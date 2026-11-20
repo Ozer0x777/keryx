@@ -7,6 +7,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     false,
     true,
     JSON,
@@ -222,7 +223,7 @@ class Notification(Base):
     channel: Mapped[str] = mapped_column(String(16))
     recipient: Mapped[str] = mapped_column(String(200))
     content: Mapped[str] = mapped_column(Text)
-    status: Mapped[str] = mapped_column(String(16))
+    status: Mapped[str] = mapped_column(String(32))  # ex. non_envoye_smtp_absent (22 caractères)
     attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
@@ -257,7 +258,7 @@ class Attachment(Base):
     filename: Mapped[str] = mapped_column(String(255))            # nom d'origine, affichage seulement
     storage_name: Mapped[str | None] = mapped_column(String(64), nullable=True)  # nom aléatoire sur disque
     content_type: Mapped[str] = mapped_column(String(100), default="application/octet-stream")
-    size: Mapped[int] = mapped_column(Integer, default=0)
+    size: Mapped[int] = mapped_column(BigInteger, default=0)  # une preuve externe (image mémoire) dépasse 2 Gio
     sha256: Mapped[str] = mapped_column(String(64))
     # Registre de collecte
     description: Mapped[str] = mapped_column(Text)
@@ -381,3 +382,11 @@ class MitreTechnique(Base):
     name: Mapped[str] = mapped_column(String(200))
     tactics: Mapped[list] = mapped_column(JSON, default=list)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class RateHit(Base):
+    """Passage compté par une limite de débit partagée (plusieurs processus ou conteneurs). [ADR-0010]"""
+    __tablename__ = "rate_hits"
+    id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(200), index=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)

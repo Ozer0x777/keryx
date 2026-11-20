@@ -17,6 +17,30 @@ jobs:
         env:
           PYTHONWARNINGS: ignore
 
+  tests-postgres:
+    # Mêmes tests sous PostgreSQL 16 : migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: pip install --require-hashes -r requirements.lock && pip install -r requirements-dev.txt
+      - run: python -m pytest -q
+        env:
+          PYTHONWARNINGS: ignore
+          KERYX_TEST_PG_URL: postgresql+psycopg://postgres:postgres@localhost:5432/postgres
+
   web:
     runs-on: ubuntu-latest
     steps:

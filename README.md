@@ -52,7 +52,10 @@ Le conteneur applique `alembic upgrade head` puis démarre. Dépendances install
 
 | Variable | Rôle | Défaut |
 |---|---|---|
-| `KERYX_DATABASE_URL` | SQLite (tests) ou PostgreSQL (production) | `sqlite:///./keryx.db` |
+| `KERYX_DATABASE_URL` | SQLite (tests) ou PostgreSQL, ex. `postgresql+psycopg://u:p@hôte/base` (production) | `sqlite:///./keryx.db` |
+| `KERYX_RATE_LIMIT_BACKEND` | `memory` (par processus) ou `db` (partagée entre processus) | `db` si PostgreSQL |
+| `KERYX_RETENTION_MONTHS` | Rétention des alertes brutes des tickets clos (6 minimum) | 12 |
+| `KERYX_NOTIFY_RETRY_S` | Intervalle de relance des courriels en échec (0 = désactivée) | 300 |
 | `KERYX_SECRET_KEY` | Clé maîtresse 32 octets base64 (`keryx gen-key`) — obligatoire | — |
 | `KERYX_PUBLIC_URL` | URL utilisée dans les liens des notifications | `https://keryx.local` |
 | `KERYX_SMTP_HOST`, `_PORT`, `_TLS` (`starttls`/`ssl`), `_USER`, `_PASSWORD`, `_FROM` | Envoi des notifications | désactivé |
@@ -67,7 +70,7 @@ Le conteneur applique `alembic upgrade head` puis démarre. Dépendances install
 python -m pytest -q
 ```
 
-140 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
+147 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
 régressions des revues, migrations, notifications (SMTP simulé, relances), pièces jointes (clamd simulé, EICAR),
 administration, confort de travail, pilotage, conformité, sauvegarde, script d'intégration Wazuh.
 
@@ -110,10 +113,10 @@ Matrice complète : `docs/matrice-tracabilite.md` · exploitation : `docs/exploi
 
 - Limites de débit en mémoire, par processus : un seul processus uvicorn tant qu'elles ne sont pas partagées (ADR-0010).
 - Quarantaine : fichier isolé et marqué, pas rezippé avec mot de passe (ADR-0008).
-- Chemins PostgreSQL (verrou d'ingestion, verrou consultatif, migrations, sauvegarde par pg_dump) non testés ni écrits ; tests sous SQLite seulement. PostgreSQL est prévu en dernier.
+- PostgreSQL 16 : la suite complète passe (147 tests, dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore). Non testé : haute disponibilité, réplication, très gros volumes.
 - Jamais testé contre un vrai manager Wazuh (le script d'intégration est testé avec un serveur simulé).
 - Interface testée dans Chrome sans tête (parcours de chaque rôle) et contrôlée avec axe-core (WCAG 2.1 A/AA) ; pas d'audit RGAA complet ni de test d'intrusion.
-- Pas encore : Keycloak/OIDC, WebAuthn, format ETSI ISI, horodatage RFC 3161, validation IODEF contre le schéma officiel complet, limites de débit partagées entre processus, stockage objet, PDF généré côté serveur (impression du navigateur à la place).
+- Pas encore : Keycloak/OIDC, WebAuthn, format ETSI ISI, horodatage RFC 3161, validation IODEF contre le schéma officiel complet, stockage objet des pièces, PDF généré côté serveur (impression du navigateur à la place).
 
 Un outil ne qualifie pas un prestataire : Keryx fournit les registres, la traçabilité et le
 cloisonnement exigés par PDIS/PRIS, la qualification reste organisationnelle.

@@ -12,6 +12,9 @@ FROM python:3.12-slim
 RUN useradd --create-home --uid 10001 keryx \
  && mkdir -p /data/attachments \
  && chown -R 10001:10001 /data && chmod 700 /data
+# Client PostgreSQL : nécessaire à « keryx backup » / « keryx restore » quand la base est PostgreSQL.
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client \
+ && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY requirements.lock .
 RUN pip install --no-cache-dir --require-hashes -r requirements.lock

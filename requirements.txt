@@ -8,4 +8,5 @@ argon2-cffi>=25.1
 nh3>=0.3,<0.4
 cryptography>=50
 python-multipart>=0.0.32
+psycopg[binary]>=3.2,<4          # pilote PostgreSQL (production)
 pillow>=12.3,<13

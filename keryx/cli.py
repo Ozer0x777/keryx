@@ -44,6 +44,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("backup", help="Sauvegarde chiffrée (base SQLite + pièces)").add_argument("out")
     r = sub.add_parser("restore", help="Restaure une sauvegarde dans un dossier vide et vérifie l'audit")
     r.add_argument("file"); r.add_argument("--to", required=True)
+    r.add_argument("--pg-url", help="PostgreSQL : URL d'une base VIDE où restaurer (sauvegarde PostgreSQL)")
     sub.add_parser("import-mitre", help="Importe le référentiel ATT&CK (fichier STIX 2.1)").add_argument("file")
     u = sub.add_parser("add-user")
     u.add_argument("username"); u.add_argument("display_name"); u.add_argument("role", choices=ROLES)
@@ -167,11 +168,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "restore":
         from . import backup
         try:
-            info = backup.restore(args.file, settings.secret_key, args.to)
+            info = backup.restore(args.file, settings.secret_key, args.to, pg_restore_url=args.pg_url)
         except backup.BackupError as exc:
             print(str(exc), file=sys.stderr)
             return 2
-        restored = Settings(database_url=f"sqlite:///{args.to}/keryx.db", secret_key=settings.secret_key)
+        if info["postgres"] and not args.pg_url:
+            print(f"Sauvegarde PostgreSQL extraite dans {args.to}. Restaurer avec : pg_restore --no-owner -d <base vide> "
+                  f"{args.to}/keryx.pgdump (ou relancer avec --pg-url).")
+            return 0
+        restored = Settings(database_url=args.pg_url if info["postgres"] else f"sqlite:///{args.to}/keryx.db",
+                            secret_key=settings.secret_key)
         rdb = _session(restored)
         ok, bad = audit.verify_chain(rdb)
         print(f"Restauration dans {args.to} : {info['files']} fichiers, empreintes vérifiées. "

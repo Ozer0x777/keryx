@@ -1,4 +1,5 @@
 import copy
+import os
 import time
 
 import pyotp
@@ -75,11 +76,37 @@ def alert():
 SECRET_KEY = security.new_secret_key()
 
 
+def _pg_database():
+    """Base PostgreSQL jetable pour un test (si KERYX_TEST_PG_URL est défini, ex. postgresql+psycopg://u:p@h/postgres)."""
+    import uuid
+
+    import psycopg
+    from sqlalchemy.engine import make_url
+    admin = make_url(os.environ["KERYX_TEST_PG_URL"])
+    name = "keryx_t_" + uuid.uuid4().hex[:12]
+    dsn = admin.set(drivername="postgresql").render_as_string(hide_password=False)
+    with psycopg.connect(dsn, autocommit=True) as c:
+        c.execute(f'CREATE DATABASE "{name}"')
+
+    def drop():
+        with psycopg.connect(dsn, autocommit=True) as c:
+            c.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+    return admin.set(database=name).render_as_string(hide_password=False), drop
+
+
 @pytest.fixture
 def settings(tmp_path):
-    return Settings(database_url=f"sqlite:///{tmp_path}/test.db", cookie_secure=False, auto_create_schema=True,
-                    secret_key=SECRET_KEY, attachments_dir=str(tmp_path / "pj"), smtp_host=None,
-                    clamav_host=None, web_dist=str(tmp_path / "no_web"))
+    drop = None
+    url = f"sqlite:///{tmp_path}/test.db"
+    if os.environ.get("KERYX_TEST_PG_URL"):
+        url, drop = _pg_database()
+    yield Settings(database_url=url, cookie_secure=False, auto_create_schema=True,
+                   secret_key=SECRET_KEY, attachments_dir=str(tmp_path / "pj"), smtp_host=None,
+                   clamav_host=None, web_dist=str(tmp_path / "no_web"))
+    if drop:
+        import gc
+        gc.collect()  # libère les moteurs avant de supprimer la base
+        drop()
 
 
 @pytest.fixture

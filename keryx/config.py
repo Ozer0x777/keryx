@@ -61,6 +61,10 @@ class Settings:
     syslog_port: int = field(default_factory=lambda: _int("KERYX_SYSLOG_PORT", 514))
     hostname: str = field(default_factory=lambda: os.environ.get("KERYX_HOSTNAME", "keryx"))
 
+    # Limites de débit : « memory » (par processus) ou « db » (partagées entre processus, base commune).
+    # Par défaut : partagées dès que la base est PostgreSQL.
+    rate_limit_backend: str | None = field(default_factory=lambda: os.environ.get("KERYX_RATE_LIMIT_BACKEND"))
+
     # Rétention des alertes brutes des tickets clos, en mois (PDIS IV.2.2.w : 6 mois minimum ; ISM : 12 mois).
     # À valider avec le DPO ; chaque client peut avoir sa propre valeur.
     retention_months: int = field(default_factory=lambda: max(6, _int("KERYX_RETENTION_MONTHS", 12)))

@@ -26,3 +26,22 @@ def test_script_wazuh_refuse_http_clair(tmp_path):
     r = subprocess.run([sys.executable, str(script), str(alert), "kx_test", "http://keryx.local/api"],
                        capture_output=True, text=True)
     assert r.returncode == 1  # HTTPS obligatoire
+
+
+def test_limite_de_debit_partagee_entre_deux_applications(settings):
+    """Deux instances sur la même base (deux processus) partagent la même limite. [ADR-0010]"""
+    from keryx.api import create_app
+    settings.rate_limit_backend = "db"
+    a, b = create_app(settings), create_app(settings)
+    from fastapi.testclient import TestClient
+    ca, cb = TestClient(a), TestClient(b)
+    codes = []
+    for i in range(12):  # limite : 10 essais par identifiant sur 5 minutes, répartis sur les deux instances
+        c = ca if i % 2 == 0 else cb
+        codes.append(c.post("/api/v1/auth/login", json={"username": "x", "password": "y"}).status_code)
+    assert codes[:10] == [401] * 10 and codes[10:] == [429, 429]
+    # En mémoire (par processus), chaque instance aurait compté séparément : 12 essais passeraient sans 429
+    settings.rate_limit_backend = "memory"
+    m1, m2 = TestClient(create_app(settings)), TestClient(create_app(settings))
+    mem = [(m1 if i % 2 == 0 else m2).post("/api/v1/auth/login", json={"username": "x", "password": "y"}).status_code for i in range(12)]
+    assert 429 not in mem

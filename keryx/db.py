@@ -14,7 +14,8 @@ def make_engine(url: str, immediate: bool = True) -> Engine:
     is_sqlite = url.startswith("sqlite")
     engine = create_engine(
         url,
-        connect_args={"check_same_thread": False, "timeout": 15} if is_sqlite else {},
+        # PostgreSQL : session en UTC, pour que les dates relues soient toujours en UTC (RFC 3339).
+        connect_args={"check_same_thread": False, "timeout": 15} if is_sqlite else {"options": "-c timezone=UTC"},
         future=True,
     )
     if is_sqlite:

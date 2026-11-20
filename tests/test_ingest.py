@@ -1,6 +1,7 @@
 """Ingestion Wazuh. [PDIS IV.2.1.w, aa, bb ; IV.2.3.g, h]"""
 from sqlalchemy import select
 
+from keryx.ids import as_utc
 from keryx.models import Notification, RawAlert, Ticket
 
 from .conftest import (
@@ -21,7 +22,7 @@ def test_ticket_cree_et_pre_rempli(app, db, world, alert):
     assert t.importance == "sensible"                 # label d'agent
     assert t.mitre[0]["id"] == "T1110" and t.mitre_source == "wazuh"
     assert "pci_dss:11.4" in t.classification
-    assert t.detected_at.isoformat().startswith("2026-11-20T14:41:02")
+    assert as_utc(t.detected_at).isoformat().startswith("2026-11-20T14:41:02")
     assert "185.220.101.4" in t.body_html and "Failed password" in t.body_html
     # Contexte rattaché : alerte brute conservée avec son empreinte [PDIS IV.2.1.aa]
     raw = db.scalars(select(RawAlert).where(RawAlert.ticket_id == t.id)).one()

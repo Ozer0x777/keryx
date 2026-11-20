@@ -4,7 +4,8 @@ Archive = base SQLite (copie cohérente via l'API de sauvegarde en ligne) + doss
 empreintes, le tout chiffré par blocs en AES-256-GCM (construction STREAM : un compteur dans le nonce et un
 indicateur de dernier bloc, donc toute troncature, permutation ou modification est détectée).
 La clé de chiffrement est dérivée de KERYX_SECRET_KEY (HKDF) : conserver cette clé hors de la sauvegarde.
-Sauvegarde de PostgreSQL : à ajouter avec la bascule de la base (pg_dump).
+PostgreSQL : la base est exportée avec `pg_dump --format=custom` (l'outil doit être installé et dans le PATH,
+ou indiqué par KERYX_PG_DUMP) ; la restauration utilise `pg_restore` vers une base VIDE dont l'URL est donnée.
 """
 from __future__ import annotations
 
@@ -14,7 +15,9 @@ import io
 import json
 import os
 import sqlite3
+import shutil
 import struct
+import subprocess
 import tarfile
 import tempfile
 from datetime import datetime, timezone
@@ -89,9 +92,29 @@ def decrypt_stream(src, dst, secret_key_b64: str) -> None:
 
 
 def _sqlite_path(url: str) -> str:
-    if not url.startswith("sqlite:///"):
-        raise BackupError("Seules les bases SQLite sont sauvegardées pour l'instant (PostgreSQL : pg_dump).")
     return url[len("sqlite:///"):]
+
+
+def _is_pg(url: str) -> bool:
+    return url.startswith("postgresql")
+
+
+def _pg_args(url: str) -> tuple[str, dict]:
+    """Chaîne de connexion libpq et environnement (le mot de passe passe par PGPASSWORD, jamais en argument)."""
+    from sqlalchemy.engine import make_url
+    u = make_url(url).set(drivername="postgresql")
+    env = dict(os.environ)
+    if u.password:
+        env["PGPASSWORD"] = u.password
+        u = u.set(password=None)
+    return u.render_as_string(hide_password=False), env
+
+
+def _pg_tool(name: str, env_var: str) -> str:
+    path = os.environ.get(env_var) or shutil.which(name)
+    if not path:
+        raise BackupError(f"Outil PostgreSQL introuvable : {name} (installer le client PostgreSQL ou définir {env_var}).")
+    return path
 
 
 def _sha(path: str) -> str:
@@ -103,15 +126,24 @@ def _sha(path: str) -> str:
 
 
 def create(database_url: str, attachments_dir: str, secret_key_b64: str, out_path: str) -> dict:
-    db_path = _sqlite_path(database_url)
+    if not database_url.startswith("sqlite:///") and not _is_pg(database_url):
+        raise BackupError("Base non prise en charge : SQLite ou PostgreSQL.")
     with tempfile.TemporaryDirectory() as tmp:
-        snap = os.path.join(tmp, "keryx.db")
-        src, dst = sqlite3.connect(db_path), sqlite3.connect(snap)
-        try:
-            src.backup(dst)  # copie cohérente même pendant que Keryx tourne
-        finally:
-            dst.close(); src.close()
-        files = {"keryx.db": snap}
+        if _is_pg(database_url):
+            snap, name = os.path.join(tmp, "keryx.pgdump"), "keryx.pgdump"
+            dsn, env = _pg_args(database_url)
+            r = subprocess.run([_pg_tool("pg_dump", "KERYX_PG_DUMP"), "--format=custom", "--no-owner", "--file", snap,
+                                "--dbname", dsn], env=env, capture_output=True, text=True)
+            if r.returncode != 0:
+                raise BackupError("pg_dump a échoué : " + r.stderr.strip()[:300])
+        else:
+            snap, name = os.path.join(tmp, "keryx.db"), "keryx.db"
+            src, dst = sqlite3.connect(_sqlite_path(database_url)), sqlite3.connect(snap)
+            try:
+                src.backup(dst)  # copie cohérente même pendant que Keryx tourne
+            finally:
+                dst.close(); src.close()
+        files = {name: snap}
         if os.path.isdir(attachments_dir):
             for root, _dirs, names in os.walk(attachments_dir):
                 for n in names:
@@ -132,8 +164,9 @@ def create(database_url: str, attachments_dir: str, secret_key_b64: str, out_pat
     return {"files": len(files), "created_at": manifest["created_at"]}
 
 
-def restore(in_path: str, secret_key_b64: str, dest_dir: str) -> dict:
-    """Déchiffre, vérifie les empreintes du manifeste, puis extrait dans un dossier vide."""
+def restore(in_path: str, secret_key_b64: str, dest_dir: str, pg_restore_url: str | None = None) -> dict:
+    """Déchiffre, vérifie les empreintes du manifeste, puis extrait dans un dossier vide. Pour une sauvegarde
+    PostgreSQL, restaure aussi la base dans `pg_restore_url` (base vide) si elle est fournie."""
     if os.path.exists(dest_dir) and os.listdir(dest_dir):
         raise BackupError("Le dossier de restauration doit être vide.")
     os.makedirs(dest_dir, mode=0o700, exist_ok=True)
@@ -149,4 +182,11 @@ def restore(in_path: str, secret_key_b64: str, dest_dir: str) -> dict:
         p = os.path.join(dest_dir, name)
         if not os.path.isfile(p) or _sha(p) != expected:
             raise BackupError(f"Empreinte différente après restauration : {name}")
-    return {"files": len(manifest["files"]), "created_at": manifest["created_at"]}
+    has_pg = "keryx.pgdump" in manifest["files"]
+    if has_pg and pg_restore_url:
+        dsn, env = _pg_args(pg_restore_url)
+        r = subprocess.run([_pg_tool("pg_restore", "KERYX_PG_RESTORE"), "--no-owner", "--exit-on-error", "--dbname", dsn,
+                            os.path.join(dest_dir, "keryx.pgdump")], env=env, capture_output=True, text=True)
+        if r.returncode != 0:
+            raise BackupError("pg_restore a échoué : " + r.stderr.strip()[:300])
+    return {"files": len(manifest["files"]), "created_at": manifest["created_at"], "postgres": has_pg}

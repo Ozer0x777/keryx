@@ -14,6 +14,11 @@ from .conftest import ALERT_SSH_BRUTEFORCE, SECRET_KEY, ingest, login
 from .test_attachments import REGISTRY, zip_bytes
 
 
+def sqlite_only(settings):
+    if not settings.database_url.startswith("sqlite"):
+        pytest.skip("test propre à SQLite (voir test_postgresql_sauvegarde_et_restauration)")
+
+
 def populate(app, db, world, alert):
     ingest(app, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE))
     a = login(app, db, "analyst_acme")
@@ -23,6 +28,7 @@ def populate(app, db, world, alert):
 
 
 def test_aller_retour_complet(app, db, world, alert, settings, tmp_path):
+    sqlite_only(settings)
     sha = populate(app, db, world, alert)
     out = tmp_path / "sauvegarde.kxb"
     info = backup.create(settings.database_url, settings.attachments_dir, SECRET_KEY, str(out))
@@ -42,6 +48,7 @@ def test_aller_retour_complet(app, db, world, alert, settings, tmp_path):
 
 
 def test_mauvaise_cle_alteration_et_troncature(app, db, world, alert, settings, tmp_path):
+    sqlite_only(settings)
     populate(app, db, world, alert)
     out = tmp_path / "s.kxb"
     backup.create(settings.database_url, settings.attachments_dir, SECRET_KEY, str(out))
@@ -82,6 +89,7 @@ def test_flux_multi_blocs_et_blocs_permutes():
 
 
 def test_commandes_cli(app, db, world, alert, settings, tmp_path, monkeypatch, capsys):
+    sqlite_only(settings)
     populate(app, db, world, alert)
     monkeypatch.setenv("KERYX_DATABASE_URL", settings.database_url)
     monkeypatch.setenv("KERYX_SECRET_KEY", SECRET_KEY)
@@ -91,3 +99,29 @@ def test_commandes_cli(app, db, world, alert, settings, tmp_path, monkeypatch, c
     assert cli_main(["restore", out, "--to", str(tmp_path / "rest")]) == 0
     assert "Chaîne d'audit intègre" in capsys.readouterr().out
     assert cli_main(["restore", out, "--to", str(tmp_path / "rest")]) == 2   # dossier non vide
+
+
+def test_postgresql_sauvegarde_et_restauration(app, db, world, alert, settings, tmp_path):
+    """Exécuté seulement avec KERYX_TEST_PG_URL et les outils pg_dump / pg_restore."""
+    import shutil
+    if not settings.database_url.startswith("postgresql") or not shutil.which("pg_dump"):
+        pytest.skip("PostgreSQL et pg_dump requis")
+    from .conftest import _pg_database
+    sha = populate(app, db, world, alert)
+    out = tmp_path / "pg.kxb"
+    backup.create(settings.database_url, settings.attachments_dir, SECRET_KEY, str(out))
+    assert b"PGDMP" not in out.read_bytes()                      # l'export n'est pas lisible en clair
+    target_url, drop = _pg_database()
+    try:
+        info = backup.restore(str(out), SECRET_KEY, str(tmp_path / "rest"), pg_restore_url=target_url)
+        assert info["postgres"] is True
+        audit.configure(SECRET_KEY)
+        rdb = make_session_factory(make_engine(target_url))()
+        assert rdb.scalars(select(Ticket)).one().ref == "ACME-1"
+        assert rdb.scalars(select(Attachment)).one().sha256 == sha
+        assert audit.verify_chain(rdb) == (True, None)
+        rdb.close()
+    finally:
+        import gc
+        gc.collect()
+        drop()

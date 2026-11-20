@@ -39,7 +39,7 @@ from .iodef import validate as iodef_validate
 from .ingest import AlertRejected, ingest_alert
 from .mitre import valid_technique
 from .models import (
-    LIFECYCLE, TLP, VERDICTS, ApiKey, Attachment, AuditEntry, Comment, CustodyEvent, MitreTechnique, RawAlert,
+    LIFECYCLE, TLP, VERDICTS, ApiKey, Attachment, AuditEntry, Comment, CustodyEvent, MitreTechnique, RateHit, RawAlert,
     Session, Tenant, Ticket, TicketEvent, User,
 )
 from .notify import retry_failed, send_pending
@@ -88,6 +88,33 @@ class RateLimiter:
             return False
         q.append(now)
         return True
+
+
+class DbRateLimiter:
+    """Même contrat que RateLimiter, mais le compte vit en base : plusieurs processus partagent la même limite.
+    Approximatif sous forte concurrence (deux requêtes simultanées peuvent dépasser la limite d'une unité)."""
+
+    def __init__(self, session_factory, name: str, limit: int, window_s: int):
+        self.sf, self.name, self.limit, self.window = session_factory, name, limit, window_s
+        self.calls = 0
+
+    def allow(self, key: str) -> bool:
+        k = f"{self.name}:{key}"[:200]
+        now = utcnow()
+        db = self.sf()
+        try:
+            db.execute(delete(RateHit).where(RateHit.key == k, RateHit.ts < now - timedelta(seconds=self.window)))
+            n = db.scalar(select(func.count()).select_from(RateHit).where(RateHit.key == k)) or 0
+            ok = n < self.limit
+            if ok:
+                db.add(RateHit(key=k, ts=now))
+            self.calls += 1
+            if self.calls % 500 == 0:  # ménage global : plus rien de plus vieux qu'une heure
+                db.execute(delete(RateHit).where(RateHit.ts < now - timedelta(hours=1)))
+            db.commit()
+            return ok
+        finally:
+            db.close()
 
 
 def _reject_constant(name: str):
@@ -162,7 +189,7 @@ class ExternalEvidenceIn(BaseModel):
     sensitivity: str = "TLP:AMBER"
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     location: str = Field(min_length=3, max_length=500)
-    size: int = Field(default=0, ge=0)
+    size: int = Field(default=0, ge=0, le=2**50)
     filename: str = Field(default="preuve externe", max_length=200)
 
 
@@ -180,10 +207,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if settings.auto_create_schema:
         Base.metadata.create_all(engine)  # tests uniquement ; sinon `alembic upgrade head`
     SessionLocal = make_session_factory(engine)
-    login_ip_limiter = RateLimiter(limit=30, window_s=300)
-    login_user_limiter = RateLimiter(limit=10, window_s=300)
-    ingest_fail_limiter = RateLimiter(limit=20, window_s=60)
-    ingest_limiter = RateLimiter(limit=600, window_s=60)
+    shared = (settings.rate_limit_backend or ("db" if settings.database_url.startswith("postgresql") else "memory")) == "db"
+
+    def limiter(name: str, limit: int, window_s: int):
+        return DbRateLimiter(SessionLocal, name, limit, window_s) if shared else RateLimiter(limit, window_s)
+
+    login_ip_limiter = limiter("login_ip", 30, 300)
+    login_user_limiter = limiter("login_user", 10, 300)
+    ingest_fail_limiter = limiter("ingest_fail", 20, 60)
+    ingest_limiter = limiter("ingest", 600, 60)
 
     # Pas d'interface Swagger : elle charge ses scripts depuis un CDN (aucun service externe).
     app = FastAPI(title="Keryx", version="0.7.0", docs_url=None, redoc_url=None, openapi_url="/api/openapi.json")
