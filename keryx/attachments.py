@@ -136,8 +136,47 @@ def _path(settings: Settings, storage_name: str, quarantined: bool) -> str:
     return os.path.join(settings.attachments_dir, sub, storage_name[:2], storage_name)
 
 
+def quarantine_archive(content: bytes, password: str) -> bytes:
+    """Ré-archive un fichier détecté comme malveillant dans un ZIP chiffré (AES-256) : jamais déposé en clair sur disque,
+    jamais exécuté ni analysé par mégarde. Le contenu d'origine est conservé tel quel sous le nom « echantillon.bin »."""
+    import pyzipper
+    buf = io.BytesIO()
+    with pyzipper.AESZipFile(buf, "w", compression=pyzipper.ZIP_STORED, encryption=pyzipper.WZ_AES) as z:
+        z.setpassword(password.encode())
+        z.writestr("echantillon.bin", content)
+    return buf.getvalue()
+
+
+_STORES: dict[int, object] = {}
+
+
+def object_store(settings: Settings):
+    """Client du stockage objet (créé une fois par configuration), ou None pour le stockage sur disque."""
+    if settings.storage_backend != "s3":
+        return None
+    if id(settings) not in _STORES:
+        from .s3store import S3Store, StorageError
+        need = (settings.s3_endpoint, settings.s3_bucket, settings.s3_access_key, settings.s3_secret_key)
+        if not all(need) or not settings.secret_key:
+            raise StorageError("Stockage objet incomplet : KERYX_S3_ENDPOINT, _BUCKET, _ACCESS_KEY et _SECRET_KEY requis.")
+        _STORES[id(settings)] = S3Store(settings.s3_endpoint, settings.s3_bucket, settings.s3_access_key,
+                                        settings.s3_secret_key, settings.s3_region, settings.secret_key,
+                                        settings.s3_prefix, settings.s3_allow_http)
+    return _STORES[id(settings)]
+
+
+def _object_key(store, storage_name: str, quarantined: bool) -> str:
+    return store.key_for("quarantaine" if quarantined else "fichiers", storage_name)
+
+
 def store(settings: Settings, content: bytes, quarantined: bool) -> str:
+    if quarantined:
+        content = quarantine_archive(content, settings.quarantine_password)
     storage_name = uuid7().replace("-", "")
+    objects = object_store(settings)
+    if objects is not None:
+        objects.put(_object_key(objects, storage_name, quarantined), content)
+        return storage_name
     path = _path(settings, storage_name, quarantined)
     os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -147,11 +186,18 @@ def store(settings: Settings, content: bytes, quarantined: bool) -> str:
 
 
 def read(settings: Settings, storage_name: str, quarantined: bool) -> bytes:
+    objects = object_store(settings)
+    if objects is not None:
+        return objects.get(_object_key(objects, storage_name, quarantined))
     with open(_path(settings, storage_name, quarantined), "rb") as f:
         return f.read()
 
 
 def destroy(settings: Settings, storage_name: str, quarantined: bool) -> None:
+    objects = object_store(settings)
+    if objects is not None:
+        objects.delete(_object_key(objects, storage_name, quarantined))
+        return
     path = _path(settings, storage_name, quarantined)
     if os.path.exists(path):
         os.remove(path)

@@ -460,8 +460,13 @@ def register(app, ctx) -> None:
     @app.get("/api/v1/admin/system")
     def system_status(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         require_role(user, "admin")
-        os.makedirs(settings.attachments_dir, exist_ok=True)
-        usage = shutil.disk_usage(settings.attachments_dir)
+        from . import attachments as att
+        objects = att.object_store(settings)
+        if objects is None:
+            os.makedirs(settings.attachments_dir, exist_ok=True)
+            usage = shutil.disk_usage(settings.attachments_dir)
+        else:
+            usage = None
         since = utcnow() - timedelta(hours=24)
         failed = db.scalar(select(func.count()).select_from(Notification)
                            .where(Notification.status == "echec", Notification.ts >= since)) or 0
@@ -473,7 +478,9 @@ def register(app, ctx) -> None:
             "smtp": "configuré" if settings.smtp_host else "non configuré",
             "clamav": _clamav_state(),
             "syslog": "configuré" if settings.syslog_host else "non configuré",
-            "disk_free_mb": usage.free // (1024 * 1024), "disk_total_mb": usage.total // (1024 * 1024),
+            "storage": "disque local" if objects is None else ("stockage objet : joignable" if objects.ping() else "stockage objet : injoignable"),
+            "disk_free_mb": usage.free // (1024 * 1024) if usage else None,
+            "disk_total_mb": usage.total // (1024 * 1024) if usage else None,
             "notifications_failed_24h": failed,
             "silent_sources": len(silent),
         }

@@ -57,6 +57,18 @@ class Settings:
     max_attachment_bytes: int = 20 * 1024 * 1024
     clamav_host: str | None = field(default_factory=lambda: os.environ.get("KERYX_CLAMAV_HOST"))
     clamav_port: int = field(default_factory=lambda: _int("KERYX_CLAMAV_PORT", 3310))
+    # Mot de passe de l'archive de quarantaine (convention du métier : « infected »). Il ne protège pas un secret :
+    # il empêche l'ouverture accidentelle et l'analyse automatique du fichier par un poste ou une messagerie.
+    quarantine_password: str = field(default_factory=lambda: os.environ.get("KERYX_QUARANTINE_PASSWORD", "infected"))
+    # Stockage des pièces : « disk » (dossier local) ou « s3 » (stockage objet compatible S3, chiffré avant envoi).
+    storage_backend: str = field(default_factory=lambda: os.environ.get("KERYX_STORAGE", "disk"))
+    s3_endpoint: str | None = field(default_factory=lambda: os.environ.get("KERYX_S3_ENDPOINT"))
+    s3_bucket: str | None = field(default_factory=lambda: os.environ.get("KERYX_S3_BUCKET"))
+    s3_access_key: str | None = field(default_factory=lambda: os.environ.get("KERYX_S3_ACCESS_KEY"))
+    s3_secret_key: str | None = field(default_factory=lambda: os.environ.get("KERYX_S3_SECRET_KEY"))
+    s3_region: str = field(default_factory=lambda: os.environ.get("KERYX_S3_REGION", "us-east-1"))
+    s3_prefix: str = field(default_factory=lambda: os.environ.get("KERYX_S3_PREFIX", "keryx"))
+    s3_allow_http: bool = field(default_factory=lambda: _bool("KERYX_S3_ALLOW_HTTP", False))
     # Sans ClamAV : les fichiers sont acceptés mais marqués « non analysé » (jamais présentés comme sains).
 
     # Journal d'audit vers Wazuh (RFC 5424)

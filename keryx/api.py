@@ -45,6 +45,7 @@ from .models import (
     Session, WebAuthnCredential, Tenant, Ticket, TicketEvent, User,
 )
 from .notify import retry_failed, send_pending
+from .s3store import StorageError
 from .sanitize import clean_html
 from .sla import state as sla_state
 from .severity import DOMMAGES, IMPORTANCES, gravite, is_rex_required
@@ -956,7 +957,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(413 if "volumineux" in str(exc) else 422, str(exc))
         status, detail = att.scan(prepared.content, settings)
         quarantined = status == "quarantaine"
-        storage = att.store(settings, prepared.content, quarantined)
+        try:
+            storage = att.store(settings, prepared.content, quarantined)
+        except StorageError as exc:
+            log.error("Stockage des pièces : %s", exc)
+            raise HTTPException(502, "Le stockage des pièces est indisponible : la pièce n'a pas été enregistrée.")
         try:
             return _record_attachment(db, t, user, file, prepared, storage, status, detail, quarantined,
                                       description, collected_at, method, sensitivity, visible_client)
@@ -1022,6 +1027,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             data = att.read(settings, a.storage_name, quarantined)
         except FileNotFoundError:
             raise HTTPException(410, "Fichier introuvable sur le stockage : signaler à l'administrateur.")
+        except StorageError as exc:
+            log.error("Lecture d'une pièce : %s", exc)
+            raise HTTPException(502, "Le stockage des pièces est indisponible ou la pièce est altérée : signaler à l'administrateur.")
         db.add(CustodyEvent(attachment_id=a.id, actor=user.username,
                             action="telechargement" if a.kind == "fichier" else "consultation",
                             reason=(motif or "")[:500]))
@@ -1029,7 +1037,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                      {"ticket": t.ref, "motif": (motif or "")[:200], "quarantaine": quarantined})
         commit(db)
         inline = a.kind == "image" and not quarantined
-        name = a.filename + (".quarantaine" if quarantined else "")
+        name = a.filename + (".quarantaine.zip" if quarantined else "")
         disposition = ("inline" if inline else "attachment") + f"; filename*=UTF-8''{quote(name)}"
         return Response(content=data, media_type=a.content_type if inline else "application/octet-stream",
                         headers={"Content-Disposition": disposition, "Cache-Control": "no-store",
@@ -1061,7 +1069,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         commit(db)
         # Suppression du fichier seulement une fois la destruction enregistrée en base.
         if body.lifecycle == "detruit" and a.storage_name:
-            att.destroy(settings, a.storage_name, a.scan_status == "quarantaine")
+            try:
+                att.destroy(settings, a.storage_name, a.scan_status == "quarantaine")
+            except StorageError as exc:  # la destruction est déjà tracée : l'objet restant est à purger à la main
+                log.error("Destruction d'un objet à vérifier (pièce %s) : %s", a.id, exc)
         return attachment_view(a)
 
     # ---------------------------------------------------------------- administration

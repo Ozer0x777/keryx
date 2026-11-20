@@ -22,7 +22,8 @@ export default function Admin() {
     sys.clamav === 'injoignable' || sys.clamav === 'réponse inattendue' ? "L'antivirus ClamAV est indisponible : les pièces déposées ne sont pas analysées." : null,
     sys.notifications_failed_24h > 0 ? `${sys.notifications_failed_24h} notification(s) par courriel en échec ces 24 dernières heures.` : null,
     sys.silent_sources > 0 ? `${sys.silent_sources} source(s) Wazuh muette(s) depuis plus de 24 h.` : null,
-    sys.disk_free_mb < 500 ? `Espace disque faible pour les pièces : ${sys.disk_free_mb} Mo libres.` : null,
+    sys.storage?.includes('injoignable') ? 'Le stockage objet des pièces est injoignable.' : null,
+    sys.disk_free_mb != null && sys.disk_free_mb < 500 ? `Espace disque faible pour les pièces : ${sys.disk_free_mb} Mo libres.` : null,
   ].filter(Boolean) : []
   return (
     <>

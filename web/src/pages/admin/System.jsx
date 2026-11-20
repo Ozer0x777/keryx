@@ -24,7 +24,7 @@ export default function System() {
         <p className="muted small">Relevé du {formatUtc(s.generated_at)}</p>
         <dl className="status-list">
           {rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd><span className={`pill ${tone(v)}`}>{v}</span></dd></div>)}
-          <div><dt>Espace disque des pièces</dt><dd>{s.disk_free_mb} Mo libres sur {s.disk_total_mb} Mo</dd></div>
+          <div><dt>Stockage des pièces</dt><dd><span className={`pill ${s.storage.includes('injoignable') ? 'danger' : 'ok'}`}>{s.storage}</span>{s.disk_free_mb != null && ` · ${s.disk_free_mb} Mo libres sur ${s.disk_total_mb} Mo`}</dd></div>
           <div><dt>Notifications en échec (24 h)</dt><dd><span className={`pill ${s.notifications_failed_24h ? 'danger' : 'ok'}`}>{s.notifications_failed_24h}</span></dd></div>
           <div><dt>Sources Wazuh muettes</dt><dd><span className={`pill ${s.silent_sources ? 'warn' : 'ok'}`}>{s.silent_sources}</span></dd></div>
         </dl>

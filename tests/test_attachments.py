@@ -191,8 +191,20 @@ def test_malware_en_quarantaine_jamais_supprime(settings, db, request):
     # Analyste : confirmation + motif obligatoires, servi en octet-stream sous un nom explicite
     assert a.get(f"/api/v1/attachments/{att_id}/content", params={"motif": "analyse"}).status_code == 409
     dl = a.get(f"/api/v1/attachments/{att_id}/content", params={"motif": "analyse", "confirmer_malveillant": "true"})
-    assert dl.status_code == 200 and ".quarantaine" in dl.headers["content-disposition"]
+    assert dl.status_code == 200 and ".quarantaine.zip" in dl.headers["content-disposition"]
     assert dl.headers["content-type"] == "application/octet-stream"
+    # Ré-archivé avec mot de passe : ni en clair sur disque, ni dans la réponse ; le contenu d'origine reste intact
+    import pyzipper
+    original = zip_bytes("eicar.com", EICAR)
+    assert EICAR not in dl.content and original not in dl.content
+    with pyzipper.AESZipFile(io.BytesIO(dl.content)) as z:
+        z.setpassword(b"infected")
+        assert z.read("echantillon.bin") == original
+        z.setpassword(b"mauvais")
+        with pytest.raises(RuntimeError):
+            z.read("echantillon.bin")
+    stored = [p for p in (__import__("pathlib").Path(settings.attachments_dir) / "quarantaine").rglob("*") if p.is_file()]
+    assert len(stored) == 1 and EICAR not in stored[0].read_bytes() and original not in stored[0].read_bytes()
     # Client : jamais, même si la pièce lui était visible
     cl = login(app, db, "client_acme")
     assert cl.get(f"/api/v1/attachments/{att_id}/content",

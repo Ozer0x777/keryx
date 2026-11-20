@@ -216,7 +216,7 @@ function Attachments({ t, enc, me, run, setNotice }) {
   const download = async (a) => {
     let params = {}
     if (a.scan_status === 'quarantaine') {
-      if (!window.confirm(`${a.filename} a été détecté comme malveillant. Le télécharger quand même, pour analyse ?`)) return
+      if (!window.confirm(`${a.filename} a été détecté comme malveillant. Il sera fourni dans une archive ZIP chiffrée (mot de passe : voir le guide d\'exploitation). Le télécharger quand même, pour analyse ?`)) return
       params.confirmer_malveillant = 'true'
     }
     if (a.kind === 'fichier' || a.scan_status === 'quarantaine') {
@@ -226,7 +226,7 @@ function Attachments({ t, enc, me, run, setNotice }) {
     }
     try {
       const blob = await api(`/attachments/${a.id}/content`, { params })
-      downloadBlob(blob, a.filename + (a.scan_status === 'quarantaine' ? '.quarantaine' : ''))
+      downloadBlob(blob, a.filename + (a.scan_status === 'quarantaine' ? '.quarantaine.zip' : ''))
     } catch (e) { setNotice(`Erreur : ${e.message}`) }
   }
 

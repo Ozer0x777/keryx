@@ -158,11 +158,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "backup":
         from . import backup
         try:
-            info = backup.create(settings.database_url, settings.attachments_dir, settings.secret_key, args.out)
+            info = backup.create(settings.database_url, None if settings.storage_backend == "s3" else settings.attachments_dir,
+                                 settings.secret_key, args.out)
         except backup.BackupError as exc:
             print(str(exc), file=sys.stderr)
             return 2
         print(f"Sauvegarde chiffrée écrite dans {args.out} ({info['files']} fichiers). Conserver KERYX_SECRET_KEY à part.")
+        if settings.storage_backend == "s3":
+            print("Les pièces sont dans le stockage objet : à sauvegarder avec les outils du serveur d'objets (réplication, versions).")
         return 0
 
     if args.cmd == "restore":

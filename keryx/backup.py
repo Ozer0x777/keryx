@@ -144,7 +144,7 @@ def create(database_url: str, attachments_dir: str, secret_key_b64: str, out_pat
             finally:
                 dst.close(); src.close()
         files = {name: snap}
-        if os.path.isdir(attachments_dir):
+        if attachments_dir and os.path.isdir(attachments_dir):
             for root, _dirs, names in os.walk(attachments_dir):
                 for n in names:
                     full = os.path.join(root, n)
