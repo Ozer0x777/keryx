@@ -53,6 +53,7 @@ Le conteneur applique `alembic upgrade head` puis démarre. Dépendances install
 | Variable | Rôle | Défaut |
 |---|---|---|
 | `KERYX_DATABASE_URL` | SQLite (tests) ou PostgreSQL, ex. `postgresql+psycopg://u:p@hôte/base` (production) | `sqlite:///./keryx.db` |
+| `KERYX_OIDC_PROVIDERS`, `KERYX_OIDC_ENFORCE`, `KERYX_OIDC_REQUIRED_ACR`, `KERYX_OIDC_ALLOW_HTTP` | SSO OpenID Connect (Keycloak), voir `docs/exploitation.md` et ADR-0017 | désactivé |
 | `KERYX_LOGIN_USER_LIMIT` | Tentatives de connexion par identifiant et par 5 minutes | 10 |
 | `KERYX_LOGIN_IP_LIMIT` | Tentatives de connexion par adresse IP et par 5 minutes | 30 |
 | `KERYX_RATE_LIMIT_BACKEND` | `memory` (par processus) ou `db` (partagée entre processus) | `db` si PostgreSQL |
@@ -72,7 +73,7 @@ Le conteneur applique `alembic upgrade head` puis démarre. Dépendances install
 python -m pytest -q
 ```
 
-163 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
+172 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
 régressions des revues, migrations, notifications (SMTP simulé, relances), pièces jointes (clamd simulé, EICAR),
 administration, confort de travail, pilotage, conformité, sauvegarde, script d'intégration Wazuh.
 
@@ -92,7 +93,7 @@ cd e2e && npm ci && node run.mjs        # CHROME_PATH et KERYX_PYTHON si besoin
 | Cycle ISO 27035, qualification obligatoire, synthèse et REX obligatoire si Élevée/Critique | ISO/IEC 27035-1, PRIS VI.5.3.e, ISO 27002 5.27 |
 | Interface web : liste, Kanban, ticket, portail client, administration | Maquettes validées |
 | Rôles Admin/Manager/Analyste/Client, cloisonnement par client, admin sans accès au contenu | PDIS IV.3.8.g, IV.3.9.d–h, PRIS IV.3.d |
-| Argon2id + TOTP obligatoire (secret chiffré) + codes de secours + anti-rejeu + limites de débit + clés de sécurité WebAuthn en option | RFC 9106, 6238, 6585 ; ADR-0006, 0010, 0016 |
+| Argon2id + TOTP obligatoire (secret chiffré) + codes de secours + anti-rejeu + limites de débit + clés de sécurité WebAuthn en option + SSO OpenID Connect (Keycloak) | RFC 9106, 6238, 6585 ; ADR-0006, 0010, 0016, 0017 |
 | Session cookie HttpOnly/Secure/SameSite, rotation, CSRF, inactivité 30 min | RFC 6265, ASVS chap. 7 |
 | HTML assaini (nh3, liste blanche) ; CSP sans source externe | ASVS chap. 1, 3 |
 | Pièces jointes 20 Mo, images ré-encodées, registre de collecte, ClamAV + quarantaine, chaîne de possession, preuves externes | PRIS VI.5.3.c, VI.2.4 ; ISO/IEC 27037 ; RFC 3227 ; ADR-0008 |
@@ -115,10 +116,10 @@ Matrice complète : `docs/matrice-tracabilite.md` · exploitation : `docs/exploi
 
 - Limites de débit en mémoire, par processus : un seul processus uvicorn tant qu'elles ne sont pas partagées (ADR-0010).
 - Quarantaine : fichier isolé et marqué, pas rezippé avec mot de passe (ADR-0008).
-- PostgreSQL 16 : la suite complète passe (163 tests, dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore). Non testé : haute disponibilité, réplication, très gros volumes.
+- PostgreSQL 16 : la suite complète passe (172 tests, dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore). Non testé : haute disponibilité, réplication, très gros volumes.
 - Jamais testé contre un vrai manager Wazuh (le script d'intégration est testé avec un serveur simulé).
 - Interface testée dans Chrome sans tête (parcours de chaque rôle) et contrôlée avec axe-core (WCAG 2.1 A/AA) ; pas d'audit RGAA complet ni de test d'intrusion.
-- Pas encore : Keycloak/OIDC, traduction complète de l'interface en anglais (navigation, connexion, liste, Kanban et profil sont traduits ; les autres écrans retombent sur le français), format ETSI ISI, horodatage RFC 3161, validation IODEF contre le schéma officiel complet, stockage objet des pièces, PDF généré côté serveur (impression du navigateur à la place).
+- Pas encore : déconnexion unique du SSO, traduction complète de l'interface en anglais (navigation, connexion, liste, Kanban et profil sont traduits ; les autres écrans retombent sur le français), format ETSI ISI, horodatage RFC 3161, validation IODEF contre le schéma officiel complet, stockage objet des pièces, PDF généré côté serveur (impression du navigateur à la place).
 
 Un outil ne qualifie pas un prestataire : Keryx fournit les registres, la traçabilité et le
 cloisonnement exigés par PDIS/PRIS, la qualification reste organisationnelle.

@@ -10,4 +10,6 @@ cryptography>=50
 python-multipart>=0.0.32
 psycopg[binary]>=3.2,<4          # pilote PostgreSQL (production)
 webauthn>=2.5,<3                  # clés de sécurité FIDO2 (second facteur en option)
+PyJWT[crypto]>=2.9,<3             # vérification des jetons d'identité OIDC (SSO Keycloak)
+httpx>=0.28,<1                    # échanges avec le fournisseur d'identité OIDC
 pillow>=12.3,<13

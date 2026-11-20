@@ -32,7 +32,8 @@ from sqlalchemy.orm import Session as DbSession
 from starlette.background import BackgroundTask
 
 from . import attachments as att
-from . import audit, inbox, routes_admin, routes_ops, routes_reports, routes_webauthn, routes_work, security
+from . import audit, inbox, routes_admin, routes_oidc, routes_ops, routes_reports, routes_webauthn, routes_work, security
+from .oidc import load_providers
 from .config import Settings
 from .db import Base, make_engine, make_session_factory
 from .ids import as_utc, rfc3339, utcnow
@@ -212,6 +213,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if settings.auto_create_schema:
         Base.metadata.create_all(engine)  # tests uniquement ; sinon `alembic upgrade head`
     SessionLocal = make_session_factory(engine)
+    oidc_providers = load_providers(settings.oidc_providers, settings.oidc_allow_http)
     shared = (settings.rate_limit_backend or ("db" if settings.database_url.startswith("postgresql") else "memory")) == "db"
 
     def limiter(name: str, limit: int, window_s: int):
@@ -386,6 +388,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         audit.record(db, user.username, "auth.password_ok", "user", user.id, None, {"ip": ip})
         commit(db)
         _set_cookie(response, SESSION_COOKIE, token, settings, http_only=True, max_age=300)
+        if settings.oidc_enforce and user.role != "admin" and user.enrolled and oidc_providers:
+            # SSO obligatoire (seul l'Admin garde le mot de passe local, accès de secours) : annoncé après la vérification
+            # du mot de passe pour ne pas révéler l'existence des comptes.
+            audit.record(db, user.username, "auth.local_login_refused", "user", user.id, None, {"ip": ip})
+            commit(db)
+            raise HTTPException(403, "La connexion par mot de passe est désactivée : utilisez l'authentification unique (SSO).")
         has_key = bool(db.scalars(select(WebAuthnCredential.id).where(WebAuthnCredential.user_id == user.id).limit(1)).first())
         return {"next": "totp" if user.enrolled else "enroll", "webauthn": has_key and user.enrolled}
 
@@ -404,6 +412,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def promote(db: DbSession, s: Session, user: User, response: Response, ip: str, method: str) -> dict:
         """Élève une session « mot de passe » en session complète (rotation du jeton : anti-fixation)."""
         db.delete(s)
+        return open_session(db, user, response, ip, method)
+
+    def open_session(db: DbSession, user: User, response: Response, ip: str, method: str) -> dict:
+        """Ouvre une session complète neuve (jeton neuf, CSRF neuf) et pose les cookies."""
         token, csrf = security.new_token(), security.new_token()
         db.add(Session(token_hash=security.sha256(token), user_id=user.id, stage="full", csrf_token=csrf,
                        expires_at=utcnow() + timedelta(hours=settings.session_hours)))
@@ -1093,12 +1105,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         visible_tenant_ids=visible_tenant_ids, event=event, session_from_cookie=_session_from_cookie,
         client_ip=client_ip, assign_ticket=assign_ticket, ticket_summary=ticket_summary, promote=promote,
         login_ip_limiter=login_ip_limiter, login_user_limiter=login_user_limiter,
-        count_second_factor_failure=count_second_factor_failure)
+        count_second_factor_failure=count_second_factor_failure, open_session=open_session,
+        set_cookie=_set_cookie, SESSION_COOKIE=SESSION_COOKIE, CSRF_COOKIE=CSRF_COOKIE, oidc_providers=oidc_providers)
     routes_admin.register(app, ctx)
     routes_work.register(app, ctx)
     routes_reports.register(app, ctx)
     routes_ops.register(app, ctx)
     routes_webauthn.register(app, ctx)
+    routes_oidc.register(app, ctx)
 
     # ---------------------------------------------------------------- interface web
     dist = settings.web_dist

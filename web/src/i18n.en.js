@@ -61,4 +61,10 @@ export default {
   'ajoutée le': 'added on', 'utilisée le': 'used on', 'Retirer': 'Remove', 'Nom de la clé': 'Key name', 'Ajouter une clé': 'Add a key',
   'Ce navigateur ne prend pas en charge les clés de sécurité.': 'This browser does not support security keys.',
   'Source': 'Source',
+  'ou': 'or', 'Se connecter avec {nom}': 'Sign in with {nom}', 'Connexion SSO refusée.': 'SSO sign-in refused.',
+  "Aucun compte Keryx n'est lié à cette identité : contactez votre administrateur.": 'No Keryx account is linked to this identity: contact your administrator.',
+  "Liaison refusée : l'adresse courriel vérifiée du fournisseur doit correspondre à celle de votre compte Keryx.": 'Linking refused: the identity provider’s verified e-mail must match your Keryx account’s e-mail.',
+  'La demande de connexion a expiré : recommencez.': 'The sign-in request expired: start again.', "Le jeton d'identité a été refusé.": 'The identity token was rejected.',
+  "Connexion refusée par le fournisseur d'identité.": 'Sign-in refused by the identity provider.', "Le fournisseur d'identité est indisponible.": 'The identity provider is unavailable.',
+  'Compte verrouillé temporairement.': 'Account temporarily locked.',
 }

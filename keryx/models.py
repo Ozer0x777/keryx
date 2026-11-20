@@ -93,7 +93,21 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     # Préférences de notification dans l'interface : {"mention": true, "assignation": false, ...}
     notif_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Identité fédérée (OIDC, Keycloak) : « émetteur » et « sub » du jeton, liés à la première connexion SSO
+    oidc_issuer: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    oidc_sub: Mapped[str | None] = mapped_column(String(200), nullable=True)
     tenants: Mapped[list["Tenant"]] = relationship(secondary="user_tenants")
+
+
+class OidcFlow(Base):
+    """Connexion SSO en cours : état, nonce et vérificateur PKCE, à usage unique et de courte durée. [RFC 7636, RFC 9700]"""
+    __tablename__ = "oidc_flows"
+    state_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    provider: Mapped[str] = mapped_column(String(40))
+    nonce: Mapped[str] = mapped_column(String(64))
+    code_verifier: Mapped[str] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class UserTenant(Base):

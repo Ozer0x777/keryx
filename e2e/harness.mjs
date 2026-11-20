@@ -15,7 +15,7 @@ export const PASSWORD = 'correct-horse-battery-staple'
 export function startStack() {
   const dir = mkdtempSync(join(tmpdir(), 'keryx-e2e-'))
   const key = execFileSync(PY, ['-m', 'keryx.cli', 'gen-key'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
-  const env = { ...process.env, KERYX_SECRET_KEY: key, KERYX_DATABASE_URL: `sqlite:///${dir}/e2e.db`, KERYX_ATTACHMENTS_DIR: `${dir}/pj`, KERYX_COOKIE_SECURE: 'false', KERYX_PUBLIC_URL: `http://localhost:${PORT}`, KERYX_LOGIN_IP_LIMIT: '1000', KERYX_LOGIN_USER_LIMIT: '1000', PYTHONWARNINGS: 'ignore' }
+  const env = { ...process.env, KERYX_SECRET_KEY: key, KERYX_DATABASE_URL: `sqlite:///${dir}/e2e.db`, KERYX_ATTACHMENTS_DIR: `${dir}/pj`, KERYX_COOKIE_SECURE: 'false', KERYX_PUBLIC_URL: `http://localhost:${PORT}`, KERYX_LOGIN_IP_LIMIT: '1000', ...(process.env.E2E_KEYCLOAK ? { KERYX_OIDC_ALLOW_HTTP: 'true', KERYX_OIDC_PROVIDERS: JSON.stringify([{ name: 'soc', label: 'Compte SOC', issuer: `${process.env.E2E_KEYCLOAK}/realms/soc`, client_id: 'keryx', client_secret: 'keryx-secret-e2e' }]) } : {}), KERYX_LOGIN_USER_LIMIT: '1000', PYTHONWARNINGS: 'ignore' }
   const cli = (...args) => execFileSync(PY, ['-m', 'keryx.cli', ...args], { cwd: ROOT, env: { ...env, KERYX_NEW_PASSWORD: PASSWORD }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
   execFileSync(PY, ['-m', 'alembic', 'upgrade', 'head'], { cwd: ROOT, env, stdio: 'ignore' })
   const seeds = {}
@@ -28,6 +28,9 @@ export function startStack() {
   const server = spawn(PY, ['-m', 'uvicorn', 'keryx.api:create_app', '--factory', '--port', String(PORT)], { cwd: ROOT, env, stdio: ['ignore', openSync(`${dir}/server.log`, 'a'), openSync(`${dir}/server.log`, 'a')] })
   return { dir, seeds, server, stop: () => server.kill('SIGTERM') }
 }
+
+// Requête SQL directe sur la base de test (préparation de données que l'interface ne propose pas).
+export const sql = (stack, statement, ...params) => execFileSync(PY, ['-c', 'import sqlite3,sys,json;c=sqlite3.connect(sys.argv[1]);c.execute(sys.argv[2], json.loads(sys.argv[3]));c.commit()', `${stack.dir}/e2e.db`, statement, JSON.stringify(params)], { stdio: 'ignore' })
 
 export const totp = (secret) => execFileSync(PY, ['-c', `import pyotp;print(pyotp.TOTP('${secret}').now())`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
 

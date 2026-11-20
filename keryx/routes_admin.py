@@ -126,7 +126,7 @@ def register(app, ctx) -> None:
 
     def user_view(u: User) -> dict:
         return {"username": u.username, "display_name": u.display_name, "role": u.role, "email": u.email,
-                "active": u.active, "enrolled": u.enrolled, "clients": [t.key for t in u.tenants],
+                "active": u.active, "enrolled": u.enrolled, "sso": bool(u.oidc_sub), "clients": [t.key for t in u.tenants],
                 "last_login_at": rfc3339(u.last_login_at), "recovery_codes_left": len(u.recovery_codes or []),
                 "locked": bool(u.locked_until and as_utc(u.locked_until) > utcnow())}
 

@@ -1,8 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../api.js'
 import OneTime from '../components/OneTime.jsx'
 import { getLang, LANGS, setLang, t } from '../i18n.js'
 import { getAssertion, webauthnSupported } from '../webauthn.js'
+
+const SSO_ERRORS = {
+  inconnu: "Aucun compte Keryx n'est lié à cette identité : contactez votre administrateur.",
+  liaison: "Liaison refusée : l'adresse courriel vérifiée du fournisseur doit correspondre à celle de votre compte Keryx.",
+  etat: 'La demande de connexion a expiré : recommencez.', jeton: "Le jeton d'identité a été refusé.",
+  refuse: 'Connexion refusée par le fournisseur d\'identité.', indisponible: "Le fournisseur d'identité est indisponible.",
+  verrouille: 'Compte verrouillé temporairement.',
+}
 
 export default function Login({ onDone }) {
   const [step, setStep] = useState(1)
@@ -18,6 +26,9 @@ export default function Login({ onDone }) {
   const [newPwd, setNewPwd] = useState('')
   const [newPwd2, setNewPwd2] = useState('')
   const [codes, setCodes] = useState(null)
+  const [providers, setProviders] = useState({ items: [], local_login_enabled: true })
+  const ssoError = new URLSearchParams(window.location.search).get('sso_error')
+  useEffect(() => { api('/auth/providers').then(setProviders).catch(() => {}) }, [])
 
   const submitPassword = async (e) => {
     e.preventDefault()
@@ -138,6 +149,13 @@ export default function Login({ onDone }) {
                 onChange={(e) => setPassword(e.target.value)} required />
               {error && <p className="error" role="alert">{error}</p>}
               <button className="primary wide" disabled={busy}>{t('Continuer')}</button>
+              {providers.items.length > 0 && (
+                <div className="sso">
+                  <p className="muted small">{t('ou')}</p>
+                  {providers.items.map((p) => <a key={p.name} className="btn-link wide" href={`/api/v1/auth/oidc/${p.name}/start`}>{t('Se connecter avec {nom}', { nom: p.label })}</a>)}
+                </div>
+              )}
+              {ssoError && <p className="error" role="alert">{SSO_ERRORS[ssoError] ? t(SSO_ERRORS[ssoError]) : t('Connexion SSO refusée.')}</p>}
             </form>
           ) : (
             <form onSubmit={submitCode}>

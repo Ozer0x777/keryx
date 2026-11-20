@@ -72,6 +72,16 @@ class Settings:
     # À valider avec le DPO ; chaque client peut avoir sa propre valeur.
     retention_months: int = field(default_factory=lambda: max(6, _int("KERYX_RETENTION_MONTHS", 12)))
 
+    # Authentification unique OIDC (Keycloak). JSON : [{"name":"soc","label":"Compte SOC","issuer":"https://…/realms/soc",
+    # "client_id":"keryx","client_secret":"…"}]. Plusieurs fournisseurs possibles (realms « soc » et « clients »).
+    oidc_providers: str | None = field(default_factory=lambda: os.environ.get("KERYX_OIDC_PROVIDERS"))
+    # HTTP autorisé pour l'émetteur : essais locaux uniquement (en production : HTTPS obligatoire)
+    oidc_allow_http: bool = field(default_factory=lambda: _bool("KERYX_OIDC_ALLOW_HTTP", False))
+    # Si vrai, seul un Admin peut encore se connecter par mot de passe local (accès de secours) ; les autres passent par SSO.
+    oidc_enforce: bool = field(default_factory=lambda: _bool("KERYX_OIDC_ENFORCE", False))
+    # Exige cette valeur dans la revendication « acr » du jeton (ex. niveau d'authentification MFA du realm). Vide = non contrôlé.
+    oidc_required_acr: str | None = field(default_factory=lambda: os.environ.get("KERYX_OIDC_REQUIRED_ACR"))
+
     # Interface web (fichiers construits par Vite)
     web_dist: str = field(default_factory=lambda: os.environ.get(
         "KERYX_WEB_DIST", os.path.join(os.path.dirname(__file__), "web_dist")))

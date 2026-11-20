@@ -92,10 +92,11 @@ export default function Users() {
                 <td className="mono">{u.username}</td><td>{u.display_name}</td><td>{ROLES[u.role]}</td>
                 <td className="mono small">{u.clients.join(', ') || '—'}</td>
                 <td className="mono small">{formatUtc(u.last_login_at)}</td>
-                <td>{!u.active ? <span className="pill">Désactivé</span> : !u.enrolled ? <span className="pill warn">À activer</span> : u.locked ? <span className="pill danger">Verrouillé</span> : <span className="pill ok">Actif</span>}</td>
+                <td>{!u.active ? <span className="pill">Désactivé</span> : !u.enrolled ? <span className="pill warn">À activer</span> : u.locked ? <span className="pill danger">Verrouillé</span> : <span className="pill ok">Actif</span>}{u.sso && <span className="pill" title="Identité fédérée liée (SSO)" style={{ marginLeft: 6 }}>SSO</span>}</td>
                 <td><div className="row gap wrap">
                   <button type="button" className="small-btn" onClick={() => reset2fa(u)}>Réinit. 2FA</button>
                   <button type="button" className="small-btn" onClick={() => resetPwd(u)}>Mot de passe</button>
+                  {u.sso && <button type="button" className="small-btn" onClick={() => window.confirm(`Délier l'identité SSO de ${u.username} ? Elle sera liée de nouveau à sa prochaine connexion SSO.`) && run(() => api(`/admin/users/${encodeURIComponent(u.username)}/unlink-sso`, { method: 'POST' }), 'Identité SSO déliée.')}>Délier SSO</button>}
                   <button type="button" className="small-btn danger" onClick={() => toggle(u)}>{u.active ? 'Désactiver' : 'Réactiver'}</button>
                 </div></td>
               </tr>
