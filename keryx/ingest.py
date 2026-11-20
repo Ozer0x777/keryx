@@ -11,7 +11,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session as DbSession
 
 from . import audit
@@ -108,6 +108,10 @@ def next_ref(db: DbSession, tenant: Tenant) -> tuple[int, str]:
 
 
 # ---------------------------------------------------------------- ingestion
+MAX_RAW_PER_TICKET = 500
+_CRIT_RANK = {"Faible": 1, "Moyenne": 2, "Élevée": 3, "Critique": 4}
+
+
 def ingest_alert(db: DbSession, settings: Settings, tenant: Tenant, alert: dict, actor: str) -> IngestResult:
     if not isinstance(alert, dict):
         raise AlertRejected("Le corps doit être un objet JSON.")
@@ -134,6 +138,10 @@ def ingest_alert(db: DbSession, settings: Settings, tenant: Tenant, alert: dict,
     raw_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()
     wazuh_id = _str(alert.get("id"), 64) or None
 
+    # Sérialise l'ingestion par client (PostgreSQL : verrou de ligne ; SQLite : sans effet, déjà sérialisé) :
+    # deux alertes simultanées de même règle et même agent ne créent plus deux tickets.
+    db.execute(select(Tenant.id).where(Tenant.id == tenant.id).with_for_update())
+
     # Idempotence : une alerte déjà reçue (même identifiant Wazuh) n'est pas comptée deux fois
     # (le script Wazuh réessaie après un délai dépassé).
     if wazuh_id:
@@ -158,7 +166,13 @@ def ingest_alert(db: DbSession, settings: Settings, tenant: Tenant, alert: dict,
         existing.occurrences += 1
         existing.last_seen_at = now
         existing.updated_at = now
-        db.add(RawAlert(ticket_id=existing.id, tenant_id=tenant.id, wazuh_id=wazuh_id, sha256=raw_hash, payload=raw))
+        if _CRIT_RANK[crit] > _CRIT_RANK.get(existing.criticite_initiale, 0):
+            existing.criticite_initiale = crit  # la criticité ne redescend jamais lors d'une fusion
+            existing.rule_level = level
+        kept = db.scalar(select(func.count()).select_from(RawAlert).where(RawAlert.ticket_id == existing.id))
+        # Plafond de stockage : au-delà, seule l'empreinte de l'alerte est conservée.
+        payload = raw if kept < MAX_RAW_PER_TICKET else json.dumps({"non_conserve": "plafond atteint", "sha256": raw_hash})
+        db.add(RawAlert(ticket_id=existing.id, tenant_id=tenant.id, wazuh_id=wazuh_id, sha256=raw_hash, payload=payload))
         db.add(TicketEvent(ticket_id=existing.id, actor=actor, action="occurrence",
                            details={"occurrences": existing.occurrences, "wazuh_id": wazuh_id}))
         audit.record(db, actor, "ticket.merge_alert", "ticket", existing.ref, tenant.id,
