@@ -1,0 +1,168 @@
+"""Administration en ligne de commande (actions tracées dans le journal d'audit).
+
+Exemples :
+  python -m keryx.cli init-db
+  python -m keryx.cli add-client ACME "ACME Industrie"
+  python -m keryx.cli add-user sbenali "S. Benali" analyst --clients ACME
+  python -m keryx.cli add-api-key ACME wazuh-manager-01
+  python -m keryx.cli add-mitre --group authentication_failures T1110 "Brute Force" "Credential Access"
+  python -m keryx.cli verify-audit [--checkpoint SEQ:SCEAU]
+  python -m keryx.cli checkpoint             # sceau de tête à archiver hors de Keryx
+  python -m keryx.cli set-contacts ACME rssi@acme.example soc@acme.example
+  python -m keryx.cli gen-key                # nouvelle KERYX_SECRET_KEY
+"""
+from __future__ import annotations
+
+import argparse
+import getpass
+import os
+import sys
+
+from sqlalchemy import select
+
+from . import audit, security
+from .config import Settings
+from .db import Base, make_engine, make_session_factory
+from .mitre import valid_technique
+from .models import ROLES, ApiKey, MitreMapping, Tenant, User
+
+
+def _session(settings: Settings):
+    engine = make_engine(settings.database_url)
+    if settings.auto_create_schema:
+        Base.metadata.create_all(engine)
+    return make_session_factory(engine)()
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(prog="keryx")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("init-db")
+    c = sub.add_parser("add-client"); c.add_argument("key"); c.add_argument("name")
+    u = sub.add_parser("add-user")
+    u.add_argument("username"); u.add_argument("display_name"); u.add_argument("role", choices=ROLES)
+    u.add_argument("--clients", default="", help="clés clients séparées par des virgules")
+    k = sub.add_parser("add-api-key"); k.add_argument("client_key"); k.add_argument("name")
+    m = sub.add_parser("add-mitre")
+    g = m.add_mutually_exclusive_group(required=True)
+    g.add_argument("--rule"); g.add_argument("--group")
+    m.add_argument("technique"); m.add_argument("name", nargs="?", default=""); m.add_argument("tactic", nargs="?", default="")
+    va = sub.add_parser("verify-audit"); va.add_argument("--checkpoint")
+    sub.add_parser("checkpoint")
+    sc = sub.add_parser("set-contacts"); sc.add_argument("client_key"); sc.add_argument("emails", nargs="*")
+    sub.add_parser("gen-key")
+    args = p.parse_args(argv)
+
+    if args.cmd == "gen-key":
+        print(security.new_secret_key())
+        return 0
+
+    settings = Settings()
+    box = security.SecretBox(settings.secret_key)
+    audit.configure(settings.secret_key)
+    db = _session(settings)
+    actor = f"cli:{os.environ.get('USER', 'admin')}"
+
+    if args.cmd == "init-db":
+        print("Base initialisée :", settings.database_url)
+        return 0
+
+    if args.cmd == "add-client":
+        key = args.key.upper()
+        if not key.isalnum() or len(key) > 16:
+            print("La clé client doit être alphanumérique (16 caractères max).", file=sys.stderr)
+            return 2
+        t = Tenant(key=key, name=args.name)
+        db.add(t); db.flush()
+        audit.record(db, actor, "client.create", "tenant", key, t.id)
+        db.commit()
+        print(f"Client {key} créé.")
+        return 0
+
+    if args.cmd == "add-user":
+        password = os.environ.get("KERYX_NEW_PASSWORD") or getpass.getpass("Mot de passe (12 caractères min.) : ")
+        tenants = []
+        for key in filter(None, (x.strip().upper() for x in args.clients.split(","))):
+            t = db.scalars(select(Tenant).where(Tenant.key == key)).first()
+            if t is None:
+                print(f"Client inconnu : {key}", file=sys.stderr)
+                return 2
+            tenants.append(t)
+        if args.role == "client" and len(tenants) != 1:
+            print("Un compte Client doit être rattaché à exactement un client.", file=sys.stderr)
+            return 2
+        if args.role == "admin" and tenants:
+            print("Un compte Admin n'est rattaché à aucun client (séparation admin / opérateurs).", file=sys.stderr)
+            return 2
+        secret = security.new_totp_secret()
+        plain_codes, hashed_codes = security.new_recovery_codes()
+        user = User(username=args.username, display_name=args.display_name, role=args.role,
+                    password_hash=security.hash_password(password), totp_secret="",
+                    recovery_codes=hashed_codes, tenants=tenants)
+        db.add(user); db.flush()
+        user.totp_secret = box.encrypt(secret, f"totp:{user.id}")
+        audit.record(db, actor, "user.create", "user", user.id, None, {"role": args.role,
+                                                                        "clients": [t.key for t in tenants]})
+        db.commit()
+        print(f"Utilisateur {args.username} créé ({args.role}).")
+        print("À enregistrer dans l'application d'authentification (une seule fois) :")
+        print("  ", security.totp_uri(secret, args.username))
+        print("Codes de secours (affichés une seule fois) :")
+        for code in plain_codes:
+            print("  ", code)
+        return 0
+
+    if args.cmd == "add-api-key":
+        t = db.scalars(select(Tenant).where(Tenant.key == args.client_key.upper())).first()
+        if t is None:
+            print("Client inconnu.", file=sys.stderr)
+            return 2
+        key, prefix, digest = security.new_api_key()
+        db.add(ApiKey(tenant_id=t.id, name=args.name, prefix=prefix, key_hash=digest))
+        audit.record(db, actor, "apikey.create", "tenant", t.key, t.id, {"name": args.name, "prefix": prefix})
+        db.commit()
+        print(f"Clé d'ingestion pour {t.key} (affichée une seule fois) :\n  {key}")
+        return 0
+
+    if args.cmd == "add-mitre":
+        if not valid_technique(args.technique):
+            print("Identifiant MITRE invalide (ex. T1110 ou T1543.003).", file=sys.stderr)
+            return 2
+        db.add(MitreMapping(rule_id=args.rule, rule_group=args.group, technique_id=args.technique,
+                            technique_name=args.name, tactic=args.tactic, created_by=actor))
+        audit.record(db, actor, "mitre.mapping_create", None, args.technique, None,
+                     {"rule": args.rule, "group": args.group})
+        db.commit()
+        print("Correspondance ajoutée.")
+        return 0
+
+    if args.cmd == "set-contacts":
+        t = db.scalars(select(Tenant).where(Tenant.key == args.client_key.upper())).first()
+        if t is None:
+            print("Client inconnu.", file=sys.stderr)
+            return 2
+        emails = [e for e in args.emails if "@" in e and len(e) <= 254]
+        t.contact_emails = emails
+        audit.record(db, actor, "client.contacts", "tenant", t.key, t.id, {"count": len(emails)})
+        db.commit()
+        print(f"{len(emails)} contact(s) enregistré(s) pour {t.key}.")
+        return 0
+
+    if args.cmd == "checkpoint":
+        seq, seal = audit.head(db)
+        print(f"{seq}:{seal}")
+        return 0
+
+    if args.cmd == "verify-audit":
+        cp = None
+        if args.checkpoint:
+            seq, _, seal = args.checkpoint.partition(":")
+            cp = (int(seq), seal)
+        ok, bad = audit.verify_chain(db, cp)
+        print("Chaîne d'audit intègre." if ok else f"Chaîne d'audit ROMPUE à l'entrée {bad}.")
+        return 0 if ok else 1
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

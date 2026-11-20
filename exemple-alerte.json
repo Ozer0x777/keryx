@@ -1,0 +1,53 @@
+{
+  "timestamp": "2026-11-20T14:41:02.118+0000",
+  "id": "1732113662.4417203",
+  "rule": {
+    "id": "5712",
+    "level": 10,
+    "description": "sshd: brute force trying to get access to the system. Authentication failed.",
+    "groups": [
+      "syslog",
+      "sshd",
+      "authentication_failures"
+    ],
+    "mitre": {
+      "id": [
+        "T1110"
+      ],
+      "tactic": [
+        "Credential Access"
+      ],
+      "technique": [
+        "Brute Force"
+      ]
+    },
+    "pci_dss": [
+      "11.4",
+      "10.2.4"
+    ],
+    "gdpr": [
+      "IV_35.7.d",
+      "IV_32.2"
+    ]
+  },
+  "agent": {
+    "id": "003",
+    "name": "srv-web-01",
+    "ip": "10.20.1.15",
+    "labels": {
+      "importance": "sensible"
+    }
+  },
+  "manager": {
+    "name": "wazuh-manager-01"
+  },
+  "decoder": {
+    "name": "sshd"
+  },
+  "data": {
+    "srcip": "185.220.101.4",
+    "srcuser": "root"
+  },
+  "location": "/var/log/auth.log",
+  "full_log": "Nov 20 14:41:02 srv-web-01 sshd[2211]: Failed password for root from 185.220.101.4 port 51344 ssh2"
+}

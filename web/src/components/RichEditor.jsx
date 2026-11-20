@@ -1,0 +1,59 @@
+import { EditorContent, useEditor } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import Image from '@tiptap/extension-image'
+import { useEffect, useRef } from 'react'
+
+// Éditeur riche (TipTap). Le HTML produit est assaini côté serveur (nh3, liste blanche) avant stockage.
+export default function RichEditor({ value, onChange, label, onImage, minHeight = 120 }) {
+  const fileRef = useRef(null)
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({ heading: { levels: [2, 3] }, link: { openOnClick: false, protocols: ['https', 'mailto'] } }),
+      Image.configure({ inline: false }),
+    ],
+    content: value || '',
+    onUpdate: ({ editor: e }) => onChange(e.isEmpty ? '' : e.getHTML()),
+    editorProps: { attributes: { 'aria-label': label, class: 'rich-content', style: `min-height:${minHeight}px` } },
+  })
+
+  useEffect(() => {
+    if (editor && value === '' && !editor.isEmpty) editor.commands.clearContent()
+  }, [value, editor])
+
+  if (!editor) return null
+  const btn = (name, title, action, active) => (
+    <button type="button" className={`tool${active ? ' active' : ''}`} aria-label={title} title={title}
+      onClick={action}>{name}</button>
+  )
+  const setLink = () => {
+    const url = window.prompt('Adresse du lien (https://…)')
+    if (url === null) return
+    if (!url) editor.chain().focus().unsetLink().run()
+    else if (/^https:\/\//.test(url)) editor.chain().focus().setLink({ href: url }).run()
+  }
+  return (
+    <div className="editor">
+      <div className="toolbar" role="toolbar" aria-label="Mise en forme">
+        {btn('H2', 'Titre', () => editor.chain().focus().toggleHeading({ level: 2 }).run(), editor.isActive('heading', { level: 2 }))}
+        {btn('B', 'Gras', () => editor.chain().focus().toggleBold().run(), editor.isActive('bold'))}
+        {btn('I', 'Italique', () => editor.chain().focus().toggleItalic().run(), editor.isActive('italic'))}
+        {btn('•', 'Liste à puces', () => editor.chain().focus().toggleBulletList().run(), editor.isActive('bulletList'))}
+        {btn('1.', 'Liste numérotée', () => editor.chain().focus().toggleOrderedList().run(), editor.isActive('orderedList'))}
+        {btn('{ }', 'Bloc de code', () => editor.chain().focus().toggleCodeBlock().run(), editor.isActive('codeBlock'))}
+        {btn('↗', 'Lien', setLink, editor.isActive('link'))}
+        {onImage && btn('▣', 'Image (PNG, JPEG, WebP)', () => fileRef.current?.click(), false)}
+        {onImage && (
+          <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden
+            onChange={async (e) => {
+              const f = e.target.files?.[0]
+              e.target.value = ''
+              if (!f) return
+              const src = await onImage(f)
+              if (src) editor.chain().focus().setImage({ src, alt: f.name }).run()
+            }} />
+        )}
+      </div>
+      <EditorContent editor={editor} />
+    </div>
+  )
+}

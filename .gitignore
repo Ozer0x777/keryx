@@ -1,0 +1,7 @@
+data/
+node_modules/
+.env.local
+run.sh
+__pycache__/
+*.pyc
+keryx/web_dist/

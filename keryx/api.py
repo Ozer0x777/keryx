@@ -1,0 +1,879 @@
+"""API REST de Keryx (FastAPI) et service de l'interface web.
+
+Erreurs au format Problem Details [RFC 9457]. Sessions par cookie HttpOnly/Secure/SameSite
++ jeton CSRF en double soumission [RFC 6265, ASVS V3/V7]. En-têtes de sécurité
+[RFC 6797 HSTS, RFC 9111 Cache-Control: no-store, CSP]. Limitation de débit [RFC 6585 : 429].
+"""
+from __future__ import annotations
+
+import ipaddress
+import json
+import logging
+import os
+import time
+from collections import defaultdict, deque
+from datetime import datetime, timedelta
+from typing import Any
+from urllib.parse import quote
+
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, Response, UploadFile
+from fastapi.concurrency import run_in_threadpool
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import delete, select, update
+from sqlalchemy.orm import Session as DbSession
+from starlette.background import BackgroundTask
+
+from . import attachments as att
+from . import audit, security
+from .config import Settings
+from .db import Base, make_engine, make_session_factory
+from .ids import as_utc, rfc3339, utcnow
+from .ingest import AlertRejected, ingest_alert
+from .mitre import valid_technique
+from .models import (
+    LIFECYCLE, TLP, VERDICTS, ApiKey, Attachment, AuditEntry, Comment, CustodyEvent, RawAlert, Session,
+    Tenant, Ticket, TicketEvent, User,
+)
+from .notify import send_pending
+from .sanitize import clean_html
+from .severity import DOMMAGES, IMPORTANCES, gravite, is_rex_required
+from .models import TERMINAL_STATUSES as TERMINAL
+from .workflow import TransitionError, check_transition, rex_pending
+
+SESSION_COOKIE = "keryx_session"
+CSRF_COOKIE = "keryx_csrf"
+PROBLEM = "application/problem+json"
+IDLE_MINUTES = 30
+GENERIC_LOGIN_ERROR = "Identifiant ou mot de passe incorrect, ou compte temporairement verrouillé."
+log = logging.getLogger("keryx")
+
+
+# ---------------------------------------------------------------- erreurs RFC 9457
+def problem(status: int, title: str, detail: str | None = None) -> JSONResponse:
+    body: dict[str, Any] = {"type": "about:blank", "title": title, "status": status}
+    if detail:
+        body["detail"] = detail
+    return JSONResponse(body, status_code=status, media_type=PROBLEM, headers={"Cache-Control": "no-store"})
+
+
+class RateLimiter:
+    """Fenêtre glissante en mémoire, par clé. Suffisant pour un processus ; à mutualiser
+    (Redis ou base) si plusieurs workers sont lancés."""
+
+    def __init__(self, limit: int, window_s: int):
+        self.limit, self.window = limit, window_s
+        self.hits: dict[str, deque] = defaultdict(deque)
+
+    def allow(self, key: str) -> bool:
+        now = time.monotonic()
+        q = self.hits[key]
+        while q and now - q[0] > self.window:
+            q.popleft()
+        if len(q) >= self.limit:
+            return False
+        q.append(now)
+        return True
+
+
+def _reject_constant(name: str):
+    raise ValueError(f"constante JSON interdite : {name}")
+
+
+def _no_control_chars(v: str) -> str:
+    if any(ord(c) < 32 or ord(c) == 127 for c in v):
+        raise ValueError("caractères de contrôle interdits")
+    return v
+
+
+# ---------------------------------------------------------------- schémas
+class LoginIn(BaseModel):
+    username: str = Field(min_length=1, max_length=120)
+    password: str = Field(max_length=256)
+    _u = field_validator("username")(_no_control_chars)
+
+
+class TotpIn(BaseModel):
+    code: str | None = Field(default=None, max_length=12)
+    recovery_code: str | None = Field(default=None, max_length=32)
+
+
+class QualificationIn(BaseModel):
+    verdict: str | None = None
+    dommages: str | None = None
+    importance: str | None = None
+    impact: str | None = Field(default=None, max_length=5000)
+    risque: str | None = Field(default=None, max_length=5000)
+    tlp: str | None = None
+
+
+class StatusIn(BaseModel):
+    status: str
+
+
+class CommentIn(BaseModel):
+    body_html: str = Field(max_length=100_000)
+    visible_client: bool = False
+
+
+class BodyIn(BaseModel):
+    body_html: str = Field(max_length=200_000)
+
+
+class MitreIn(BaseModel):
+    techniques: list[str] = Field(max_length=50)
+
+
+class AssignIn(BaseModel):
+    username: str | None = Field(default=None, max_length=120)
+
+
+class SyntheseIn(BaseModel):
+    compromission_initiale: datetime | None = None
+    chronologie: str | None = Field(default=None, max_length=100_000)
+    mode_operatoire: str | None = Field(default=None, max_length=100_000)
+    perimetre: str | None = Field(default=None, max_length=100_000)
+    rex_html: str | None = Field(default=None, max_length=100_000)
+
+
+class ExternalEvidenceIn(BaseModel):
+    description: str = Field(min_length=3, max_length=5000)
+    collected_at: datetime
+    method: str = Field(min_length=3, max_length=500)
+    sensitivity: str = "TLP:AMBER"
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    location: str = Field(min_length=3, max_length=500)
+    size: int = Field(default=0, ge=0)
+    filename: str = Field(default="preuve externe", max_length=200)
+
+
+class LifecycleIn(BaseModel):
+    lifecycle: str
+    reason: str = Field(min_length=3, max_length=500)
+
+
+# ---------------------------------------------------------------- application
+def create_app(settings: Settings | None = None) -> FastAPI:
+    settings = settings or Settings()
+    box = security.SecretBox(settings.secret_key)
+    audit.configure(settings.secret_key)
+    engine = make_engine(settings.database_url)
+    if settings.auto_create_schema:
+        Base.metadata.create_all(engine)  # tests uniquement ; sinon `alembic upgrade head`
+    SessionLocal = make_session_factory(engine)
+    login_ip_limiter = RateLimiter(limit=30, window_s=300)
+    login_user_limiter = RateLimiter(limit=10, window_s=300)
+    ingest_fail_limiter = RateLimiter(limit=20, window_s=60)
+    ingest_limiter = RateLimiter(limit=600, window_s=60)
+
+    # Pas d'interface Swagger : elle charge ses scripts depuis un CDN (aucun service externe).
+    app = FastAPI(title="Keryx", version="0.2.0", docs_url=None, redoc_url=None, openapi_url="/api/openapi.json")
+    app.state.settings = settings
+    app.state.engine = engine
+    app.state.SessionLocal = SessionLocal
+    app.state.box = box
+
+    # -- erreurs
+    @app.exception_handler(HTTPException)
+    async def _http_exc(_req: Request, exc: HTTPException):
+        return problem(exc.status_code, _title(exc.status_code), str(exc.detail) if exc.detail else None)
+
+    @app.exception_handler(RequestValidationError)
+    async def _val_exc(_req: Request, exc: RequestValidationError):
+        return problem(422, "Requête invalide", "; ".join(str(e.get("msg", "")) for e in exc.errors())[:500])
+
+    @app.exception_handler(Exception)
+    async def _any_exc(_req: Request, exc: Exception):
+        log.exception("Erreur interne")
+        return problem(500, "Erreur interne", "Une erreur inattendue est survenue.")
+
+    # -- en-têtes de sécurité
+    @app.middleware("http")
+    async def _headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; "
+            "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+        )
+        if request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
+    # -- dépendances
+    def get_db():
+        db = SessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    def commit(db: DbSession) -> None:
+        new_entries = db.info.pop("audit_new", [])
+        db.commit()
+        if settings.syslog_host:
+            for e in new_entries:  # pragma: no cover - réseau
+                try:
+                    audit.send_syslog(audit.to_syslog(e, settings.hostname), settings.syslog_host, settings.syslog_port)
+                except OSError:
+                    pass
+
+    def _session_from_cookie(request: Request, db: DbSession) -> Session | None:
+        token = request.cookies.get(SESSION_COOKIE)
+        if not token or len(token) > 100:
+            return None
+        s = db.get(Session, security.sha256(token))
+        now = utcnow()
+        if s is None or as_utc(s.expires_at) < now:
+            return None
+        if s.stage == "full" and as_utc(s.last_seen_at) < now - timedelta(minutes=IDLE_MINUTES):
+            return None  # inactivité prolongée [ASVS V7]
+        if s.stage == "full" and as_utc(s.last_seen_at) < now - timedelta(seconds=60):
+            s.last_seen_at = now
+            db.commit()
+        return s
+
+    def current_user(request: Request, db: DbSession = Depends(get_db),
+                     x_csrf_token: str | None = Header(default=None)) -> User:
+        s = _session_from_cookie(request, db)
+        if s is None or s.stage != "full":
+            raise HTTPException(401, "Authentification requise (mot de passe + code TOTP).")
+        if request.method not in ("GET", "HEAD", "OPTIONS"):
+            if not x_csrf_token or not security.hmac_equal(x_csrf_token, s.csrf_token):
+                raise HTTPException(403, "Jeton CSRF manquant ou invalide.")
+        user = db.get(User, s.user_id)
+        if user is None or not user.active:
+            raise HTTPException(401, "Compte inactif.")
+        if user.locked_until and as_utc(user.locked_until) > utcnow():
+            raise HTTPException(401, "Compte verrouillé.")
+        return user
+
+    def visible_tenant_ids(user: User) -> list[str]:
+        """Cloisonnement par client [PDIS IV.3.8.g]. L'admin ne voit aucun ticket [PDIS IV.3.9]."""
+        if user.role == "admin":
+            return []
+        return [t.id for t in user.tenants]
+
+    def load_ticket(db: DbSession, user: User, ref: str) -> Ticket:
+        if user.role == "admin":
+            audit.record(db, user.username, "ticket.access_denied", "ticket", ref[:32], None, {"role": "admin"})
+            commit(db)
+            raise HTTPException(403, "Le rôle Admin n'a pas accès au contenu des tickets.")
+        t = db.scalars(select(Ticket).where(Ticket.ref == ref[:32])).first()
+        # 404 aussi pour un ticket d'un autre client : on ne révèle pas son existence.
+        if t is None or t.tenant_id not in visible_tenant_ids(user):
+            audit.record(db, user.username, "ticket.access_denied", "ticket", ref[:32], None, {})
+            commit(db)
+            raise HTTPException(404, "Ticket introuvable.")
+        return t
+
+    def load_attachment(db: DbSession, user: User, attachment_id: str) -> tuple[Attachment, Ticket]:
+        a = db.get(Attachment, attachment_id[:36])
+        if a is None or a.tenant_id not in visible_tenant_ids(user):
+            raise HTTPException(404, "Pièce introuvable.")
+        if user.role == "client" and not a.visible_client:
+            raise HTTPException(404, "Pièce introuvable.")
+        return a, db.get(Ticket, a.ticket_id)
+
+    def require_role(user: User, *roles: str) -> None:
+        if user.role not in roles:
+            raise HTTPException(403, "Action non autorisée pour ce rôle.")
+
+    def require_open(t: Ticket) -> None:
+        if t.status in TERMINAL:
+            raise HTTPException(409, "Ticket clos : modification impossible.")
+
+    def client_ip(request: Request) -> str:
+        return request.client.host if request.client else "inconnu"
+
+    def event(db, t: Ticket, user: User, action: str, details: dict, visible_client: bool = False):
+        db.add(TicketEvent(ticket_id=t.id, actor=user.username, action=action, details=details,
+                           visible_client=visible_client))
+        audit.record(db, user.username, f"ticket.{action}", "ticket", t.ref, t.tenant_id, details)
+
+    def _lock(user: User) -> None:
+        user.locked_until = utcnow() + timedelta(minutes=settings.lockout_minutes)
+        user.failed_attempts = 0
+
+    # ---------------------------------------------------------------- santé
+    @app.get("/healthz")
+    def healthz():
+        return {"status": "ok"}
+
+    # ---------------------------------------------------------------- authentification
+    @app.post("/api/v1/auth/login")
+    def login(body: LoginIn, request: Request, response: Response, db: DbSession = Depends(get_db)):
+        ip = client_ip(request)
+        if not login_ip_limiter.allow(ip) or not login_user_limiter.allow(body.username.lower()):
+            raise HTTPException(429, "Trop de tentatives, réessayez plus tard.")
+        now = utcnow()
+        db.execute(delete(Session).where(Session.expires_at < now))  # ménage des sessions expirées
+        user = db.scalars(select(User).where(User.username == body.username)).first()
+        locked = bool(user and user.locked_until and as_utc(user.locked_until) > now)
+        # Toujours une vérification Argon2 (même durée que l'identifiant existe ou non).
+        ok = security.verify_password(user.password_hash if user else None, body.password)
+        if not user or not user.active or locked or not ok:
+            # Pas de verrouillage sur le mot de passe (sinon n'importe qui bloquerait un compte) :
+            # la limitation par identifiant et par IP freine la force brute.
+            audit.record(db, body.username, "auth.login_failed", "user", user.id if user else None, None,
+                         {"ip": ip, "locked": locked})
+            commit(db)
+            raise HTTPException(401, GENERIC_LOGIN_ERROR)
+        token = security.new_token()
+        db.add(Session(token_hash=security.sha256(token), user_id=user.id, stage="password",
+                       csrf_token=security.new_token(), expires_at=now + timedelta(minutes=5)))
+        audit.record(db, user.username, "auth.password_ok", "user", user.id, None, {"ip": ip})
+        commit(db)
+        _set_cookie(response, SESSION_COOKIE, token, settings, http_only=True, max_age=300)
+        return {"next": "totp"}
+
+    @app.post("/api/v1/auth/totp")
+    def totp(body: TotpIn, request: Request, response: Response, db: DbSession = Depends(get_db)):
+        ip = client_ip(request)
+        s = _session_from_cookie(request, db)
+        if s is None or s.stage != "password":
+            raise HTTPException(401, "Étape mot de passe requise.")
+        user = db.get(User, s.user_id)
+        if not login_ip_limiter.allow(ip) or not login_user_limiter.allow(user.username.lower()):
+            raise HTTPException(429, "Trop de tentatives, réessayez plus tard.")
+        if user.locked_until and as_utc(user.locked_until) > utcnow():
+            # Verrouillé : aucune session intermédiaire ne doit permettre de continuer.
+            db.execute(delete(Session).where(Session.user_id == user.id, Session.stage == "password"))
+            audit.record(db, user.username, "auth.totp_while_locked", "user", user.id, None, {"ip": ip})
+            commit(db)
+            raise HTTPException(401, GENERIC_LOGIN_ERROR)
+        ok, method = False, None
+        if body.code:
+            step = security.verify_totp(box.decrypt(user.totp_secret, f"totp:{user.id}"), body.code,
+                                        user.last_totp_step)
+            if step is not None:
+                user.last_totp_step, ok, method = step, True, "totp"
+        elif body.recovery_code:
+            remaining = security.use_recovery_code(user.recovery_codes or [], body.recovery_code)
+            if remaining is not None:
+                user.recovery_codes, ok, method = remaining, True, "recovery_code"
+        if not ok:
+            failures = db.execute(update(User).where(User.id == user.id)
+                                  .values(failed_attempts=User.failed_attempts + 1)
+                                  .returning(User.failed_attempts)).scalar_one()
+            db.refresh(user)
+            if failures >= settings.max_failed_logins:
+                _lock(user)
+                db.execute(delete(Session).where(Session.user_id == user.id, Session.stage == "password"))
+            audit.record(db, user.username, "auth.totp_failed", "user", user.id, None, {"ip": ip})
+            commit(db)
+            raise HTTPException(401, "Code de vérification invalide.")
+        db.delete(s)  # rotation du jeton à l'élévation (anti-fixation)
+        token, csrf = security.new_token(), security.new_token()
+        db.add(Session(token_hash=security.sha256(token), user_id=user.id, stage="full", csrf_token=csrf,
+                       expires_at=utcnow() + timedelta(hours=settings.session_hours)))
+        user.failed_attempts = 0
+        user.last_login_at = utcnow()
+        audit.record(db, user.username, "auth.login_success", "user", user.id, None, {"ip": ip, "method": method})
+        commit(db)
+        max_age = settings.session_hours * 3600
+        _set_cookie(response, SESSION_COOKIE, token, settings, http_only=True, max_age=max_age)
+        _set_cookie(response, CSRF_COOKIE, csrf, settings, http_only=False, max_age=max_age)
+        return {"csrf_token": csrf, "role": user.role, "display_name": user.display_name,
+                "recovery_codes_left": len(user.recovery_codes or [])}
+
+    @app.post("/api/v1/auth/logout")
+    def logout(request: Request, response: Response, user: User = Depends(current_user),
+               db: DbSession = Depends(get_db)):
+        s = _session_from_cookie(request, db)
+        if s:
+            db.delete(s)
+        audit.record(db, user.username, "auth.logout", "user", user.id)
+        commit(db)
+        response.delete_cookie(SESSION_COOKIE, path="/")
+        response.delete_cookie(CSRF_COOKIE, path="/")
+        return {"status": "ok"}
+
+    @app.get("/api/v1/me")
+    def me(request: Request, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        s = _session_from_cookie(request, db)
+        return {"username": user.username, "display_name": user.display_name, "role": user.role,
+                "csrf_token": s.csrf_token if s else None,
+                "clients": [{"key": t.key, "name": t.name} for t in user.tenants]}
+
+    # ---------------------------------------------------------------- ingestion Wazuh
+    def _auth_ingest_key(authorization: str | None, ip: str) -> tuple[str, str, str]:
+        db = SessionLocal()
+        try:
+            key = None
+            if authorization and authorization.startswith("Bearer ") and len(authorization) < 200:
+                key = db.scalars(select(ApiKey).where(
+                    ApiKey.key_hash == security.sha256(authorization[7:].strip()))).first()
+            if key is None or key.revoked:
+                # Limite AVANT d'écrire dans l'audit : un inconnu ne peut pas remplir le journal.
+                if ingest_fail_limiter.allow(ip):
+                    audit.record(db, "anonyme", "ingest.rejected_key", None, None, None, {"ip": ip})
+                    commit(db)
+                    raise HTTPException(401, "Clé d'API invalide.")
+                raise HTTPException(429, "Trop de tentatives, réessayez plus tard.")
+            if not ingest_limiter.allow(key.id):
+                raise HTTPException(429, "Débit d'ingestion dépassé.")
+            return key.id, key.tenant_id, key.name
+        finally:
+            db.close()
+
+    def _ingest_sync(raw: bytes, tenant_id: str, key_name: str) -> JSONResponse:
+        try:
+            alert = json.loads(raw, parse_constant=_reject_constant)
+        except (ValueError, UnicodeDecodeError, RecursionError):
+            raise HTTPException(400, "Le corps n'est pas un JSON valide.")
+        db = SessionLocal()
+        try:
+            tenant = db.get(Tenant, tenant_id)
+            try:
+                result = ingest_alert(db, settings, tenant, alert, actor=f"wazuh:{key_name}")
+            except AlertRejected as exc:
+                db.rollback()
+                raise HTTPException(422, str(exc))
+            notif_ids = [n.id for n in result.notifications if n.status == "en_attente"]
+            commit(db)
+            if result.status == "ignored":
+                return JSONResponse({"status": "ignored", "reason": result.reason}, status_code=202)
+            return JSONResponse(
+                {"status": result.status, "ticket": result.ticket.ref, "occurrences": result.ticket.occurrences},
+                status_code=201 if result.status == "created" else 200,
+                background=BackgroundTask(send_pending, SessionLocal, settings, notif_ids) if notif_ids else None,
+            )
+        finally:
+            db.close()
+
+    @app.post("/api/v1/ingest/wazuh")
+    async def ingest(request: Request, authorization: str | None = Header(default=None)):
+        ip = client_ip(request)
+        # Authentification avant de lire le corps ; accès base hors de la boucle d'événements.
+        _key_id, tenant_id, key_name = await run_in_threadpool(_auth_ingest_key, authorization, ip)
+        declared = request.headers.get("content-length")
+        if declared and (not declared.isdigit() or int(declared) > settings.max_alert_bytes):
+            raise HTTPException(413, "Alerte trop volumineuse.")
+        raw = bytearray()
+        async for chunk in request.stream():
+            raw += chunk
+            if len(raw) > settings.max_alert_bytes:
+                raise HTTPException(413, "Alerte trop volumineuse.")
+        return await run_in_threadpool(_ingest_sync, bytes(raw), tenant_id, key_name)
+
+    # ---------------------------------------------------------------- tickets
+    def ticket_summary(t: Ticket, tenants: dict[str, Tenant], users: dict[str, User] | None = None) -> dict[str, Any]:
+        return {
+            "ref": t.ref, "title": t.title,
+            "client": tenants[t.tenant_id].name if t.tenant_id in tenants else None,
+            "client_key": tenants[t.tenant_id].key if t.tenant_id in tenants else None,
+            "status": t.status, "criticite_initiale": t.criticite_initiale, "gravite": t.gravite,
+            "tlp": t.tlp, "mitre": [m["id"] for m in t.mitre], "mitre_source": t.mitre_source,
+            "occurrences": t.occurrences, "detected_at": rfc3339(t.detected_at),
+            "last_seen_at": rfc3339(t.last_seen_at),
+            "assignee": (users or {}).get(t.assignee_id).display_name if users and t.assignee_id in users else None,
+            "rex_en_attente": rex_pending(t.status, t.rex_required),
+        }
+
+    @app.get("/api/v1/tickets")
+    def list_tickets(status: str | None = None, client: str | None = None, rex_en_attente: bool = False,
+                     limit: int = 100, offset: int = 0,
+                     user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        limit, offset = max(1, min(limit, 500)), max(0, offset)
+        if user.role == "admin":
+            raise HTTPException(403, "Le rôle Admin n'a pas accès au contenu des tickets.")
+        tenants = {t.id: t for t in user.tenants}
+        ids = list(tenants)
+        if client:
+            ids = [i for i, t in tenants.items() if t.key == client.upper()]
+        q = select(Ticket).where(Ticket.tenant_id.in_(ids)).order_by(Ticket.created_at.desc())
+        if status:
+            q = q.where(Ticket.status == status)
+        if rex_en_attente:
+            q = q.where(Ticket.status == "cloture", Ticket.rex_required.is_(True))
+        tickets = db.scalars(q.limit(limit).offset(offset)).all()
+        assignee_ids = {t.assignee_id for t in tickets if t.assignee_id}
+        users = {u.id: u for u in db.scalars(select(User).where(User.id.in_(assignee_ids)))} if assignee_ids else {}
+        audit.record(db, user.username, "ticket.list", None, None, None, {"count": len(tickets)})
+        commit(db)
+        return {"items": [ticket_summary(t, tenants, users) for t in tickets], "limit": limit, "offset": offset}
+
+    def attachment_view(a: Attachment) -> dict:
+        return {"id": a.id, "kind": a.kind, "filename": a.filename, "content_type": a.content_type, "size": a.size,
+                "sha256": a.sha256, "description": a.description, "collected_at": rfc3339(a.collected_at),
+                "method": a.method, "sensitivity": a.sensitivity, "location": a.location,
+                "scan_status": a.scan_status, "scan_detail": a.scan_detail, "lifecycle": a.lifecycle,
+                "visible_client": a.visible_client, "created_at": rfc3339(a.created_at)}
+
+    @app.get("/api/v1/tickets/{ref}")
+    def get_ticket(ref: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        t = load_ticket(db, user, ref)
+        is_client = user.role == "client"
+        comments = db.scalars(select(Comment).where(Comment.ticket_id == t.id).order_by(Comment.created_at)).all()
+        events = db.scalars(select(TicketEvent).where(TicketEvent.ticket_id == t.id).order_by(TicketEvent.ts)).all()
+        atts = db.scalars(select(Attachment).where(Attachment.ticket_id == t.id).order_by(Attachment.created_at)).all()
+        author_ids = {c.author_id for c in comments} | ({t.assignee_id} if t.assignee_id else set())
+        authors = {u.id: u for u in db.scalars(select(User).where(User.id.in_(author_ids)))} if author_ids else {}
+        out = ticket_summary(t, {x.id: x for x in user.tenants}, authors)
+        out.update({
+            "body_html": t.body_html, "verdict": t.verdict, "dommages": t.dommages, "importance": t.importance,
+            "impact": t.impact, "risque": t.risque, "rex_required": t.rex_required,
+            "rule": {"id": t.rule_id, "level": t.rule_level, "description": t.rule_description, "groups": t.rule_groups},
+            "agent": {"id": t.agent_id, "name": t.agent_name, "ip": t.agent_ip},
+            "mitre_detail": t.mitre, "classification": t.classification,
+            "comments": [
+                {"author": authors[c.author_id].display_name if c.author_id in authors else "?",
+                 "body_html": c.body_html, "visible_client": c.visible_client, "created_at": rfc3339(c.created_at)}
+                for c in comments if (c.visible_client or not is_client)
+            ],
+            "events": [
+                {"ts": rfc3339(e.ts), "actor": e.actor, "action": e.action, "details": e.details}
+                for e in events if (e.visible_client or not is_client)
+            ],
+            "attachments": [attachment_view(a) for a in atts if (a.visible_client or not is_client)],
+        })
+        if not is_client:
+            out["raw_alerts"] = len(db.scalars(select(RawAlert.id).where(RawAlert.ticket_id == t.id)).all())
+            out["synthese"] = {"compromission_initiale": rfc3339(t.compromission_initiale),
+                               "chronologie": t.chronologie, "mode_operatoire": t.mode_operatoire,
+                               "perimetre": t.perimetre, "rex_html": t.rex_html}
+        audit.record(db, user.username, "ticket.read", "ticket", t.ref, t.tenant_id)
+        commit(db)
+        return out
+
+    @app.post("/api/v1/tickets/{ref}/qualification")
+    def qualify(ref: str, body: QualificationIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        require_role(user, "analyst", "manager")
+        t = load_ticket(db, user, ref)
+        require_open(t)
+        sent = body.model_fields_set  # mise à jour partielle : un champ absent n'efface rien
+        if "verdict" in sent and body.verdict not in VERDICTS:
+            raise HTTPException(422, f"Verdict attendu parmi : {', '.join(VERDICTS)}.")
+        if "importance" in sent and body.importance not in IMPORTANCES:
+            raise HTTPException(422, f"Importance attendue parmi : {', '.join(IMPORTANCES)}.")
+        if "dommages" in sent and body.dommages not in DOMMAGES:
+            raise HTTPException(422, f"Dommages attendus parmi : {', '.join(DOMMAGES)}.")
+        if "tlp" in sent and body.tlp not in TLP:
+            raise HTTPException(422, f"Marquage attendu parmi : {', '.join(TLP)}.")
+        if "verdict" in sent and body.verdict != t.verdict and t.status not in ("nouveau", "en_evaluation"):
+            raise HTTPException(409, "Le verdict ne peut changer qu'en phase d'évaluation.")
+        for f in ("verdict", "importance", "dommages", "impact", "risque", "tlp"):
+            if f in sent:
+                setattr(t, f, getattr(body, f))
+        if t.dommages:  # toujours recalculée sur l'état complet
+            tenant = db.get(Tenant, t.tenant_id)
+            t.gravite = gravite(t.dommages, t.importance, tenant.severity_grid)
+        t.rex_required = bool(t.verdict and t.verdict != "faux_positif"
+                              and is_rex_required(t.gravite or t.criticite_initiale))
+        t.qualified_at = t.updated_at = utcnow()
+        details = {"verdict": t.verdict, "gravite": t.gravite, "dommages": t.dommages, "importance": t.importance,
+                   "tlp": t.tlp}
+        event(db, t, user, "qualification", details)
+        commit(db)
+        return {"ref": t.ref, "verdict": t.verdict, "gravite": t.gravite, "rex_required": t.rex_required}
+
+    @app.post("/api/v1/tickets/{ref}/status")
+    def change_status(ref: str, body: StatusIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        require_role(user, "analyst", "manager")
+        t = load_ticket(db, user, ref)
+        try:
+            check_transition(t.status, body.status, t.verdict, t.rex_required, t.rex_html)
+        except TransitionError as exc:
+            raise HTTPException(409, str(exc))
+        old, t.status = t.status, body.status
+        t.updated_at = utcnow()
+        if body.status in ("faux_positif", "cloture"):
+            t.closed_at = t.updated_at
+        event(db, t, user, "statut", {"from": old, "to": body.status}, visible_client=True)
+        commit(db)
+        return {"ref": t.ref, "status": t.status, "rex_required": t.rex_required}
+
+    @app.post("/api/v1/tickets/{ref}/assign")
+    def assign(ref: str, body: AssignIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        require_role(user, "analyst", "manager")
+        t = load_ticket(db, user, ref)
+        require_open(t)
+        target = None
+        if body.username:
+            target = db.scalars(select(User).where(User.username == body.username)).first()
+            if (target is None or target.role not in ("analyst", "manager")
+                    or t.tenant_id not in [x.id for x in target.tenants]):
+                raise HTTPException(422, "Utilisateur inconnu ou non affecté à ce client.")
+        t.assignee_id = target.id if target else None
+        t.updated_at = utcnow()
+        event(db, t, user, "affectation", {"assignee": target.username if target else None})
+        commit(db)
+        return {"ref": t.ref, "assignee": target.display_name if target else None}
+
+    @app.get("/api/v1/tickets/{ref}/assignables")
+    def assignables(ref: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        require_role(user, "analyst", "manager")
+        t = load_ticket(db, user, ref)
+        tenant = db.get(Tenant, t.tenant_id)
+        users = db.scalars(select(User).where(User.role.in_(("analyst", "manager")), User.active.is_(True))).all()
+        return {"items": [{"username": u.username, "display_name": u.display_name}
+                          for u in users if tenant in u.tenants]}
+
+    @app.post("/api/v1/tickets/{ref}/comments", status_code=201)
+    def add_comment(ref: str, body: CommentIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        t = load_ticket(db, user, ref)
+        visible = True if user.role == "client" else body.visible_client
+        clean = clean_html(body.body_html)
+        if not clean.strip():
+            raise HTTPException(422, "Commentaire vide.")
+        db.add(Comment(ticket_id=t.id, author_id=user.id, body_html=clean, visible_client=visible))
+        audit.record(db, user.username, "ticket.comment", "ticket", t.ref, t.tenant_id, {"visible_client": visible})
+        commit(db)
+        return {"ref": t.ref, "visible_client": visible, "body_html": clean}
+
+    @app.put("/api/v1/tickets/{ref}/body")
+    def set_body(ref: str, body: BodyIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        require_role(user, "analyst", "manager")
+        t = load_ticket(db, user, ref)
+        require_open(t)
+        previous = t.body_html
+        t.body_html = clean_html(body.body_html)
+        t.updated_at = utcnow()
+        # Historique : la version précédente est conservée dans le registre des actions.
+        event(db, t, user, "description", {"version_precedente": previous})
+        commit(db)
+        return {"ref": t.ref, "body_html": t.body_html}
+
+    @app.put("/api/v1/tickets/{ref}/synthese")
+    def set_synthese(ref: str, body: SyntheseIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        """Synthèse évolutive de l'incident et retour d'expérience [PRIS VI.5.3.e, ISO 27002 5.27]."""
+        require_role(user, "analyst", "manager")
+        t = load_ticket(db, user, ref)
+        if t.status in ("faux_positif", "retour_experience"):
+            raise HTTPException(409, "Ticket clos : modification impossible.")
+        sent = body.model_fields_set
+        for f in ("chronologie", "mode_operatoire", "perimetre", "rex_html"):
+            if f in sent:
+                v = getattr(body, f)
+                setattr(t, f, clean_html(v) if v else None)
+        if "compromission_initiale" in sent:
+            t.compromission_initiale = body.compromission_initiale
+        t.updated_at = utcnow()
+        event(db, t, user, "synthese", {"champs": sorted(sent)})
+        commit(db)
+        return {"ref": t.ref, "status": "ok"}
+
+    @app.post("/api/v1/tickets/{ref}/mitre")
+    def set_mitre(ref: str, body: MitreIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        require_role(user, "analyst", "manager")
+        t = load_ticket(db, user, ref)
+        require_open(t)
+        bad = [x for x in body.techniques if not valid_technique(x)]
+        if bad:
+            raise HTTPException(422, f"Identifiants MITRE invalides : {', '.join(bad[:5])}")
+        before = [m["id"] for m in t.mitre]
+        known = {m["id"]: m for m in t.mitre}  # on garde nom et tactiques déjà connus
+        t.mitre = [known.get(x, {"id": x, "technique": "", "tactics": []}) for x in dict.fromkeys(body.techniques)]
+        t.mitre_source = "manuel"
+        t.updated_at = utcnow()
+        event(db, t, user, "mitre_manuel", {"avant": before, "apres": [m["id"] for m in t.mitre]})
+        commit(db)
+        return {"ref": t.ref, "mitre": [m["id"] for m in t.mitre], "mitre_source": "manuel"}
+
+    @app.get("/api/v1/tickets/{ref}/iodef")
+    def export_iodef(ref: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        """Export inspiré d'IODEF v2 en JSON (RFC 7970 / RFC 8727). Sous-ensemble ; schéma complet à valider."""
+        require_role(user, "analyst", "manager")
+        t = load_ticket(db, user, ref)
+        tenant = db.get(Tenant, t.tenant_id)
+        node: dict[str, Any] = {"NodeName": [t.agent_name] if t.agent_name else []}
+        if t.agent_ip:
+            try:
+                ip = ipaddress.ip_address(t.agent_ip)
+                node["Address"] = [{"value": str(ip), "category": "ipv6-addr" if ip.version == 6 else "ipv4-addr"}]
+            except ValueError:
+                pass
+        doc = {
+            "version": "2.0", "lang": "fr",
+            "Incident": [{
+                "purpose": "reporting", "status": t.status,
+                "IncidentID": {"id": t.ref, "name": "keryx"},
+                "GenerationTime": rfc3339(utcnow()), "DetectTime": rfc3339(t.detected_at),
+                "ReportTime": rfc3339(t.created_at),
+                "Description": [t.title],
+                "Assessment": [{"Impact": [{"severity": t.gravite or t.criticite_initiale,
+                                            "description": t.impact or ""}]}],
+                "Contact": [{"role": "creator", "type": "organization", "ContactName": ["Keryx"]},
+                            {"role": "cc", "type": "organization", "ContactName": [tenant.name]}],
+                "Method": [{"Reference": [{"ReferenceName": {"ID": m["id"]},
+                                           "URL": [f"https://attack.mitre.org/techniques/{m['id'].replace('.', '/')}/"]}]}
+                           for m in t.mitre],
+                "EventData": [{"System": [{"category": "target", "Node": [node]}]}],
+                "AdditionalData": [{"dtype": "string", "meaning": "tlp", "value": t.tlp}],
+            }],
+        }
+        audit.record(db, user.username, "ticket.export_iodef", "ticket", t.ref, t.tenant_id)
+        commit(db)
+        return doc
+
+    # ---------------------------------------------------------------- pièces jointes et preuves
+    @app.post("/api/v1/tickets/{ref}/attachments", status_code=201)
+    def upload_attachment(ref: str, request: Request, file: UploadFile = File(...),
+                          description: str = Form(min_length=3, max_length=5000),
+                          collected_at: datetime = Form(...), method: str = Form(min_length=3, max_length=500),
+                          sensitivity: str = Form("TLP:AMBER"), visible_client: bool = Form(False),
+                          user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        t = load_ticket(db, user, ref)
+        if sensitivity not in TLP:
+            raise HTTPException(422, f"Sensibilité attendue parmi : {', '.join(TLP)}.")
+        declared = request.headers.get("content-length")
+        if declared and declared.isdigit() and int(declared) > settings.max_attachment_bytes + 64 * 1024:
+            raise HTTPException(413, "Fichier trop volumineux (20 Mo maximum) : déclarer une preuve externe.")
+        data = file.file.read(settings.max_attachment_bytes + 1)
+        try:
+            prepared = att.prepare(data, settings)
+        except att.AttachmentRejected as exc:
+            raise HTTPException(413 if "volumineux" in str(exc) else 422, str(exc))
+        status, detail = att.scan(prepared.content, settings)
+        quarantined = status == "quarantaine"
+        storage = att.store(settings, prepared.content, quarantined)
+        a = Attachment(
+            ticket_id=t.id, tenant_id=t.tenant_id, kind=prepared.kind,
+            filename=att.safe_filename(file.filename or "fichier"), storage_name=storage,
+            content_type=prepared.content_type, size=len(prepared.content), sha256=prepared.sha256,
+            description=description, collected_at=collected_at, method=method, sensitivity=sensitivity,
+            scan_status=status, scan_detail=detail,
+            visible_client=True if user.role == "client" else visible_client, uploaded_by=user.id,
+        )
+        db.add(a)
+        db.flush()
+        reason = f"empreinte reçue {prepared.original_sha256}" if prepared.original_sha256 != prepared.sha256 else ""
+        db.add(CustodyEvent(attachment_id=a.id, actor=user.username, action="depot", reason=reason))
+        event(db, t, user, "piece_jointe", {"id": a.id, "fichier": a.filename, "sha256": a.sha256,
+                                            "antivirus": status}, visible_client=a.visible_client)
+        commit(db)
+        return attachment_view(a)
+
+    @app.post("/api/v1/tickets/{ref}/preuves-externes", status_code=201)
+    def external_evidence(ref: str, body: ExternalEvidenceIn, user: User = Depends(current_user),
+                          db: DbSession = Depends(get_db)):
+        """Preuve de plus de 20 Mo conservée hors de Keryx (support hors ligne) [PRIS VI.2.4]."""
+        require_role(user, "analyst", "manager")
+        t = load_ticket(db, user, ref)
+        if body.sensitivity not in TLP:
+            raise HTTPException(422, f"Sensibilité attendue parmi : {', '.join(TLP)}.")
+        a = Attachment(ticket_id=t.id, tenant_id=t.tenant_id, kind="preuve_externe",
+                       filename=att.safe_filename(body.filename), storage_name=None, size=body.size,
+                       sha256=body.sha256, description=body.description, collected_at=body.collected_at,
+                       method=body.method, sensitivity=body.sensitivity, location=body.location,
+                       scan_status="non_analyse", uploaded_by=user.id)
+        db.add(a)
+        db.flush()
+        db.add(CustodyEvent(attachment_id=a.id, actor=user.username, action="declaration", reason=body.location))
+        event(db, t, user, "preuve_externe", {"id": a.id, "sha256": a.sha256, "lieu": a.location})
+        commit(db)
+        return attachment_view(a)
+
+    @app.get("/api/v1/attachments/{attachment_id}/content")
+    def download_attachment(attachment_id: str, motif: str | None = None, confirmer_malveillant: bool = False,
+                            user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        a, t = load_attachment(db, user, attachment_id)
+        if a.kind == "preuve_externe" or not a.storage_name or a.lifecycle != "conserve":
+            raise HTTPException(410, "Contenu non disponible dans Keryx (preuve externe, restituée ou détruite).")
+        quarantined = a.scan_status == "quarantaine"
+        if quarantined:
+            if user.role == "client":
+                raise HTTPException(404, "Pièce introuvable.")
+            if not confirmer_malveillant or not motif or len(motif) < 3:
+                raise HTTPException(409, "Fichier en quarantaine : confirmer le téléchargement et indiquer un motif.")
+        if a.kind == "fichier" and (not motif or len(motif) < 3):
+            raise HTTPException(422, "Indiquer le motif du téléchargement (chaîne de possession).")
+        data = att.read(settings, a.storage_name, quarantined)
+        db.add(CustodyEvent(attachment_id=a.id, actor=user.username,
+                            action="telechargement" if a.kind == "fichier" else "consultation",
+                            reason=(motif or "")[:500]))
+        audit.record(db, user.username, "attachment.download", "attachment", a.id, a.tenant_id,
+                     {"ticket": t.ref, "motif": (motif or "")[:200], "quarantaine": quarantined})
+        commit(db)
+        inline = a.kind == "image" and not quarantined
+        name = a.filename + (".quarantaine" if quarantined else "")
+        disposition = ("inline" if inline else "attachment") + f"; filename*=UTF-8''{quote(name)}"
+        return Response(content=data, media_type=a.content_type if inline else "application/octet-stream",
+                        headers={"Content-Disposition": disposition, "Cache-Control": "no-store",
+                                 "Content-Security-Policy": "default-src 'none'; sandbox"})
+
+    @app.get("/api/v1/attachments/{attachment_id}/custody")
+    def custody(attachment_id: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        require_role(user, "analyst", "manager")
+        a, _t = load_attachment(db, user, attachment_id)
+        rows = db.scalars(select(CustodyEvent).where(CustodyEvent.attachment_id == a.id).order_by(CustodyEvent.ts))
+        return {"items": [{"ts": rfc3339(c.ts), "actor": c.actor, "action": c.action, "reason": c.reason}
+                          for c in rows]}
+
+    @app.post("/api/v1/attachments/{attachment_id}/lifecycle")
+    def lifecycle(attachment_id: str, body: LifecycleIn, user: User = Depends(current_user),
+                  db: DbSession = Depends(get_db)):
+        """Restitution (analyste, manager) ou destruction (manager seulement) [PRIS VI.2.4]."""
+        require_role(user, "analyst", "manager")
+        a, t = load_attachment(db, user, attachment_id)
+        if body.lifecycle not in LIFECYCLE or body.lifecycle == "conserve":
+            raise HTTPException(422, "Cycle de vie attendu : restitue ou detruit.")
+        if a.lifecycle != "conserve":
+            raise HTTPException(409, "Cette pièce n'est plus conservée.")
+        if body.lifecycle == "detruit":
+            require_role(user, "manager")
+            if a.storage_name:
+                att.destroy(settings, a.storage_name, a.scan_status == "quarantaine")
+        a.lifecycle = body.lifecycle
+        db.add(CustodyEvent(attachment_id=a.id, actor=user.username, action=body.lifecycle, reason=body.reason))
+        event(db, t, user, "piece_jointe_" + body.lifecycle, {"id": a.id, "sha256": a.sha256, "motif": body.reason})
+        commit(db)
+        return attachment_view(a)
+
+    # ---------------------------------------------------------------- administration
+    @app.get("/api/v1/audit/verify")
+    def audit_verify(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        require_role(user, "admin")
+        ok, bad = audit.verify_chain(db)
+        count = db.scalar(select(AuditEntry.seq).order_by(AuditEntry.seq.desc()).limit(1)) or 0
+        audit.record(db, user.username, "audit.verify", None, None, None, {"ok": ok})
+        commit(db)
+        return {"chain_ok": ok, "first_broken_seq": bad, "entries": count}
+
+    @app.get("/api/v1/admin/revue-comptes")
+    def account_review(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        """Revue des comptes et des droits [PDIS IV.3.4.b, PRIS IV.3.n]."""
+        require_role(user, "admin")
+        users = db.scalars(select(User).order_by(User.role, User.username)).all()
+        audit.record(db, user.username, "admin.account_review", None, None, None, {"count": len(users)})
+        commit(db)
+        return {"generated_at": rfc3339(utcnow()), "items": [
+            {"username": u.username, "display_name": u.display_name, "role": u.role, "active": u.active,
+             "clients": [t.key for t in u.tenants], "last_login_at": rfc3339(u.last_login_at),
+             "recovery_codes_left": len(u.recovery_codes or []),
+             "locked": bool(u.locked_until and as_utc(u.locked_until) > utcnow())} for u in users]}
+
+    # ---------------------------------------------------------------- interface web
+    dist = settings.web_dist
+    if os.path.isdir(os.path.join(dist, "assets")):
+        app.mount("/assets", StaticFiles(directory=os.path.join(dist, "assets")), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa(full_path: str):
+        if full_path.startswith("api/"):
+            raise HTTPException(404, "Ressource introuvable.")
+        index = os.path.join(dist, "index.html")
+        if not os.path.isfile(index):
+            raise HTTPException(404, "Interface web non construite (voir web/README).")
+        return FileResponse(index, headers={"Cache-Control": "no-cache"})
+
+    return app
+
+
+def _set_cookie(response: Response, name: str, value: str, settings: Settings, http_only: bool, max_age: int) -> None:
+    response.set_cookie(name, value, max_age=max_age, httponly=http_only, secure=settings.cookie_secure,
+                        samesite="strict", path="/")
+
+
+def _title(status: int) -> str:
+    return {
+        400: "Requête incorrecte", 401: "Non authentifié", 403: "Accès refusé", 404: "Introuvable",
+        405: "Méthode non autorisée", 409: "Conflit", 410: "Plus disponible", 413: "Contenu trop volumineux",
+        422: "Requête invalide", 429: "Trop de requêtes",
+    }.get(status, "Erreur")
