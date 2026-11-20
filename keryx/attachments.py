@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import logging
 import os
 import socket
 import struct
@@ -21,6 +22,8 @@ from PIL import Image
 
 from .config import Settings
 from .ids import uuid7
+
+log = logging.getLogger("keryx.attachments")
 
 ZIP_MAGIC = (b"PK\x03\x04", b"PK\x05\x06")
 IMAGE_FORMATS = {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp"}
@@ -115,12 +118,14 @@ def scan(data: bytes, settings: Settings) -> tuple[str, str | None]:
                     break
                 reply += part
     except OSError as exc:
+        log.error("ClamAV injoignable (%s) : pièce stockée sans analyse", type(exc).__name__)
         return "non_analyse", f"ClamAV injoignable ({type(exc).__name__})"
     text = reply.rstrip(b"\0").decode("utf-8", "replace")
     if text.endswith("OK"):
         return "sain", None
     if text.endswith("FOUND"):
         return "quarantaine", text.split(":", 1)[-1].replace("FOUND", "").strip()[:200]
+    log.error("Réponse ClamAV inattendue : pièce stockée sans analyse (%s)", text[:100])
     return "non_analyse", f"Réponse ClamAV inattendue : {text[:100]}"
 
 
