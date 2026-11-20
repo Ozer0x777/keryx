@@ -55,6 +55,10 @@ class Tenant(Base):
     severity_grid: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Destinataires des notifications du client [PDIS IV.2.3.d stratégie de notification]
     contact_emails: Mapped[list] = mapped_column(JSON, default=list)
+    # Rétention des alertes brutes en mois (None = valeur par défaut de la configuration) [PDIS IV.2.2.w]
+    retention_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Délais cibles par gravité, en heures : {"Critique": {"qualification": 1, "resolution": 8}, ...}
+    sla: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -107,6 +111,7 @@ class ApiKey(Base):
     key_hash: Mapped[str] = mapped_column(String(64), unique=True)
     revoked: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Ticket(Base):

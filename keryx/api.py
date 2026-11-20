@@ -14,6 +14,7 @@ import os
 import time
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 from typing import Any
 from urllib.parse import quote
 
@@ -28,7 +29,7 @@ from sqlalchemy.orm import Session as DbSession
 from starlette.background import BackgroundTask
 
 from . import attachments as att
-from . import audit, security
+from . import audit, routes_admin, security
 from .config import Settings
 from .db import Base, make_engine, make_session_factory
 from .ids import as_utc, rfc3339, utcnow
@@ -427,6 +428,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 raise HTTPException(429, "Trop de tentatives, réessayez plus tard.")
             if not ingest_limiter.allow(key.id):
                 raise HTTPException(429, "Débit d'ingestion dépassé.")
+            key.last_used_at = utcnow()
+            db.commit()
             return key.id, key.tenant_id, key.name
         finally:
             db.close()
@@ -886,6 +889,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
              "clients": [t.key for t in u.tenants], "last_login_at": rfc3339(u.last_login_at),
              "recovery_codes_left": len(u.recovery_codes or []),
              "locked": bool(u.locked_until and as_utc(u.locked_until) > utcnow())} for u in users]}
+
+    # ---------------------------------------------------------------- routeurs complémentaires
+    ctx = SimpleNamespace(
+        settings=settings, box=box, SessionLocal=SessionLocal, get_db=get_db, current_user=current_user,
+        require_role=require_role, require_open=require_open, commit=commit, load_ticket=load_ticket,
+        visible_tenant_ids=visible_tenant_ids, event=event, session_from_cookie=_session_from_cookie,
+        client_ip=client_ip)
+    routes_admin.register(app, ctx)
 
     # ---------------------------------------------------------------- interface web
     dist = settings.web_dist
