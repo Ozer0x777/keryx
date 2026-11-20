@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from . import audit
 from .config import Settings
-from .ids import utcnow
+from .ids import as_utc, utcnow
 from .models import Notification, Tenant, Ticket
 
 
@@ -82,6 +82,7 @@ def send_pending(session_factory, settings: Settings, notification_ids: list[str
             if not settings.smtp_host:
                 n.status = "non_envoye_smtp_absent"
             else:
+                n.attempts = (n.attempts or 0) + 1
                 try:
                     _send(settings, n.recipient, subject, body)
                     n.status = "envoye"
@@ -95,3 +96,25 @@ def send_pending(session_factory, settings: Settings, notification_ids: list[str
         db.commit()
     finally:
         db.close()
+
+
+def retry_failed(session_factory, settings: Settings, now=None) -> int:
+    """Relance les courriels en échec, avec un délai croissant (2^essais minutes) et un nombre d'essais borné.
+    Chaque tentative reste inscrite au registre des notifications [PDIS IV.2.3.h, j]. Renvoie le nombre relancé."""
+    from datetime import timedelta
+    if not settings.smtp_host:
+        return 0
+    now = now or utcnow()
+    db = session_factory()
+    try:
+        rows = db.scalars(select(Notification).where(Notification.status == "echec",
+                                                     Notification.attempts < settings.notify_max_attempts)).all()
+        due = [n.id for n in rows if as_utc(n.ts) + timedelta(minutes=2 ** (n.attempts or 1)) <= now]
+        for n in rows:
+            if n.id in due:
+                n.status = "en_attente"
+        db.commit()
+    finally:
+        db.close()
+    send_pending(session_factory, settings, due)
+    return len(due)

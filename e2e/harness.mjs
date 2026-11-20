@@ -17,7 +17,7 @@ export function startStack() {
   const key = execFileSync(PY, ['-m', 'keryx.cli', 'gen-key'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
   const env = { ...process.env, KERYX_SECRET_KEY: key, KERYX_DATABASE_URL: `sqlite:///${dir}/e2e.db`, KERYX_ATTACHMENTS_DIR: `${dir}/pj`, KERYX_COOKIE_SECURE: 'false', PYTHONWARNINGS: 'ignore' }
   const cli = (...args) => execFileSync(PY, ['-m', 'keryx.cli', ...args], { cwd: ROOT, env: { ...env, KERYX_NEW_PASSWORD: PASSWORD }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
-  execFileSync(join(dirname(PY), 'alembic'), ['upgrade', 'head'], { cwd: ROOT, env, stdio: 'ignore' })
+  execFileSync(PY, ['-m', 'alembic', 'upgrade', 'head'], { cwd: ROOT, env, stdio: 'ignore' })
   const seeds = {}
   cli('add-client', 'ACME', 'Acme Industrie'); cli('add-client', 'DELTA', 'Transports Delta')
   for (const [name, role, clients] of [['admin', 'admin', ''], ['manager', 'manager', 'ACME,DELTA'], ['analyste', 'analyst', 'ACME'], ['client', 'client', 'ACME']]) {
@@ -25,7 +25,7 @@ export function startStack() {
     seeds[name] = { secret: /secret=([A-Z2-7]+)/.exec(out)[1], recovery: [...out.matchAll(/^\s+([0-9a-f]{6}-[0-9a-f]{6})$/gm)].map((m) => m[1]) }
   }
   seeds.apiKey = /(kx_[\w-]+)/.exec(cli('add-api-key', 'ACME', 'wazuh-e2e'))[1]
-  const server = spawn(join(dirname(PY), 'uvicorn'), ['keryx.api:create_app', '--factory', '--port', String(PORT)], { cwd: ROOT, env, stdio: 'ignore' })
+  const server = spawn(PY, ['-m', 'uvicorn', 'keryx.api:create_app', '--factory', '--port', String(PORT)], { cwd: ROOT, env, stdio: 'ignore' })
   return { dir, seeds, server, stop: () => server.kill('SIGTERM') }
 }
 

@@ -45,6 +45,9 @@ class Settings:
     smtp_password: str | None = field(default_factory=lambda: os.environ.get("KERYX_SMTP_PASSWORD"))
     smtp_from: str = field(default_factory=lambda: os.environ.get("KERYX_SMTP_FROM", "keryx@keryx.local"))
     smtp_timeout_s: int = 10
+    # Nouvelle tentative des courriels en échec : intervalle de relance en secondes (0 = désactivée), essais maximum.
+    notify_retry_interval_s: int = field(default_factory=lambda: _int("KERYX_NOTIFY_RETRY_S", 300))
+    notify_max_attempts: int = 5
 
     # Pièces jointes (PRIS VI.5.3.c, VI.2.4, IV.3.q)
     attachments_dir: str = field(default_factory=lambda: os.environ.get("KERYX_ATTACHMENTS_DIR", "./data/attachments"))

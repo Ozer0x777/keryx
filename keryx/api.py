@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
@@ -41,7 +42,7 @@ from .models import (
     LIFECYCLE, TLP, VERDICTS, ApiKey, Attachment, AuditEntry, Comment, CustodyEvent, MitreTechnique, RawAlert,
     Session, Tenant, Ticket, TicketEvent, User,
 )
-from .notify import send_pending
+from .notify import retry_failed, send_pending
 from .sanitize import clean_html
 from .sla import state as sla_state
 from .severity import DOMMAGES, IMPORTANCES, gravite, is_rex_required
@@ -960,6 +961,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
              "clients": [t.key for t in u.tenants], "last_login_at": rfc3339(u.last_login_at),
              "recovery_codes_left": len(u.recovery_codes or []),
              "locked": bool(u.locked_until and as_utc(u.locked_until) > utcnow())} for u in users]}
+
+    # ---------------------------------------------------------------- relance des courriels en échec
+    if settings.smtp_host and settings.notify_retry_interval_s > 0:
+        def _retry_loop() -> None:  # pragma: no cover - tâche de fond
+            while True:
+                time.sleep(settings.notify_retry_interval_s)
+                try:
+                    retry_failed(SessionLocal, settings)
+                except Exception:
+                    log.exception("Relance des notifications en échec")
+        threading.Thread(target=_retry_loop, name="notify-retry", daemon=True).start()
 
     # ---------------------------------------------------------------- routeurs complémentaires
     ctx = SimpleNamespace(

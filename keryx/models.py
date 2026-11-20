@@ -218,6 +218,7 @@ class Notification(Base):
     recipient: Mapped[str] = mapped_column(String(200))
     content: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16))
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class MitreMapping(Base):

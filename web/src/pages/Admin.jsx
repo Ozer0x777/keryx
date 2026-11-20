@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
+import { api } from '../api.js'
 import { useAuth } from '../App.jsx'
 import Audit from './admin/Audit.jsx'
 import Clients from './admin/Clients.jsx'
@@ -13,7 +15,15 @@ const TABS = [['comptes', 'Comptes'], ['clients', 'Clients'], ['cles', "Clés d'
 
 export default function Admin() {
   const { me } = useAuth()
+  const [sys, setSys] = useState(null)
+  useEffect(() => { if (me.role === 'admin') api('/admin/system').then(setSys).catch(() => {}) }, [me.role])
   if (me.role !== 'admin') return <p className="error">Réservé au rôle Admin.</p>
+  const alerts = sys ? [
+    sys.clamav === 'injoignable' || sys.clamav === 'réponse inattendue' ? "L'antivirus ClamAV est indisponible : les pièces déposées ne sont pas analysées." : null,
+    sys.notifications_failed_24h > 0 ? `${sys.notifications_failed_24h} notification(s) par courriel en échec ces 24 dernières heures.` : null,
+    sys.silent_sources > 0 ? `${sys.silent_sources} source(s) Wazuh muette(s) depuis plus de 24 h.` : null,
+    sys.disk_free_mb < 500 ? `Espace disque faible pour les pièces : ${sys.disk_free_mb} Mo libres.` : null,
+  ].filter(Boolean) : []
   return (
     <>
       <header className="page-head">
@@ -22,6 +32,7 @@ export default function Admin() {
           <p className="muted">Le rôle Admin n'a pas accès au contenu des tickets (séparation administrateur / opérateur, PDIS IV.3.9).</p>
         </div>
       </header>
+      {alerts.length > 0 && <div className="banner warn" role="alert"><strong>À traiter :</strong><ul>{alerts.map((a) => <li key={a}>{a}</li>)}</ul></div>}
       <nav className="tabs" aria-label="Sections d'administration">
         {TABS.map(([to, label]) => <NavLink key={to} to={`/admin/${to}`} className={({ isActive }) => `tab${isActive ? ' on' : ''}`}>{label}</NavLink>)}
       </nav>

@@ -82,3 +82,32 @@ def test_sans_smtp_configure(app, db, world):
 def test_sans_contact(app, db, world):
     ingest(app, world["keys"]["ACME"], ALERT_SSH_BRUTEFORCE)
     assert db.scalars(select(Notification)).one().status == "sans_destinataire"
+
+
+def test_relance_des_echecs_avec_delai_croissant_et_plafond(smtp_app, db, request, settings):
+    from datetime import timedelta
+
+    from keryx.ids import utcnow
+    world = request.getfixturevalue("world")
+    _contacts(db, world, emails=("rssi@acme.example",))
+    FakeSMTP.fail = True
+    ingest(smtp_app, world["keys"]["ACME"], ALERT_SSH_BRUTEFORCE)
+    factory = smtp_app.state.SessionLocal
+    n = db.scalars(select(Notification)).one()
+    assert n.status == "echec" and n.attempts == 1
+    # Trop tôt : le délai de 2 minutes n'est pas écoulé
+    assert notify.retry_failed(factory, settings, now=utcnow()) == 0
+    # Après le délai, SMTP toujours en panne : nouvel échec, 2e essai enregistré
+    later = utcnow() + timedelta(minutes=3)
+    assert notify.retry_failed(factory, settings, now=later) == 1
+    db.rollback(); db.refresh(n)
+    assert n.status == "echec" and n.attempts == 2
+    # SMTP rétabli : le courriel part, le registre le reflète
+    FakeSMTP.fail = False
+    assert notify.retry_failed(factory, settings, now=utcnow() + timedelta(minutes=30)) == 1
+    db.rollback(); db.refresh(n)
+    assert n.status == "envoye" and n.attempts == 3 and len(FakeSMTP.sent) == 1
+    # Plafond d'essais : plus de relance au-delà
+    n.status, n.attempts = "echec", settings.notify_max_attempts
+    db.commit()
+    assert notify.retry_failed(factory, settings, now=utcnow() + timedelta(days=2)) == 0
