@@ -15,8 +15,8 @@ from sqlalchemy.orm import Session as DbSession
 from . import audit, sla
 from .ids import rfc3339, utcnow
 from .inbox import push
-from .models import (INBOX_KINDS, LINK_KINDS, InboxItem, RawAlert, SavedFilter, Template, Tenant, Ticket, TicketLink,
-                     User, Comment)
+from .models import (INBOX_KINDS, LINK_KINDS, InboxItem, RawAlert, SavedFilter, Template, Tenant, Ticket, TicketEvent,
+                     TicketLink, User, Comment)
 from .sanitize import clean_html
 
 
@@ -143,6 +143,19 @@ def register(app, ctx) -> None:
         event(db, dst, user, "fusion_recue", {"depuis": src.ref, "alertes": moved})
         commit(db)
         return {"ref": src.ref, "merged_into": dst.ref, "occurrences": dst.occurrences}
+
+    # ---------------------------------------------------------------- historique des versions du corps du ticket
+    @app.get("/api/v1/tickets/{ref}/body-history")
+    def body_history(ref: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        """Qui a modifié la description, quand, et ce qu'elle contenait avant (plan : historique des versions)."""
+        staff(user)
+        t = load_ticket(db, user, ref)
+        rows = db.scalars(select(TicketEvent).where(TicketEvent.ticket_id == t.id, TicketEvent.action == "description")
+                          .order_by(TicketEvent.ts)).all()
+        return {"current": t.body_html, "versions": [
+            {"ts": rfc3339(e.ts), "actor": e.actor, "html": (e.details or {}).get("version_precedente", ""),
+             "truncated": bool((e.details or {}).get("tronquee")), "length": (e.details or {}).get("version_precedente_longueur"),
+             "sha256": (e.details or {}).get("version_precedente_sha256")} for e in rows]}
 
     # ---------------------------------------------------------------- affectation en masse
     @app.post("/api/v1/tickets/bulk-assign")

@@ -58,6 +58,7 @@ class ClientPatchIn(BaseModel):
     severity_grid: dict | None = None
     retention_months: int | None = Field(default=None, ge=6, le=120)  # PDIS IV.2.2.w : 6 mois minimum
     sla: dict | None = None
+    max_attachment_mb: int | None = Field(default=None, ge=1, le=20)
 
 
 class ApiKeyCreateIn(BaseModel):
@@ -244,6 +245,7 @@ def register(app, ctx) -> None:
     def client_view(t: Tenant, tickets: int = 0) -> dict:
         return {"key": t.key, "name": t.name, "contact_emails": t.contact_emails or [],
                 "severity_grid": t.severity_grid, "retention_months": t.retention_months, "sla": t.sla,
+                "max_attachment_mb": t.max_attachment_mb,
                 "tickets": tickets, "created_at": rfc3339(t.created_at)}
 
     @app.get("/api/v1/admin/clients")
@@ -288,6 +290,9 @@ def register(app, ctx) -> None:
         if "retention_months" in sent:
             t.retention_months = body.retention_months
             changed.append("retention_months")
+        if "max_attachment_mb" in sent:
+            t.max_attachment_mb = body.max_attachment_mb
+            changed.append("max_attachment_mb")
         if "sla" in sent:
             if body.sla is not None and not _sla_ok(body.sla):
                 raise HTTPException(422, "Délais invalides : par gravité, qualification et resolution en heures.")

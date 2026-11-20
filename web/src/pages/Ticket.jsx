@@ -145,11 +145,38 @@ export default function Ticket() {
   )
 }
 
+function BodyHistory({ enc, current }) {
+  const [h, setH] = useState(null)
+  const [error, setError] = useState('')
+  useEffect(() => { api(`/tickets/${enc}/body-history`).then(setH).catch((e) => setError(e.message)) }, [enc, current])
+  if (error) return <p className="error" role="alert">{error}</p>
+  if (!h) return <p className="muted small">Chargement…</p>
+  if (h.versions.length === 0) return <p className="muted small">Aucune modification depuis la création du ticket.</p>
+  return (
+    <ol className="versions" aria-label="Versions de la description">
+      {[...h.versions].reverse().map((v, i) => (
+        <li key={v.ts + i}>
+          <details>
+            <summary>Avant la modification du <span className="mono">{formatUtc(v.ts)}</span> par <strong>{v.actor}</strong>{v.truncated ? ' (aperçu tronqué)' : ''}</summary>
+            <Html html={v.html} />
+            {v.truncated && <p className="muted small">Version complète de {v.length} caractères ; empreinte SHA-256 <span className="mono">{v.sha256}</span>.</p>}
+          </details>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
 function Description({ t, enc, canEdit, run, onImage }) {
   const [editing, setEditing] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   const [html, setHtml] = useState(t.body_html)
+  const isTeam = t.raw_alerts !== undefined
   return (
-    <Section title="Description" extra={canEdit && !editing && <button type="button" onClick={() => { setHtml(t.body_html); setEditing(true) }}>Modifier</button>}>
+    <Section title="Description" extra={<div className="row gap">
+      {isTeam && <button type="button" aria-expanded={showHistory} onClick={() => setShowHistory(!showHistory)}>{showHistory ? "Masquer l'historique" : 'Historique'}</button>}
+      {canEdit && !editing && <button type="button" onClick={() => { setHtml(t.body_html); setEditing(true) }}>Modifier</button>}</div>}>
+      {showHistory && <BodyHistory enc={enc} current={t.body_html} />}
       {editing ? (
         <>
           <RichEditor value={html} onChange={setHtml} label="Description du ticket" onImage={onImage} minHeight={200} />
@@ -227,7 +254,7 @@ function Attachments({ t, enc, me, run, setNotice }) {
     <Section title={isClient ? 'Éléments déposés' : 'Registre des preuves'} extra={
       <div className="row gap">
         {isTeam && <button type="button" onClick={() => { setExt(true); setForm(null) }}>Déclarer une preuve externe</button>}
-        <button type="button" className="dark" onClick={() => { setForm(true); setExt(null) }}>Déposer un fichier (20 Mo max)</button>
+        <button type="button" className="dark" onClick={() => { setForm(true); setExt(null) }}>Déposer un fichier ({t.attachment_max_mb ?? 20} Mo max)</button>
       </div>}>
       {form && (
         <form className="subform" onSubmit={submit}>
@@ -245,7 +272,7 @@ function Attachments({ t, enc, me, run, setNotice }) {
       )}
       {ext && (
         <form className="subform" onSubmit={submitExt}>
-          <p className="muted small">Pour une preuve de plus de 20 Mo (image disque, dump mémoire, pcap) conservée hors de Keryx, sur un support hors ligne.</p>
+          <p className="muted small">Pour une preuve de plus de {t.attachment_max_mb ?? 20} Mo (image disque, dump mémoire, pcap) conservée hors de Keryx, sur un support hors ligne.</p>
           <label>Nom<input name="filename" required /></label>
           <label>Description<input name="description" minLength={3} required /></label>
           <div className="grid2">
@@ -418,6 +445,9 @@ function Qualification({ t, enc, run, open }) {
           </select>
         </label>
       </div>
+      {t.severity_hint && open && (
+        <p className="muted small" data-testid="severity-hint">Selon l'importance « {IMPORTANCES[v.importance]} » de l'équipement : dommages limités → <strong>{t.severity_hint.limites}</strong>, significatifs → <strong>{t.severity_hint.significatifs}</strong>, graves → <strong>{t.severity_hint.graves}</strong> (grille du client). La gravité est fixée par votre qualification.</p>
+      )}
       <div className="row between gravity"><span className="muted">Gravité qualifiée</span><Severity value={t.gravite} /></div>
       <label>Impact constaté<textarea rows="2" value={v.impact} disabled={!open} onChange={(e) => setV({ ...v, impact: e.target.value })} /></label>
       <label>Risque induit<textarea rows="2" value={v.risque} disabled={!open} onChange={(e) => setV({ ...v, risque: e.target.value })} /></label>

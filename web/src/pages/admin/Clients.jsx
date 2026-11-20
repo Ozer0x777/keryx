@@ -12,6 +12,7 @@ const DEFAULT_GRID = {
 function ClientEditor({ client, onSaved, onError }) {
   const [emails, setEmails] = useState((client.contact_emails || []).join(', '))
   const [retention, setRetention] = useState(client.retention_months ?? '')
+  const [maxMb, setMaxMb] = useState(client.max_attachment_mb ?? '')
   const [grid, setGrid] = useState(client.severity_grid || null)
   const [sla, setSla] = useState(client.sla || {})
   const g = grid || DEFAULT_GRID
@@ -23,6 +24,7 @@ function ClientEditor({ client, onSaved, onError }) {
       await api(`/admin/clients/${client.key}`, { method: 'PATCH', json: {
         contact_emails: emails.split(/[,\s;]+/).filter(Boolean),
         retention_months: retention === '' ? null : Number(retention),
+        max_attachment_mb: maxMb === '' ? null : Number(maxMb),
         severity_grid: grid, sla: Object.keys(cleanSla).length ? cleanSla : null } })
       onSaved()
     } catch (err) { onError(err.message) }
@@ -31,6 +33,7 @@ function ClientEditor({ client, onSaved, onError }) {
     <form className="subform" onSubmit={save}>
       <label>Contacts de notification (séparés par des virgules)<input value={emails} onChange={(e) => setEmails(e.target.value)} /></label>
       <label>Rétention des alertes brutes, en mois (6 minimum, vide = valeur par défaut)<input type="number" min="6" max="120" value={retention} onChange={(e) => setRetention(e.target.value)} /></label>
+      <label>Taille maximale d'une pièce, en Mo (1 à 20, vide = 20 : plafond fixé par le plan)<input type="number" min="1" max="20" value={maxMb} onChange={(e) => setMaxMb(e.target.value)} /></label>
       <h3>Grille de gravité {grid ? '(propre au client)' : '(grille par défaut)'}</h3>
       <div className="table-wrap"><table className="grid">
         <thead><tr><th scope="col">Dommages \ Importance</th>{Object.entries(IMPORTANCES).map(([k, v]) => <th key={k} scope="col">{v}</th>)}</tr></thead>

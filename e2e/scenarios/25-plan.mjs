@@ -1,0 +1,18 @@
+export default async ({ BASE, check, login }) => {
+  const m = await login('manager')
+  await m.goto(`${BASE}/tickets/ACME-2`)
+  await m.waitForSelector('text=Description')
+  await m.getByRole('button', { name: 'Modifier', exact: true }).first().click()
+  await m.locator('.rich-content').first().click()
+  await m.keyboard.press('Control+End'); await m.keyboard.type(' Note de l’analyste.')
+  await m.getByRole('button', { name: 'Enregistrer', exact: true }).first().click()
+  await m.waitForSelector('text=Description enregistrée')
+  await m.getByRole('button', { name: 'Historique' }).click()
+  await m.waitForSelector('.versions summary')
+  check(await m.locator('.versions summary').first().innerText().then((t) => t.includes('Test manager') || t.includes('manager')), 'historique : auteur et date de la modification')
+  await m.locator('.versions summary').first().click()
+  check(await m.locator('.versions .rich-content').first().isVisible(), 'historique : ancienne version consultable')
+  check(await m.getByTestId('severity-hint').count() === 1, 'suggestion de gravité affichée à la qualification')
+  check(m.errors.length === 0, 'aucune erreur JavaScript')
+  await m.context().close()
+}

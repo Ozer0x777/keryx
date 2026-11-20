@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from . import audit, mitre_stix, retention
 from .ids import rfc3339, utcnow
-from .models import CRISIS_KINDS, AuditEntry, CrisisEntry, MitreTechnique, Tenant, Ticket, User
+from .models import CRISIS_KINDS, AuditEntry, CrisisEntry, MitreMapping, MitreTechnique, Tenant, Ticket, User
 
 MAX_STIX_BYTES = 80 * 1024 * 1024
 CONTENT_ACTIONS = ("ticket.", "attachment.", "report.", "registry.", "template.")
@@ -201,6 +201,29 @@ def register(app, ctx) -> None:
                                                        | MitreTechnique.name.ilike(like, escape="\\"))
                           .order_by(MitreTechnique.technique_id).limit(50)).all()
         return {"items": [{"id": r.technique_id, "name": r.name, "tactics": r.tactics} for r in rows]}
+
+    @app.get("/api/v1/mitre/suggestions")
+    def mitre_suggestions(min_count: int = Query(default=3, ge=2, le=50), user: User = Depends(current_user),
+                          db: DbSession = Depends(get_db)):
+        """Corrections manuelles répétées : la même technique ajoutée à la main sur des tickets de la même règle est
+        proposée comme nouvelle entrée de la table de correspondance (plan : enrichissement MITRE, niveau 3)."""
+        require_role(user, "admin", "manager")
+        tenant_ids = None if user.role == "admin" else [t.id for t in user.tenants]
+        q = select(Ticket.rule_id, Ticket.rule_description, Ticket.mitre).where(Ticket.mitre_source == "manuel")
+        if tenant_ids is not None:
+            q = q.where(Ticket.tenant_id.in_(tenant_ids))
+        counts: dict[tuple[str, str], int] = {}
+        label: dict[str, str] = {}
+        for rule_id, desc, mitre in db.execute(q.limit(20000)).all():
+            label.setdefault(rule_id, desc)
+            for m in mitre or []:
+                counts[(rule_id, m["id"])] = counts.get((rule_id, m["id"]), 0) + 1
+        mapped = {(m.rule_id, m.technique_id) for m in db.scalars(select(MitreMapping).where(MitreMapping.rule_id.is_not(None)))}
+        names = {r.technique_id: r for r in db.scalars(select(MitreTechnique))}
+        items = [{"rule_id": r, "rule_description": label[r], "technique": t, "count": n,
+                  "name": names[t].name if t in names else "", "tactics": names[t].tactics if t in names else []}
+                 for (r, t), n in sorted(counts.items(), key=lambda kv: -kv[1]) if n >= min_count and (r, t) not in mapped]
+        return {"items": items[:50], "min_count": min_count}
 
     # ---------------------------------------------------------------- rétention
     @app.post("/api/v1/admin/retention")

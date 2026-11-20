@@ -5,8 +5,14 @@ export default function Mitre() {
   const [items, setItems] = useState(null)
   const [error, setError] = useState('')
   const [msg, setMsg] = useState('')
+  const [sugg, setSugg] = useState([])
   const load = useCallback(() => api('/mitre/mappings').then((r) => setItems(r.items)).catch((e) => setError(e.message)), [])
-  useEffect(() => { load() }, [load])
+  const loadSugg = useCallback(() => api('/mitre/suggestions').then((r) => setSugg(r.items)).catch(() => setSugg([])), [])
+  useEffect(() => { load(); loadSugg() }, [load, loadSugg])
+  const accept = async (s) => {
+    setError('')
+    try { await api('/mitre/mappings', { method: 'POST', json: { technique: s.technique, name: s.name, tactic: s.tactics?.[0] || '', rule_id: s.rule_id } }); load(); loadSugg() } catch (err) { setError(err.message) }
+  }
   const add = async (e) => {
     e.preventDefault()
     const fd = new FormData(e.target)
@@ -36,6 +42,15 @@ export default function Mitre() {
       <p className="muted small">Utilisée quand Wazuh ne fournit pas la technique : d'abord l'identifiant de règle, puis le groupe de règles.</p>
       {error && <p className="error" role="alert">{error}</p>}
       <p className="live" role="status">{msg}</p>
+      {sugg.length > 0 && (
+        <div className="subform" role="region" aria-label="Propositions">
+          <h3 style={{ marginTop: 0 }}>Propositions</h3>
+          <p className="muted small">Ces techniques ont été ajoutées à la main sur plusieurs tickets de la même règle. Les ajouter à la table évite de les saisir à chaque fois.</p>
+          <ul className="found">{sugg.map((s) => (
+            <li key={s.rule_id + s.technique}>règle <span className="mono">{s.rule_id}</span> ({s.rule_description}) → <span className="mono">{s.technique}</span> {s.name} · {s.count} correction(s)
+              {' '}<button type="button" className="small-btn" onClick={() => accept(s)}>Ajouter à la table</button></li>))}</ul>
+        </div>
+      )}
       <div className="subform">
         <label>Importer le référentiel ATT&amp;CK (fichier STIX 2.1, par exemple enterprise-attack.json téléchargé hors de Keryx)
           <input type="file" accept=".json,application/json" onChange={importStix} /></label>

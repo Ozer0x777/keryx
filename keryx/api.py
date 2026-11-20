@@ -676,6 +676,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "rule": {"id": t.rule_id, "level": t.rule_level, "description": t.rule_description, "groups": t.rule_groups},
             "agent": {"id": t.agent_id, "name": t.agent_name, "ip": t.agent_ip},
             "mitre_detail": t.mitre, "classification": t.classification,
+            "attachment_max_mb": db.get(Tenant, t.tenant_id).max_attachment_mb or 20,
+            "severity_hint": {d: gravite(d, t.importance, db.get(Tenant, t.tenant_id).severity_grid) for d in DOMMAGES}
+            if not is_client else None,
             "comments": [
                 {"author": authors[c.author_id].display_name if c.author_id in authors else "?",
                  "body_html": c.body_html, "visible_client": c.visible_client, "created_at": rfc3339(c.created_at)}
@@ -853,6 +856,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         bad = [x for x in body.techniques if not valid_technique(x)]
         if bad:
             raise HTTPException(422, f"Identifiants MITRE invalides : {', '.join(bad[:5])}")
+        if db.scalar(select(func.count()).select_from(MitreTechnique)):  # référentiel importé : on s'y fie
+            known_ids = set(db.scalars(select(MitreTechnique.technique_id).where(MitreTechnique.technique_id.in_(body.techniques))))
+            unknown = [x for x in dict.fromkeys(body.techniques) if x not in known_ids]
+            if unknown:
+                raise HTTPException(422, f"Technique inconnue du référentiel ATT&CK importé : {', '.join(unknown[:5])}")
         before = [m["id"] for m in t.mitre]
         known = {m["id"]: m for m in t.mitre}  # on garde nom et tactiques déjà connus
         ref = {r.technique_id: r for r in db.scalars(select(MitreTechnique).where(MitreTechnique.technique_id.in_(body.techniques)))}
@@ -920,11 +928,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not (declared and declared.isdigit()):
             # Sans Content-Length (envoi chunked), le corps serait entièrement écrit sur disque avant tout contrôle.
             raise HTTPException(411, "En-tête Content-Length obligatoire pour déposer une pièce.")
-        if int(declared) > settings.max_attachment_bytes + 64 * 1024:
-            raise HTTPException(413, "Fichier trop volumineux (20 Mo maximum) : déclarer une preuve externe.")
-        data = file.file.read(settings.max_attachment_bytes + 1)
+        tenant = db.get(Tenant, t.tenant_id)
+        limit = min(settings.max_attachment_bytes, (tenant.max_attachment_mb or 20) * 1024 * 1024)
+        if int(declared) > limit + 64 * 1024:
+            raise HTTPException(413, f"Fichier trop volumineux ({limit // (1024 * 1024)} Mo maximum) : déclarer une preuve externe.")
+        data = file.file.read(limit + 1)
         try:
-            prepared = att.prepare(data, settings)
+            prepared = att.prepare(data, settings, limit)
         except att.AttachmentRejected as exc:
             raise HTTPException(413 if "volumineux" in str(exc) else 422, str(exc))
         status, detail = att.scan(prepared.content, settings)

@@ -62,6 +62,8 @@ class Tenant(Base):
     retention_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Délais cibles par gravité, en heures : {"Critique": {"qualification": 1, "resolution": 8}, ...}
     sla: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Taille maximale d'une pièce, en Mio (1 à 20) ; vide = 20 Mio, plafond fixé par le plan [PRIS VI.2.4]
+    max_attachment_mb: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

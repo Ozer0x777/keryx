@@ -84,11 +84,12 @@ def _reencode_image(data: bytes) -> tuple[bytes, str]:
     return out.getvalue(), IMAGE_FORMATS[fmt]
 
 
-def prepare(data: bytes, settings: Settings) -> Prepared:
+def prepare(data: bytes, settings: Settings, max_bytes: int | None = None) -> Prepared:
+    limit = min(max_bytes or settings.max_attachment_bytes, settings.max_attachment_bytes)
     if not data:
         raise AttachmentRejected("Fichier vide.")
-    if len(data) > settings.max_attachment_bytes:
-        raise AttachmentRejected("Fichier trop volumineux (20 Mo maximum) : déclarer une preuve externe.")
+    if len(data) > limit:
+        raise AttachmentRejected(f"Fichier trop volumineux ({limit // (1024 * 1024)} Mo maximum) : déclarer une preuve externe.")
     original = hashlib.sha256(data).hexdigest()
     kind = sniff(data)
     if kind == "zip":
