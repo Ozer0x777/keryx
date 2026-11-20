@@ -1,4 +1,4 @@
-# Keryx — v0.2
+# Keryx — v0.7
 
 Outil open source de gestion d'incidents de sécurité alimenté par Wazuh. Une alerte Wazuh arrive,
 Keryx ouvre un ticket pré-rempli (description, criticité, règle, équipement, MITRE ATT&CK),
@@ -40,9 +40,9 @@ Brancher un vrai Wazuh : voir `integrations/wazuh/README.md` (script d'intégrat
 ## Conteneur
 
 ```bash
-docker build -t keryx:0.2 .
+docker build -t keryx:0.7 .
 docker run -p 8000:8000 -v keryx-data:/data \
-  -e KERYX_SECRET_KEY=... -e KERYX_DATABASE_URL=sqlite:////data/keryx.db keryx:0.2
+  -e KERYX_SECRET_KEY=... -e KERYX_DATABASE_URL=sqlite:////data/keryx.db keryx:0.7
 ```
 
 Le conteneur applique `alembic upgrade head` puis démarre. Dépendances installées depuis `requirements.lock`
@@ -67,8 +67,14 @@ Le conteneur applique `alembic upgrade head` puis démarre. Dépendances install
 python -m pytest -q
 ```
 
-88 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
-régressions de la revue de sécurité, migrations, notifications (SMTP simulé), pièces jointes (clamd simulé, EICAR).
+140 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
+régressions des revues, migrations, notifications (SMTP simulé, relances), pièces jointes (clamd simulé, EICAR),
+administration, confort de travail, pilotage, conformité, sauvegarde, script d'intégration Wazuh.
+
+Parcours dans un navigateur (Chrome sans tête, base temporaire, 6 scénarios dont un contrôle d'accessibilité axe-core) :
+```bash
+cd e2e && npm ci && node run.mjs        # CHROME_PATH et KERYX_PYTHON si besoin
+```
 
 ## Ce que fait Keryx
 
@@ -91,15 +97,23 @@ régressions de la revue de sécurité, migrations, notifications (SMTP simulé)
 | Export IODEF JSON (sous-ensemble) | RFC 7970, RFC 8727 |
 | Erreurs Problem Details, UUIDv7, dates RFC 3339 UTC, no-store, HSTS | RFC 9457, 9562, 3339, 9111, 6797 |
 | Migrations Alembic | ISO 27002 8.32 ; ADR-0005 |
+| Administration dans l'interface : comptes, clients (grille, SLA, rétention), clés d'API, MITRE, revue, état du système | PDIS IV.3.4.b, IV.3.9.d à h ; ADR-0011 |
+| Recherche plein texte, vues, tri, affectation en masse, filtres enregistrés, modèles, liens et fusion, échéances (SLA), notifications dans l'interface | PDIS IV.2.1.e, r, s ; ADR-0012 |
+| Pilotage : tableau de bord, registre par client (CSV), rapport périodique et d'incident imprimables | PDIS IV.2.1.bb |
+| Mode crise (registre des décisions, plan d'action, synthèse) | PRIS VI.5.5.1 ; ADR-0013 |
+| Journal d'audit consultable (contenu masqué à l'Admin), point de contrôle, import ATT&CK (STIX), rétention | PDIS IV.3.9.c, IV.2.2.w ; ADR-0014 |
+| Sauvegarde chiffrée et restauration vérifiée | PDIS IV.3.6 ; ADR-0015 |
+
+Matrice complète : `docs/matrice-tracabilite.md` · exploitation : `docs/exploitation.md` · SBOM : `python scripts/sbom.py`.
 
 ## Limites connues
 
 - Limites de débit en mémoire, par processus : un seul processus uvicorn tant qu'elles ne sont pas partagées (ADR-0010).
 - Quarantaine : fichier isolé et marqué, pas rezippé avec mot de passe (ADR-0008).
-- Chemins PostgreSQL (verrou consultatif, migrations) non testés ; tests sous SQLite seulement.
-- Jamais testé contre un vrai manager Wazuh.
-- Interface testée dans Chrome sans tête (parcours analyste, client, admin) ; pas d'audit d'accessibilité RGAA complet.
-- Pas encore : gestion des comptes depuis l'interface, Keycloak, import STIX d'ATT&CK, IODEF validé contre le schéma, format ETSI ISI, horodatage RFC 3161, nouvelle tentative d'envoi des courriels.
+- Chemins PostgreSQL (verrou d'ingestion, verrou consultatif, migrations, sauvegarde par pg_dump) non testés ni écrits ; tests sous SQLite seulement. PostgreSQL est prévu en dernier.
+- Jamais testé contre un vrai manager Wazuh (le script d'intégration est testé avec un serveur simulé).
+- Interface testée dans Chrome sans tête (parcours de chaque rôle) et contrôlée avec axe-core (WCAG 2.1 A/AA) ; pas d'audit RGAA complet ni de test d'intrusion.
+- Pas encore : Keycloak/OIDC, WebAuthn, enrôlement du TOTP par l'utilisateur lui-même, format ETSI ISI, horodatage RFC 3161, validation IODEF contre le schéma officiel complet, limites de débit partagées entre processus, stockage objet, PDF généré côté serveur (impression du navigateur à la place).
 
 Un outil ne qualifie pas un prestataire : Keryx fournit les registres, la traçabilité et le
 cloisonnement exigés par PDIS/PRIS, la qualification reste organisationnelle.

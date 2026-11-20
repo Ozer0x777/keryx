@@ -181,7 +181,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ingest_limiter = RateLimiter(limit=600, window_s=60)
 
     # Pas d'interface Swagger : elle charge ses scripts depuis un CDN (aucun service externe).
-    app = FastAPI(title="Keryx", version="0.2.0", docs_url=None, redoc_url=None, openapi_url="/api/openapi.json")
+    app = FastAPI(title="Keryx", version="0.7.0", docs_url=None, redoc_url=None, openapi_url="/api/openapi.json")
     app.state.settings = settings
     app.state.engine = engine
     app.state.SessionLocal = SessionLocal

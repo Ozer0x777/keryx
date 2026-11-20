@@ -19,3 +19,10 @@ Identifiants UUIDv7 (RFC 9562), dates en UTC (RFC 3339).
 | `attachments` | Fichiers, images et preuves externes : SHA-256, registre de collecte, statut antivirus, cycle de vie, visibilité client | PRIS VI.5.3.c, VI.2.4 ; ISO/IEC 27037 ; ADR-0008 |
 | `custody_events` | Chaîne de possession (dépôt, téléchargement + motif, restitution, destruction) | ISO/IEC 27037 ; RFC 3227 |
 | `audit_log` | Journal d'audit en ajout seul, séquence continue, scellement HMAC | PDIS IV.3.9.c ; ISO 27002 8.15 ; ADR-0007 |
+| `ticket_links` | Liens parent / lié / doublon entre tickets d'un même client | ISO/IEC 27035 (regroupement d'incidents) ; ADR-0012 |
+| `templates` | Modèles de commentaire et de synthèse (communs ou par client) | Confort d'analyste ; HTML assaini comme tout contenu |
+| `inbox` | Notifications dans l'interface : référence et nature de l'événement, sans détail | PDIS IV.2.3.g (par analogie, pas de détail) ; ADR-0012 |
+| `saved_filters` | Filtres de liste enregistrés par utilisateur | Confort d'analyste |
+| `crisis_entries` | Registre de crise : décisions, plan d'action, synthèse de crise | PRIS VI.5.5.1 ; ADR-0013 |
+| `mitre_techniques` | Référentiel ATT&CK importé (STIX 2.1) : nom et tactiques | MITRE ATT&CK ; ADR-0014 |
+Colonnes ajoutées : `tenants.retention_months`, `tenants.sla`, `api_keys.last_used_at`, `users.notif_prefs`, `tickets.crisis`, `tickets.crisis_started_at`, `notifications.attempts`.
