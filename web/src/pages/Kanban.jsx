@@ -7,10 +7,11 @@ import { KANBAN_COLUMNS, STATUS, TRANSITIONS } from '../labels.js'
 export default function Kanban() {
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
+  const [mine, setMine] = useState(false)
   const [message, setMessage] = useState('')
   const [dragging, setDragging] = useState(null)
 
-  const load = useCallback(() => api('/tickets', { params: { limit: 500 } }).then((r) => { setItems(r.items); setTotal(r.total ?? r.items.length) }), [])
+  const load = useCallback(() => api('/tickets', { params: { limit: 500, assignee: mine ? 'me' : undefined } }).then((r) => { setItems(r.items); setTotal(r.total ?? r.items.length) }), [mine])
   useEffect(() => { load().catch((e) => setMessage(e.message)) }, [load])
 
   const move = async (ticket, target) => {
@@ -45,6 +46,7 @@ export default function Kanban() {
           <Link to="/kanban" className="on" aria-current="page">Kanban</Link>
         </div>
       </header>
+      <label className="check"><input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} /> Mes tickets seulement</label>
       <p className="live" role="status" aria-live="polite">{message}</p>
       {total > items.length && <p className="muted small" role="status">{items.length} tickets affichés sur {total} : les plus anciens ne figurent pas dans le tableau.</p>}
       <div className="kanban">
@@ -67,6 +69,7 @@ export default function Kanban() {
                   <Tlp value={t.tlp} />
                   {t.status === 'faux_positif' && <span className="pill">Faux positif</span>}
                   {t.rex_en_attente && <span className="pill warn">REX</span>}
+                  {t.overdue && <span className="pill danger">En retard</span>}
                 </div>
                 <div className="row gap small muted">
                   <span className="mono ref">{t.ref}</span><span>{t.client}</span>

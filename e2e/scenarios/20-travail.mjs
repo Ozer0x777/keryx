@@ -1,0 +1,61 @@
+import { until } from '../harness.mjs'
+
+export default async ({ stack, BASE, check, login }) => {
+  const send = (alert) => fetch(`${BASE}/api/v1/ingest/wazuh`, { method: 'POST', headers: { Authorization: `Bearer ${stack.seeds.apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify(alert) }).then((r) => r.json())
+  const base = { timestamp: '2026-11-20T14:41:02.118+0000', rule: { id: '5712', level: 10, description: 'sshd: brute force', groups: ['sshd'] }, agent: { id: '003', name: 'srv-web-01', ip: '10.20.1.15' }, full_log: 'x' }
+  check((await send({ ...base, id: 'a1' })).status === 'created', 'alerte 1 ingérée')
+  check((await send({ ...base, id: 'b1', rule: { ...base.rule, id: '5999', description: 'ftp: login failed' }, agent: { id: '004', name: 'srv-ftp', ip: '10.20.1.16' } })).status === 'created', 'alerte 2 ingérée')
+
+  const m = await login('manager')
+  await m.goto(`${BASE}/tickets`)
+  await m.waitForSelector('text=ACME-2')
+  // recherche
+  await m.fill('input[type=search]', 'ftp'); await m.keyboard.press('Enter')
+  await until(async () => (await m.locator('tbody tr').count()) === 1, '1 ligne')
+  check(await m.locator('tbody tr').first().innerText().then((t) => t.includes('ACME-2')), 'recherche plein texte')
+  await m.getByRole('button', { name: 'Réinitialiser' }).click()
+  await until(async () => (await m.locator('tbody tr').count()) === 2, '2 lignes')
+  // tri par référence croissante
+  await m.getByRole('button', { name: /^Réf\./ }).click()
+  await m.getByRole('button', { name: /^Réf\./ }).click()
+  await m.waitForTimeout(500)
+  check((await m.locator('tbody tr').first().innerText()).includes('ACME-1'), 'tri par référence')
+  // affectation en masse
+  await m.check('input[aria-label="Sélectionner ACME-1"]'); await m.check('input[aria-label="Sélectionner ACME-2"]')
+  await m.waitForSelector('.bulkbar select option:has-text("Test analyste")', { state: 'attached' })
+  await m.selectOption('.bulkbar select', 'analyste')
+  await m.waitForSelector('text=2 ticket(s) affecté(s)')
+  check(true, 'affectation en masse')
+  // lien entre tickets depuis la fiche
+  await m.goto(`${BASE}/tickets/ACME-1`)
+  await m.fill('input[placeholder="ACME-2"]', 'ACME-2'); await m.getByRole('button', { name: 'Lier', exact: true }).click()
+  await m.waitForSelector('.linklist >> text=ACME-2')
+  check(true, 'lien créé depuis la fiche')
+  // modèle enregistré depuis un commentaire
+  await m.locator('.rich-content').last().click(); await m.keyboard.type('Accusé de réception, analyse en cours.')
+  m.once('dialog', (d) => d.accept('Accusé'))
+  await m.getByRole('button', { name: 'Enregistrer comme modèle' }).click()
+  await m.waitForSelector('text=Modèle enregistré.')
+  check(true, 'modèle enregistré')
+  await m.context().close()
+
+  // l'analyste reçoit la notification d'affectation (cloche) et filtre « Mes tickets »
+  const a = await login('analyste')
+  await a.waitForSelector('.bell-count')
+  check((await a.locator('.bell-count').innerText()).trim() === '2', 'cloche : 2 notifications non lues')
+  await a.getByRole('button', { name: /Notifications/ }).click()
+  await a.waitForSelector('.bell-panel >> text=Ticket affecté')
+  check(true, 'liste des notifications')
+  await a.locator('.bell-panel li button').first().click()
+  await a.waitForURL(/\/tickets\/ACME-/)
+  await a.goto(`${BASE}/tickets`)
+  await a.getByRole('button', { name: 'Mes tickets' }).click()
+  await until(async () => (await a.locator('tbody tr').count()) === 2, '2 lignes')
+  check(true, 'vue Mes tickets')
+  // modèle visible côté ticket
+  await a.goto(`${BASE}/tickets/ACME-1`)
+  await a.waitForSelector('select[aria-label="Insérer un modèle"]')
+  check(true, 'modèle proposé à l\'éditeur')
+  check(a.errors.length === 0, 'aucune erreur JavaScript')
+  await a.context().close()
+}

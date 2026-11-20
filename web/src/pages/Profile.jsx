@@ -8,10 +8,16 @@ export default function Profile() {
   const { me } = useAuth()
   const [sessions, setSessions] = useState(null)
   const [secret, setSecret] = useState(null)
+  const [prefs, setPrefs] = useState(null)
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
   const load = useCallback(() => api('/me/sessions').then((r) => setSessions(r.items)).catch((e) => setError(e.message)), [])
   useEffect(() => { load() }, [load])
+  useEffect(() => { if (me.role !== 'admin') api('/me/preferences').then(setPrefs).catch(() => {}) }, [me.role])
+  const setPref = async (k, v) => {
+    const next = { ...prefs.prefs, [k]: v }
+    try { await api('/me/preferences', { method: 'PUT', json: { prefs: next } }); setPrefs({ ...prefs, prefs: next }) } catch (e) { setError(e.message) }
+  }
 
   const changePassword = async (e) => {
     e.preventDefault()
@@ -59,6 +65,14 @@ export default function Profile() {
           <button style={{ marginBottom: 10 }}>Régénérer</button>
         </form>
       </section>
+      {prefs && (
+        <section className="card section" aria-label="Notifications">
+          <header className="section-head"><h2>Notifications dans l'interface</h2></header>
+          {prefs.kinds.map((k) => (
+            <label key={k} className="check"><input type="checkbox" checked={prefs.prefs[k]} onChange={(e) => setPref(k, e.target.checked)} /> {{ assignation: 'Ticket qui m\'est affecté', mention: 'Mention dans un commentaire', echeance: 'Échéance dépassée', reponse_client: 'Réponse d\'un client' }[k]}</label>
+          ))}
+        </section>
+      )}
       <section className="card section" aria-label="Sessions">
         <header className="section-head"><h2>Sessions actives</h2></header>
         <div className="table-wrap"><table className="grid">

@@ -64,3 +64,10 @@ export async function login(browser, stack, name) {
 export function check(cond, label) {
   if (!cond) { console.error(`✗ ${label}`); process.exitCode = 1 } else console.log(`✓ ${label}`)
 }
+
+// Attente active sans évaluation de script dans la page (la CSP de Keryx l'interdit).
+export async function until(fn, label = 'condition', ms = 8000) {
+  const end = Date.now() + ms
+  while (Date.now() < end) { if (await fn()) return; await new Promise((r) => setTimeout(r, 150)) }
+  throw new Error(`délai dépassé : ${label}`)
+}

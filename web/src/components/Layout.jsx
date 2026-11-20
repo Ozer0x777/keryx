@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../App.jsx'
 import { ROLES } from '../labels.js'
+import NotificationBell from './NotificationBell.jsx'
 
 function Shield() {
   return (
@@ -28,6 +29,7 @@ export default function Layout() {
         {links.map(([to, label]) => (
           <NavLink key={to} to={to} className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>{label}</NavLink>
         ))}
+        {me.role !== 'admin' && <NotificationBell />}
         <NavLink to="/profil" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>Mon profil</NavLink>
         <div className="sidebar-user">
           <span className="avatar" aria-hidden="true">{initials}</span>

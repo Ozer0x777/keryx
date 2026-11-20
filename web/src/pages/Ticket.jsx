@@ -38,6 +38,9 @@ export default function Ticket() {
     try { setT(await api(`/tickets/${enc}`)) } catch (e) { setError(e.message) }
   }, [enc])
   useEffect(() => { load() }, [load])
+  const [tpls, setTpls] = useState([])
+  useEffect(() => { if (isTeam) api('/templates').then((r) => setTpls(r.items)).catch(() => {}) }, [isTeam])
+  const templates = (kind) => tpls.filter((x) => x.kind === kind)
 
   const run = async (fn, okMessage) => {
     setNotice('')
@@ -120,15 +123,16 @@ export default function Ticket() {
           <Description t={t} enc={enc} canEdit={isTeam && open} run={run} onImage={(f) => uploadImage(f, true)} />
           {isTeam && <AlertBlock t={t} />}
           <Attachments t={t} enc={enc} me={me} run={run} setNotice={setNotice} />
-          {isTeam && <Synthese t={t} enc={enc} run={run} onImage={(f) => uploadImage(f, false)} />}
+          {isTeam && <Synthese t={t} enc={enc} run={run} onImage={(f) => uploadImage(f, false)} templates={templates('synthese')} />}
           <Events t={t} />
-          <Comments t={t} enc={enc} isClient={isClient} run={run} onImage={uploadImage} />
+          <Comments t={t} enc={enc} isClient={isClient} run={run} onImage={uploadImage} templates={templates('commentaire')} />
         </div>
         {isTeam && (
           <aside className="ticket-aside" aria-label="Pilotage du ticket">
             <Qualification t={t} enc={enc} run={run} open={open} />
             <Mitre t={t} enc={enc} run={run} open={open} />
             <Assignment t={t} enc={enc} run={run} open={open} />
+            <Links t={t} enc={enc} run={run} open={open} />
             <Details t={t} />
           </aside>
         )}
@@ -280,7 +284,7 @@ function Attachments({ t, enc, me, run, setNotice }) {
   )
 }
 
-function Synthese({ t, enc, run, onImage }) {
+function Synthese({ t, enc, run, onImage, templates }) {
   const s = t.synthese || {}
   const [v, setV] = useState({
     compromission_initiale: s.compromission_initiale ? s.compromission_initiale.slice(0, 16) : '',
@@ -307,13 +311,13 @@ function Synthese({ t, enc, run, onImage }) {
         <input type="datetime-local" value={v.compromission_initiale} onChange={(e) => setV({ ...v, compromission_initiale: e.target.value })} />
       </label>
       <h3>Chronologie</h3>
-      <RichEditor value={v.chronologie} onChange={(x) => setV({ ...v, chronologie: x })} label="Chronologie" minHeight={80} />
+      <RichEditor value={v.chronologie} onChange={(x) => setV({ ...v, chronologie: x })} label="Chronologie" templates={templates} minHeight={80} />
       <h3>Mode opératoire</h3>
-      <RichEditor value={v.mode_operatoire} onChange={(x) => setV({ ...v, mode_operatoire: x })} label="Mode opératoire" minHeight={80} />
+      <RichEditor value={v.mode_operatoire} onChange={(x) => setV({ ...v, mode_operatoire: x })} label="Mode opératoire" templates={templates} minHeight={80} />
       <h3>Périmètre</h3>
-      <RichEditor value={v.perimetre} onChange={(x) => setV({ ...v, perimetre: x })} label="Périmètre" minHeight={80} />
+      <RichEditor value={v.perimetre} onChange={(x) => setV({ ...v, perimetre: x })} label="Périmètre" templates={templates} minHeight={80} />
       <h3>Retour d'expérience {t.rex_required && <span className="pill warn">obligatoire</span>}</h3>
-      <RichEditor value={v.rex_html} onChange={(x) => setV({ ...v, rex_html: x })} label="Retour d'expérience" onImage={onImage} minHeight={80} />
+      <RichEditor value={v.rex_html} onChange={(x) => setV({ ...v, rex_html: x })} label="Retour d'expérience" templates={templates} onImage={onImage} minHeight={80} />
       <div className="row end"><button type="button" className="primary" onClick={save}>Enregistrer la synthèse</button></div>
     </Section>
   )
@@ -343,12 +347,17 @@ function Events({ t }) {
   )
 }
 
-function Comments({ t, enc, isClient, run, onImage }) {
+function Comments({ t, enc, isClient, run, onImage, templates }) {
   const [html, setHtml] = useState('')
   const [visible, setVisible] = useState(isClient)
   const post = async () => {
     if (!html.trim()) return
     if (await run(() => api(`/tickets/${enc}/comments`, { method: 'POST', json: { body_html: html, visible_client: visible } }), 'Commentaire publié.')) setHtml('')
+  }
+  const saveTemplate = async () => {
+    const name = window.prompt('Nom du modèle (propre à ce client)')
+    if (!name) return
+    run(() => api('/templates', { method: 'POST', json: { kind: 'commentaire', name, body_html: html, client: t.client_key } }), 'Modèle enregistré.')
   }
   return (
     <Section title={isClient ? 'Échanges avec le SOC' : 'Commentaires'}>
@@ -360,11 +369,15 @@ function Comments({ t, enc, isClient, run, onImage }) {
         </div>
       ))}
       <h3>{isClient ? 'Votre réponse' : 'Nouveau commentaire'}</h3>
-      <RichEditor value={html} onChange={setHtml} label="Nouveau commentaire" onImage={(f) => onImage(f, isClient || visible)} />
+      <RichEditor value={html} onChange={setHtml} label="Nouveau commentaire" templates={templates} onImage={(f) => onImage(f, isClient || visible)} />
       <div className="row gap between">
         {!isClient ? <label className="check"><input type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)} /> Visible par le client</label> : <span />}
-        <button type="button" className="dark" onClick={post}>Publier</button>
+        <div className="row gap">
+          {!isClient && <button type="button" onClick={saveTemplate} disabled={!html.trim()}>Enregistrer comme modèle</button>}
+          <button type="button" className="dark" onClick={post}>Publier</button>
+        </div>
       </div>
+      {!isClient && <p className="muted small">Mentionnez un collègue avec @identifiant : il recevra une notification.</p>}
     </Section>
   )
 }
@@ -453,12 +466,57 @@ function Assignment({ t, enc, run, open }) {
   )
 }
 
+const LINK_LABEL = { parent: 'Parent', enfant: 'Enfant', lie: 'Lié', doublon: 'Doublon de', 'doublon_de_celui-ci': 'Doublon de ce ticket' }
+
+function Links({ t, enc, run, open }) {
+  const [items, setItems] = useState([])
+  const [kind, setKind] = useState('lie')
+  const [ref, setRef] = useState('')
+  const [err, setErr] = useState('')
+  const load = useCallback(() => api(`/tickets/${enc}/links`).then((r) => setItems(r.items)).catch(() => {}), [enc])
+  useEffect(() => { load() }, [load, t.status])
+  const add = async (e) => {
+    e.preventDefault(); setErr('')
+    try { setItems((await api(`/tickets/${enc}/links`, { method: 'POST', json: { ref: ref.trim().toUpperCase(), kind } })).items); setRef('') } catch (x) { setErr(x.message) }
+  }
+  const drop = async (id) => { try { setItems((await api(`/tickets/${enc}/links/${id}`, { method: 'DELETE' })).items) } catch (x) { setErr(x.message) } }
+  const merge = async () => {
+    const into = window.prompt('Référence du ticket à conserver (ex. ACME-1). Ce ticket sera clos comme doublon.')
+    if (!into) return
+    const reason = window.prompt('Motif de la fusion') || ''
+    run(() => api(`/tickets/${enc}/merge`, { method: 'POST', json: { into: into.trim().toUpperCase(), reason } }), 'Ticket fusionné.')
+  }
+  return (
+    <section className="card section" aria-label="Tickets liés">
+      <h2>Tickets liés</h2>
+      {items.length === 0 && <p className="muted small">Aucun lien.</p>}
+      <ul className="linklist">
+        {items.map((l) => (
+          <li key={l.id}><span className="muted small">{LINK_LABEL[l.kind] || l.kind}</span>{' '}
+            <Link to={`/tickets/${encodeURIComponent(l.ref)}`} className="mono">{l.ref}</Link>
+            <button type="button" className="x" aria-label={`Supprimer le lien avec ${l.ref}`} onClick={() => drop(l.id)}>×</button></li>
+        ))}
+      </ul>
+      {err && <p className="error" role="alert">{err}</p>}
+      <form onSubmit={add} className="row gap wrap">
+        <label className="grow">Référence<input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="ACME-2" required /></label>
+        <label>Type<select value={kind} onChange={(e) => setKind(e.target.value)}><option value="lie">Lié</option><option value="parent">Parent</option><option value="doublon">Doublon</option></select></label>
+        <button style={{ marginBottom: 10 }}>Lier</button>
+      </form>
+      {open && <button type="button" className="small-btn danger" onClick={merge}>Fusionner dans un autre ticket…</button>}
+    </section>
+  )
+}
+
 function Details({ t }) {
   return (
     <section className="card section" aria-label="Détails">
       <h2>Détails</h2>
       <dl className="kv">
         <dt>Client</dt><dd>{t.client}</dd>
+        {t.due_qualification && <><dt>Qualifier avant</dt><dd className="mono small">{formatUtc(t.due_qualification)}</dd></>}
+        {t.due_resolution && <><dt>Résoudre avant</dt><dd className="mono small">{formatUtc(t.due_resolution)}</dd></>}
+        {t.overdue && <><dt>Échéance</dt><dd><span className="pill danger">Dépassée</span></dd></>}
         <dt>Dernière occurrence</dt><dd className="mono small">{formatUtc(t.last_seen_at)}</dd>
         <dt>REX</dt><dd>{t.rex_required ? 'Obligatoire' : 'Non requis'}</dd>
       </dl>

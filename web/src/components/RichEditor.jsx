@@ -4,7 +4,7 @@ import Image from '@tiptap/extension-image'
 import { useEffect, useRef } from 'react'
 
 // Éditeur riche (TipTap). Le HTML produit est assaini côté serveur (nh3, liste blanche) avant stockage.
-export default function RichEditor({ value, onChange, label, onImage, minHeight = 120 }) {
+export default function RichEditor({ value, onChange, label, onImage, templates, minHeight = 120 }) {
   const fileRef = useRef(null)
   const editor = useEditor({
     extensions: [
@@ -41,6 +41,15 @@ export default function RichEditor({ value, onChange, label, onImage, minHeight 
         {btn('1.', 'Liste numérotée', () => editor.chain().focus().toggleOrderedList().run(), editor.isActive('orderedList'))}
         {btn('{ }', 'Bloc de code', () => editor.chain().focus().toggleCodeBlock().run(), editor.isActive('codeBlock'))}
         {btn('↗', 'Lien', setLink, editor.isActive('link'))}
+        {templates?.length > 0 && (
+          <select className="tpl" aria-label="Insérer un modèle" value="" onChange={(e) => {
+            const m = templates.find((x) => x.id === e.target.value)
+            if (m) editor.chain().focus().insertContent(m.body_html).run()
+          }}>
+            <option value="">Modèle…</option>
+            {templates.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        )}
         {onImage && btn('▣', 'Image (PNG, JPEG, WebP)', () => fileRef.current?.click(), false)}
         {onImage && (
           <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden
