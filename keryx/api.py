@@ -30,10 +30,11 @@ from sqlalchemy.orm import Session as DbSession
 from starlette.background import BackgroundTask
 
 from . import attachments as att
-from . import audit, inbox, routes_admin, routes_work, security
+from . import audit, inbox, routes_admin, routes_reports, routes_work, security
 from .config import Settings
 from .db import Base, make_engine, make_session_factory
 from .ids import as_utc, rfc3339, utcnow
+from .iodef import validate as iodef_validate
 from .ingest import AlertRejected, ingest_alert
 from .mitre import valid_technique
 from .models import (
@@ -792,6 +793,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "AdditionalData": [{"dtype": "string", "meaning": "tlp", "value": t.tlp}],
             }],
         }
+        problems = iodef_validate(doc)
+        if problems:  # ne jamais émettre un document non conforme
+            log.error("Export IODEF non conforme pour %s : %s", t.ref, problems)
+            raise HTTPException(500, "Export IODEF non conforme à la structure attendue.")
         audit.record(db, user.username, "ticket.export_iodef", "ticket", t.ref, t.tenant_id)
         commit(db)
         return doc
@@ -959,6 +964,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         client_ip=client_ip, assign_ticket=assign_ticket, ticket_summary=ticket_summary)
     routes_admin.register(app, ctx)
     routes_work.register(app, ctx)
+    routes_reports.register(app, ctx)
 
     # ---------------------------------------------------------------- interface web
     dist = settings.web_dist
