@@ -79,6 +79,8 @@ class User(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Préférences de notification dans l'interface : {"mention": true, "assignation": false, ...}
+    notif_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     tenants: Mapped[list["Tenant"]] = relationship(secondary="user_tenants")
 
 
@@ -289,3 +291,56 @@ class AuditEntry(Base):
     details: Mapped[dict] = mapped_column(JSON, default=dict)
     prev_hash: Mapped[str] = mapped_column(String(64))
     hash: Mapped[str] = mapped_column(String(64))
+
+
+LINK_KINDS = ("parent", "lie", "doublon")
+INBOX_KINDS = ("assignation", "mention", "echeance", "reponse_client")
+
+
+class TicketLink(Base):
+    """Lien entre deux tickets du même client (parent, lié, doublon). [ISO/IEC 27035 : regroupement d'incidents]"""
+    __tablename__ = "ticket_links"
+    __table_args__ = (UniqueConstraint("ticket_id", "other_id", "kind"),)
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    ticket_id: Mapped[str] = mapped_column(ForeignKey("tickets.id", ondelete="CASCADE"), index=True)
+    other_id: Mapped[str] = mapped_column(ForeignKey("tickets.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    created_by: Mapped[str] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Template(Base):
+    """Modèle de commentaire ou de synthèse. tenant_id vide = modèle commun à tous les clients."""
+    __tablename__ = "templates"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str | None] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    kind: Mapped[str] = mapped_column(String(16))  # commentaire | synthese
+    name: Mapped[str] = mapped_column(String(120))
+    body_html: Mapped[str] = mapped_column(Text)
+    created_by: Mapped[str] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class InboxItem(Base):
+    """Notification dans l'interface : référence du ticket et nature de l'événement, sans détail de l'incident."""
+    __tablename__ = "inbox"
+    __table_args__ = (UniqueConstraint("user_id", "dedup_key"),)
+    id: Mapped[str] = _id()
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    kind: Mapped[str] = mapped_column(String(24))
+    ticket_ref: Mapped[str] = mapped_column(String(32))
+    actor: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    dedup_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SavedFilter(Base):
+    """Filtre de liste enregistré par un utilisateur."""
+    __tablename__ = "saved_filters"
+    id: Mapped[str] = _id()
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(80))
+    params: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

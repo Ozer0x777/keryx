@@ -11,6 +11,7 @@ import ipaddress
 import json
 import logging
 import os
+import re
 import time
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
@@ -18,18 +19,18 @@ from types import SimpleNamespace
 from typing import Any
 from urllib.parse import quote
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, Response, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, Response, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session as DbSession
 from starlette.background import BackgroundTask
 
 from . import attachments as att
-from . import audit, routes_admin, security
+from . import audit, inbox, routes_admin, routes_work, security
 from .config import Settings
 from .db import Base, make_engine, make_session_factory
 from .ids import as_utc, rfc3339, utcnow
@@ -41,6 +42,7 @@ from .models import (
 )
 from .notify import send_pending
 from .sanitize import clean_html
+from .sla import state as sla_state
 from .severity import DOMMAGES, IMPORTANCES, gravite, is_rex_required
 from .models import TERMINAL_STATUSES as TERMINAL
 from .workflow import TransitionError, check_transition, rex_pending
@@ -475,7 +477,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return await run_in_threadpool(_ingest_sync, bytes(raw), tenant_id, key_name)
 
     # ---------------------------------------------------------------- tickets
-    def ticket_summary(t: Ticket, tenants: dict[str, Tenant], users: dict[str, User] | None = None) -> dict[str, Any]:
+    def ticket_summary(t: Ticket, tenants: dict[str, Tenant], users: dict[str, User] | None = None,
+                       with_sla: bool = True) -> dict[str, Any]:
+        out = _ticket_summary(t, tenants, users)
+        if with_sla:  # échéances internes : jamais montrées au client
+            out.update(sla_state(t, tenants.get(t.tenant_id)))
+        return out
+
+    def _ticket_summary(t: Ticket, tenants: dict[str, Tenant], users: dict[str, User] | None = None) -> dict[str, Any]:
         return {
             "ref": t.ref, "title": t.title,
             "client": tenants[t.tenant_id].name if t.tenant_id in tenants else None,
@@ -490,6 +499,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/v1/tickets")
     def list_tickets(status: str | None = None, client: str | None = None, rex_en_attente: bool = False,
+                     q: str | None = Query(default=None, max_length=200), assignee: str | None = None,
+                     overdue: bool = False, sort: str = "created", order: str = "desc",
                      limit: int = 100, offset: int = 0,
                      user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         limit, offset = max(1, min(limit, 500)), max(0, offset)
@@ -499,18 +510,45 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ids = list(tenants)
         if client:
             ids = [i for i, t in tenants.items() if t.key == client.upper()]
-        q = select(Ticket).where(Ticket.tenant_id.in_(ids)).order_by(Ticket.created_at.desc())
+        sort_cols = {"created": Ticket.created_at, "updated": Ticket.updated_at, "detected": Ticket.detected_at,
+                     "ref": Ticket.seq, "status": Ticket.status, "occurrences": Ticket.occurrences}
+        if sort not in sort_cols or order not in ("asc", "desc"):
+            raise HTTPException(422, f"Tri attendu parmi : {', '.join(sort_cols)} ; ordre asc ou desc.")
+        col = sort_cols[sort]
+        query = select(Ticket).where(Ticket.tenant_id.in_(ids)).order_by(col.asc() if order == "asc" else col.desc(),
+                                                                       Ticket.id.desc())
         if status:
-            q = q.where(Ticket.status == status)
+            query = query.where(Ticket.status == status)
         if rex_en_attente:
-            q = q.where(Ticket.status == "cloture", Ticket.rex_required.is_(True))
-        total = db.scalar(select(func.count()).select_from(q.order_by(None).subquery()))
-        tickets = db.scalars(q.limit(limit).offset(offset)).all()
+            query = query.where(Ticket.status == "cloture", Ticket.rex_required.is_(True))
+        if assignee == "me":
+            query = query.where(Ticket.assignee_id == user.id)
+        elif assignee == "none":
+            query = query.where(Ticket.assignee_id.is_(None))
+        elif assignee:
+            query = query.where(Ticket.assignee_id == db.scalar(select(User.id).where(User.username == assignee[:120])))
+        if q and q.strip():
+            like = "%" + q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+            fields = [Ticket.ref, Ticket.title, Ticket.rule_description, Ticket.rule_id, Ticket.agent_name, Ticket.agent_ip]
+            conds = [f.ilike(like, escape="\\") for f in fields]
+            # Les commentaires internes ne comptent que pour les agents du SOC (jamais pour le client).
+            cq = select(Comment.ticket_id).where(Comment.body_html.ilike(like, escape="\\"))
+            if user.role == "client":
+                cq = cq.where(Comment.visible_client.is_(True))
+            conds.append(Ticket.id.in_(cq))
+            query = query.where(or_(*conds))
+        if overdue and user.role != "client":
+            open_t = [t for t in db.scalars(query).all() if sla_state(t, tenants.get(t.tenant_id))["overdue"]]
+            total, tickets = len(open_t), open_t[offset:offset + limit]
+        else:
+            total = db.scalar(select(func.count()).select_from(query.order_by(None).subquery()))
+            tickets = db.scalars(query.limit(limit).offset(offset)).all()
         assignee_ids = {t.assignee_id for t in tickets if t.assignee_id}
         users = {u.id: u for u in db.scalars(select(User).where(User.id.in_(assignee_ids)))} if assignee_ids else {}
         audit.record(db, user.username, "ticket.list", None, None, None, {"count": len(tickets)})
         commit(db)
-        return {"items": [ticket_summary(t, tenants, users) for t in tickets], "limit": limit, "offset": offset,
+        return {"items": [ticket_summary(t, tenants, users, with_sla=user.role != "client") for t in tickets],
+                "limit": limit, "offset": offset,
                 "total": total}
 
     def attachment_view(a: Attachment) -> dict:
@@ -529,7 +567,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         atts = db.scalars(select(Attachment).where(Attachment.ticket_id == t.id).order_by(Attachment.created_at)).all()
         author_ids = {c.author_id for c in comments} | ({t.assignee_id} if t.assignee_id else set())
         authors = {u.id: u for u in db.scalars(select(User).where(User.id.in_(author_ids)))} if author_ids else {}
-        out = ticket_summary(t, {x.id: x for x in user.tenants}, authors)
+        out = ticket_summary(t, {x.id: x for x in user.tenants}, authors, with_sla=not is_client)
         out.update({
             "body_html": t.body_html, "verdict": t.verdict, "dommages": t.dommages, "importance": t.importance,
             "impact": t.impact, "risque": t.risque, "rex_required": t.rex_required,
@@ -603,6 +641,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         commit(db)
         return {"ref": t.ref, "status": t.status, "rex_required": t.rex_required}
 
+    def assign_ticket(db: DbSession, user: User, t: Ticket, target: User | None) -> None:
+        t.assignee_id = target.id if target else None
+        t.updated_at = utcnow()
+        event(db, t, user, "affectation", {"assignee": target.username if target else None})
+        if target is not None and target.id != user.id:
+            inbox.push(db, target, "assignation", t.ref, actor=user.username)
+
     @app.post("/api/v1/tickets/{ref}/assign")
     def assign(ref: str, body: AssignIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         require_role(user, "analyst", "manager")
@@ -614,9 +659,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if (target is None or not target.active or target.role not in ("analyst", "manager")
                     or t.tenant_id not in [x.id for x in target.tenants]):
                 raise HTTPException(422, "Utilisateur inconnu ou non affecté à ce client.")
-        t.assignee_id = target.id if target else None
-        t.updated_at = utcnow()
-        event(db, t, user, "affectation", {"assignee": target.username if target else None})
+        assign_ticket(db, user, t, target)
         commit(db)
         return {"ref": t.ref, "assignee": target.display_name if target else None}
 
@@ -629,6 +672,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"items": [{"username": u.username, "display_name": u.display_name}
                           for u in users if tenant in u.tenants]}
 
+    def notify_comment(db: DbSession, t: Ticket, author: User, html: str, visible: bool) -> None:
+        """Mentions @identifiant (agents du SOC affectés au client) et réponse d'un client à l'équipe."""
+        plain = re.sub(r"<[^>]+>", " ", html)
+        names = {m.lower() for m in re.findall(r"(?<![\w.@-])@([A-Za-z0-9][A-Za-z0-9._-]{2,63})", plain)}
+        if names:
+            for u in db.scalars(select(User).where(func.lower(User.username).in_(names), User.active.is_(True),
+                                                   User.role.in_(("analyst", "manager")))).all():
+                if u.id != author.id and t.tenant_id in [x.id for x in u.tenants]:
+                    inbox.push(db, u, "mention", t.ref, actor=author.username)
+        if author.role == "client":
+            targets = [db.get(User, t.assignee_id)] if t.assignee_id else [
+                u for u in db.scalars(select(User).where(User.role.in_(("analyst", "manager")),
+                                                         User.active.is_(True))).all()
+                if t.tenant_id in [x.id for x in u.tenants]]
+            for u in targets:
+                inbox.push(db, u, "reponse_client", t.ref, actor=author.username)
+
     @app.post("/api/v1/tickets/{ref}/comments", status_code=201)
     def add_comment(ref: str, body: CommentIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         t = load_ticket(db, user, ref)
@@ -639,6 +699,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(422, "Commentaire vide.")
         db.add(Comment(ticket_id=t.id, author_id=user.id, body_html=clean, visible_client=visible))
         audit.record(db, user.username, "ticket.comment", "ticket", t.ref, t.tenant_id, {"visible_client": visible})
+        notify_comment(db, t, user, clean, visible)
         commit(db)
         return {"ref": t.ref, "visible_client": visible, "body_html": clean}
 
@@ -895,8 +956,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         settings=settings, box=box, SessionLocal=SessionLocal, get_db=get_db, current_user=current_user,
         require_role=require_role, require_open=require_open, commit=commit, load_ticket=load_ticket,
         visible_tenant_ids=visible_tenant_ids, event=event, session_from_cookie=_session_from_cookie,
-        client_ip=client_ip)
+        client_ip=client_ip, assign_ticket=assign_ticket, ticket_summary=ticket_summary)
     routes_admin.register(app, ctx)
+    routes_work.register(app, ctx)
 
     # ---------------------------------------------------------------- interface web
     dist = settings.web_dist
