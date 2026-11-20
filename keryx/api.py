@@ -722,6 +722,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                           sensitivity: str = Form("TLP:AMBER"), visible_client: bool = Form(False),
                           user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         t = load_ticket(db, user, ref)
+        require_open(t)  # chaîne de possession figée sur un ticket clos [ISO/IEC 27037]
         if sensitivity not in TLP:
             raise HTTPException(422, f"Sensibilité attendue parmi : {', '.join(TLP)}.")
         declared = request.headers.get("content-length")
@@ -758,6 +759,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         """Preuve de plus de 20 Mo conservée hors de Keryx (support hors ligne) [PRIS VI.2.4]."""
         require_role(user, "analyst", "manager")
         t = load_ticket(db, user, ref)
+        require_open(t)
         if body.sensitivity not in TLP:
             raise HTTPException(422, f"Sensibilité attendue parmi : {', '.join(TLP)}.")
         a = Attachment(ticket_id=t.id, tenant_id=t.tenant_id, kind="preuve_externe",
