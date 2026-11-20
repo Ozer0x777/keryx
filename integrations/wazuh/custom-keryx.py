@@ -30,7 +30,9 @@ SPOOL_DIR = os.environ.get("KERYX_SPOOL_DIR", "/var/ossec/var/keryx-spool")
 SPOOL_MAX_FILES = int(os.environ.get("KERYX_SPOOL_MAX", "50000"))
 FLUSH_PER_RUN = 20
 TIMEOUT_S = 8
-DEFINITIVE = (400, 401, 403, 413, 422)  # erreurs définitives : renvoyer ne servirait à rien
+# Erreurs définitives : renvoyer ne servirait à rien. 401/403 n'en font PAS partie : une clé révoquée ou en cours
+# de rotation doit laisser les alertes en file d'attente jusqu'au remplacement de la clé (aucune alerte perdue).
+DEFINITIVE = (400, 413, 422)
 
 
 def log(msg: str) -> None:
