@@ -41,6 +41,9 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("add-client"); c.add_argument("key"); c.add_argument("name")
     sub.add_parser("purge", help="Supprime les alertes brutes arrivées en fin de rétention (--apply pour exécuter)").add_argument(
         "--apply", action="store_true")
+    sub.add_parser("backup", help="Sauvegarde chiffrée (base SQLite + pièces)").add_argument("out")
+    r = sub.add_parser("restore", help="Restaure une sauvegarde dans un dossier vide et vérifie l'audit")
+    r.add_argument("file"); r.add_argument("--to", required=True)
     sub.add_parser("import-mitre", help="Importe le référentiel ATT&CK (fichier STIX 2.1)").add_argument("file")
     u = sub.add_parser("add-user")
     u.add_argument("username"); u.add_argument("display_name"); u.add_argument("role", choices=ROLES)
@@ -150,6 +153,30 @@ def main(argv: list[str] | None = None) -> int:
         db.commit()
         print(f"{len(emails)} contact(s) enregistré(s) pour {t.key}.")
         return 0
+
+    if args.cmd == "backup":
+        from . import backup
+        try:
+            info = backup.create(settings.database_url, settings.attachments_dir, settings.secret_key, args.out)
+        except backup.BackupError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(f"Sauvegarde chiffrée écrite dans {args.out} ({info['files']} fichiers). Conserver KERYX_SECRET_KEY à part.")
+        return 0
+
+    if args.cmd == "restore":
+        from . import backup
+        try:
+            info = backup.restore(args.file, settings.secret_key, args.to)
+        except backup.BackupError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        restored = Settings(database_url=f"sqlite:///{args.to}/keryx.db", secret_key=settings.secret_key)
+        rdb = _session(restored)
+        ok, bad = audit.verify_chain(rdb)
+        print(f"Restauration dans {args.to} : {info['files']} fichiers, empreintes vérifiées. "
+              + ("Chaîne d'audit intègre." if ok else f"CHAÎNE D'AUDIT ROMPUE à l'entrée {bad}."))
+        return 0 if ok else 1
 
     if args.cmd == "purge":
         from . import retention
