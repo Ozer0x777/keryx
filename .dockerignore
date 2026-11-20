@@ -5,3 +5,7 @@ keryx/web_dist
 *.db
 data
 tests
+e2e/node_modules
+.github
+run.sh
+.env.local

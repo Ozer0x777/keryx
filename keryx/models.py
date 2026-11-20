@@ -7,6 +7,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
+    false,
     JSON,
     Boolean,
     DateTime,
@@ -168,7 +169,7 @@ class Ticket(Base):
     qualified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Mode « crise » [PRIS VI.5.5.1] : registre des décisions, plan d'action, synthèse de crise
-    crisis: Mapped[bool] = mapped_column(Boolean, default=False)
+    crisis: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     crisis_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

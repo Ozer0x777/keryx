@@ -48,7 +48,7 @@ def upgrade() -> None:
         batch_op.create_index(batch_op.f('ix_crisis_entries_ticket_id'), ['ticket_id'], unique=False)
 
     with op.batch_alter_table('tickets', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('crisis', sa.Boolean(), nullable=False))
+        batch_op.add_column(sa.Column('crisis', sa.Boolean(), server_default=sa.false(), nullable=False))
         batch_op.add_column(sa.Column('crisis_started_at', sa.DateTime(timezone=True), nullable=True))
 
     # ### end Alembic commands ###
