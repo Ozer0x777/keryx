@@ -599,7 +599,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         target = None
         if body.username:
             target = db.scalars(select(User).where(User.username == body.username)).first()
-            if (target is None or target.role not in ("analyst", "manager")
+            if (target is None or not target.active or target.role not in ("analyst", "manager")
                     or t.tenant_id not in [x.id for x in target.tenants]):
                 raise HTTPException(422, "Utilisateur inconnu ou non affecté à ce client.")
         t.assignee_id = target.id if target else None
