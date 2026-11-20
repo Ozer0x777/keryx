@@ -35,6 +35,7 @@ class Settings:
     session_hours: int = field(default_factory=lambda: _int("KERYX_SESSION_HOURS", 8))
     max_failed_logins: int = 5
     # Tentatives de connexion par adresse IP et par 5 minutes. À relever derrière un proxy partagé (ADR-0010).
+    login_user_limit: int = field(default_factory=lambda: _int("KERYX_LOGIN_USER_LIMIT", 10))
     login_ip_limit: int = field(default_factory=lambda: _int("KERYX_LOGIN_IP_LIMIT", 30))
     lockout_minutes: int = 15
 

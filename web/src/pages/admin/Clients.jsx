@@ -78,7 +78,7 @@ export default function Clients() {
       <form className="row gap wrap" onSubmit={create}>
         <label>Clé (ex. ACME)<input name="key" required pattern="[A-Za-z0-9]{1,16}" /></label>
         <label className="grow">Nom<input name="name" required /></label>
-        <button className="primary" style={{ marginBottom: 10 }}>Ajouter</button>
+        <button className="primary">Ajouter</button>
       </form>
       {items?.map((c) => (
         <div key={c.key} className="client-block">

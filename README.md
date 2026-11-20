@@ -53,6 +53,7 @@ Le conteneur applique `alembic upgrade head` puis démarre. Dépendances install
 | Variable | Rôle | Défaut |
 |---|---|---|
 | `KERYX_DATABASE_URL` | SQLite (tests) ou PostgreSQL, ex. `postgresql+psycopg://u:p@hôte/base` (production) | `sqlite:///./keryx.db` |
+| `KERYX_LOGIN_USER_LIMIT` | Tentatives de connexion par identifiant et par 5 minutes | 10 |
 | `KERYX_LOGIN_IP_LIMIT` | Tentatives de connexion par adresse IP et par 5 minutes | 30 |
 | `KERYX_RATE_LIMIT_BACKEND` | `memory` (par processus) ou `db` (partagée entre processus) | `db` si PostgreSQL |
 | `KERYX_RETENTION_MONTHS` | Rétention des alertes brutes des tickets clos (6 minimum) | 12 |

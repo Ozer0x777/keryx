@@ -26,7 +26,7 @@ export default function AuditViewer() {
         <label className="filter">Client<input value={f.client} onChange={set('client')} placeholder="ACME" /></label>
         <label className="filter">Du<input type="date" value={f.from} onChange={set('from')} /></label>
         <label className="filter">Au<input type="date" value={f.to} onChange={set('to')} /></label>
-        <button className="primary" style={{ marginBottom: 10 }}>Filtrer</button>
+        <button className="primary">Filtrer</button>
       </form>
       {error && <p className="error" role="alert">{error}</p>}
       <div className="table-wrap" tabIndex={0} role="region" aria-label="Entrées du journal d'audit"><table className="grid">
@@ -36,8 +36,8 @@ export default function AuditViewer() {
           {items?.length === 0 && <tr><td colSpan="7" className="muted">Aucune entrée.</td></tr>}
           {items?.map((e) => (
             <tr key={e.seq}>
-              <td className="num mono small">{e.seq}</td><td className="mono small">{formatUtc(e.ts)}</td><td>{e.actor}</td>
-              <td className="mono small">{e.action}</td><td className="mono small">{e.object_id || '—'}</td><td>{e.client || '—'}</td>
+              <td className="num mono small">{e.seq}</td><td className="mono small">{formatUtc(e.ts)}</td><td className="small">{e.actor}</td>
+              <td className="mono small">{e.action}</td><td className="mono small">{e.object_id || '—'}</td><td className="mono small">{e.client || '—'}</td>
               <td className="small">{e.details?.masque ? <span className="pill">masqué (contenu)</span> : <code className="mono">{Object.keys(e.details || {}).length ? JSON.stringify(e.details) : '—'}</code>}</td>
             </tr>
           ))}

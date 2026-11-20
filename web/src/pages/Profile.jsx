@@ -71,7 +71,7 @@ export default function Profile() {
       {secret && <OneTime {...secret} onClose={() => setSecret(null)} />}
       <section className="card section" aria-label={t('Langue')}>
         <header className="section-head"><h2>{t('Langue')}</h2></header>
-        <label>{t('Langue')}<select value={getLang()} onChange={(e) => setLang(e.target.value)}>{Object.entries(LANGS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+        <select className="narrow-select" aria-label={t('Langue')} value={getLang()} onChange={(e) => setLang(e.target.value)}>{Object.entries(LANGS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
       </section>
       <section className="card section" aria-label="Mot de passe">
         <header className="section-head"><h2>Changer de mot de passe</h2></header>
@@ -90,7 +90,7 @@ export default function Profile() {
           <form onSubmit={addKey} className="row gap wrap">
             <label>{t('Nom de la clé')}<input name="name" required maxLength={80} placeholder="YubiKey bureau" /></label>
             <label>{t('Mot de passe')}<input name="password" type="password" required autoComplete="current-password" /></label>
-            <button style={{ marginBottom: 10 }}>{t('Ajouter une clé')}</button>
+            <button>{t('Ajouter une clé')}</button>
           </form>
         ) : <p className="muted small">{t("Ce navigateur ne prend pas en charge les clés de sécurité.")}</p>}
       </section>
@@ -99,7 +99,7 @@ export default function Profile() {
         <p className="muted small">Génère 10 nouveaux codes à usage unique ; les précédents cessent de fonctionner.</p>
         <form onSubmit={regen} className="row gap wrap">
           <label>Mot de passe<input name="password" type="password" required autoComplete="current-password" /></label>
-          <button style={{ marginBottom: 10 }}>Régénérer</button>
+          <button>Régénérer</button>
         </form>
       </section>
       {prefs && (

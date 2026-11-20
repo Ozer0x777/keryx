@@ -218,7 +218,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return DbRateLimiter(SessionLocal, name, limit, window_s) if shared else RateLimiter(limit, window_s)
 
     login_ip_limiter = limiter("login_ip", settings.login_ip_limit, 300)
-    login_user_limiter = limiter("login_user", 10, 300)
+    login_user_limiter = limiter("login_user", settings.login_user_limit, 300)
     ingest_fail_limiter = limiter("ingest_fail", 20, 60)
     ingest_limiter = limiter("ingest", 600, 60)
 

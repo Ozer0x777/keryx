@@ -60,4 +60,5 @@ export default {
   'Une clé de sécurité peut remplacer le code TOTP à la connexion. Le TOTP et vos codes de secours restent utilisables si vous perdez la clé.': 'A security key can replace the TOTP code at sign-in. TOTP and your recovery codes remain usable if you lose the key.',
   'ajoutée le': 'added on', 'utilisée le': 'used on', 'Retirer': 'Remove', 'Nom de la clé': 'Key name', 'Ajouter une clé': 'Add a key',
   'Ce navigateur ne prend pas en charge les clés de sécurité.': 'This browser does not support security keys.',
+  'Source': 'Source',
 }

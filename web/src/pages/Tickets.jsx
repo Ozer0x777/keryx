@@ -151,7 +151,7 @@ export default function Tickets() {
             {tr('REX en attente')}
           </label>
         )}
-        <div className="row gap" style={{ marginBottom: 10 }}>
+        <div className="row gap">
           <button type="button" onClick={() => { setDraftQ(''); set(EMPTY) }}>{tr('Réinitialiser')}</button>
           {!isClient && <button type="button" onClick={saveFilter}>{tr('Enregistrer ce filtre')}</button>}
         </div>
@@ -197,12 +197,12 @@ export default function Tickets() {
               <tr key={t.ref} className={t.overdue ? 'overdue' : ''}>
                 {!isClient && <td><input type="checkbox" aria-label={`Sélectionner ${t.ref}`} checked={picked.has(t.ref)} onChange={() => toggle(t.ref)} /></td>}
                 <td className="mono"><Link to={`/tickets/${encodeURIComponent(t.ref)}`}>{t.ref}</Link></td>
-                <td className="strong">{t.title}{t.overdue && <span className="pill danger" style={{ marginLeft: 8 }}>{tr('En retard')}</span>}{t.crisis && <span className="pill danger" style={{ marginLeft: 8 }}>CRISE</span>}</td>
-                {me.clients.length > 1 && <td>{t.client}</td>}
+                <td className="strong title-cell">{t.title}{t.overdue && <span className="pill danger" style={{ marginLeft: 8 }}>{tr('En retard')}</span>}{t.crisis && <span className="pill danger" style={{ marginLeft: 8 }}>CRISE</span>}</td>
+                {me.clients.length > 1 && <td className="mono small" title={t.client}>{t.client_key}</td>}
                 <td><Severity value={t.criticite_initiale} /></td>
                 <td><Severity value={t.gravite} /></td>
                 <td><Status value={t.status} />{t.rex_en_attente && <span className="pill warn">REX</span>}</td>
-                <td><span className="mono">{t.mitre.join(', ') || '—'}</span> <span className="muted small">({MITRE_SOURCE[t.mitre_source]})</span></td>
+                <td title={`${tr('Source')} : ${MITRE_SOURCE[t.mitre_source]}`}><span className="mono">{t.mitre.join(', ') || '—'}</span></td>
                 {!isClient && <td>{t.assignee || '—'}</td>}
                 <td className="mono small">{formatUtc(t.detected_at)}</td>
                 <td><Tlp value={t.tlp} /></td>

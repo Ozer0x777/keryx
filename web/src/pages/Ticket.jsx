@@ -548,7 +548,7 @@ function Links({ t, enc, run, open }) {
       <form onSubmit={add} className="row gap wrap">
         <label className="grow">Référence<input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="ACME-2" required /></label>
         <label>Type<select value={kind} onChange={(e) => setKind(e.target.value)}><option value="lie">Lié</option><option value="parent">Parent</option><option value="doublon">Doublon</option></select></label>
-        <button style={{ marginBottom: 10 }}>Lier</button>
+        <button>Lier</button>
       </form>
       {open && <button type="button" className="small-btn danger" onClick={merge}>Fusionner dans un autre ticket…</button>}
     </section>

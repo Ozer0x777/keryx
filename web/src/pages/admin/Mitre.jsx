@@ -62,7 +62,7 @@ export default function Mitre() {
         <label>Technique<input name="technique" required placeholder="T1110" /></label>
         <label>Nom<input name="name" placeholder="Brute Force" /></label>
         <label>Tactique<input name="tactic" placeholder="Credential Access" /></label>
-        <button className="primary" style={{ marginBottom: 10 }}>Ajouter</button>
+        <button className="primary">Ajouter</button>
       </form>
       <div className="table-wrap"><table className="grid">
         <thead><tr><th scope="col">Règle / groupe</th><th scope="col">Technique</th><th scope="col">Nom</th><th scope="col">Tactique</th><th scope="col">Ajoutée par</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>

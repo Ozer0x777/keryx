@@ -30,7 +30,7 @@ export default function Reports() {
         <label className="filter">Client<select value={f.client} onChange={set('client')} required>{me.clients.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}</select></label>
         <label className="filter">Du<input type="date" value={f.from} onChange={set('from')} /></label>
         <label className="filter">Au<input type="date" value={f.to} onChange={set('to')} /></label>
-        <div className="row gap" style={{ marginBottom: 10 }}>
+        <div className="row gap">
           <button className="primary">Générer</button>
           <button type="button" onClick={csv}>Exporter le registre (CSV)</button>
           <button type="button" onClick={() => window.print()} disabled={!r}>Imprimer / PDF</button>

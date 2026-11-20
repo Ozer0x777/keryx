@@ -32,7 +32,7 @@ export default function Keys() {
       <form className="row gap wrap" onSubmit={create}>
         <label>Client<select name="client" required>{clients.map((c) => <option key={c.key} value={c.key}>{c.key}</option>)}</select></label>
         <label className="grow">Nom du manager Wazuh<input name="name" required placeholder="wazuh-manager-01" /></label>
-        <button className="primary" style={{ marginBottom: 10 }}>Créer une clé</button>
+        <button className="primary">Créer une clé</button>
       </form>
       <div className="table-wrap"><table className="grid">
         <thead><tr><th scope="col">Client</th><th scope="col">Nom</th><th scope="col">Préfixe</th><th scope="col">Dernière alerte reçue</th><th scope="col">État</th><th scope="col">Actions</th></tr></thead>
