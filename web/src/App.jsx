@@ -3,11 +3,14 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { api } from './api.js'
 import Layout from './components/Layout.jsx'
 import Admin from './pages/Admin.jsx'
+import Dashboard from './pages/Dashboard.jsx'
 import Kanban from './pages/Kanban.jsx'
 import Login from './pages/Login.jsx'
 import Mitre from './pages/admin/Mitre.jsx'
 import Profile from './pages/Profile.jsx'
+import Reports from './pages/Reports.jsx'
 import Ticket from './pages/Ticket.jsx'
+import TicketReport from './pages/TicketReport.jsx'
 import Tickets from './pages/Tickets.jsx'
 
 const AuthContext = createContext(null)
@@ -48,8 +51,11 @@ export default function App() {
           <Route path="/tickets" element={<Tickets />} />
           <Route path="/kanban" element={<Kanban />} />
           <Route path="/tickets/:ref" element={<Ticket />} />
+          <Route path="/tickets/:ref/rapport" element={<TicketReport />} />
           <Route path="/admin/*" element={<Admin />} />
           <Route path="/mitre" element={<Mitre />} />
+          <Route path="/pilotage" element={<Dashboard />} />
+          <Route path="/rapports" element={<Reports />} />
           <Route path="/profil" element={<Profile />} />
         </Route>
         <Route path="*" element={<Navigate to={me ? home : '/connexion'} replace />} />

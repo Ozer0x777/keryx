@@ -230,3 +230,26 @@ tr.overdue { background: #FFF8F8; }
 .linklist li { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
 .linklist .x { margin-left: auto; border: 0; background: none; color: var(--muted); min-height: 24px; }
 select.tpl { min-height: 28px; padding: 2px 6px; font-size: 12px; margin-left: 6px; }
+
+/* Pilotage */
+.barlist { list-style: none; margin: 0; padding: 0; }
+.barlist li { display: grid; grid-template-columns: 110px 1fr 40px; align-items: center; gap: 10px; padding: 4px 0; }
+.bl-track { background: #EEF0F3; border-radius: 4px; height: 14px; overflow: hidden; }
+.bl-fill { display: block; height: 100%; min-width: 2px; }
+.bl-value { text-align: right; }
+.trend svg { width: 100%; height: auto; }
+.trend .key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 10px; vertical-align: middle; }
+.dash { align-items: start; margin-bottom: 14px; }
+.btn-link { display: inline-block; padding: 7px 14px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); text-decoration: none; }
+@media (max-width: 900px) { .dash { grid-template-columns: 1fr; } }
+
+/* Impression (rapports) : seul le contenu du rapport est imprimé */
+@media print {
+  .sidebar, .noprint, .tabs, .segmented, button, .filters { display: none !important; }
+  .shell { display: block; }
+  body, .content { background: #fff; }
+  .content { padding: 0; margin: 0; max-width: none; }
+  .card { border: 0; }
+  .report h1 { font-size: 20px; }
+  tr, .report h2 { break-inside: avoid; }
+}

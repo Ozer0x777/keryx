@@ -105,6 +105,7 @@ export default function Ticket() {
         </div>
         {isTeam && (
           <div className="row wrap gap">
+            <Link to={`/tickets/${enc}/rapport`} className="btn-link">Rapport imprimable</Link>
             <button type="button" onClick={exportIodef}>Exporter (IODEF JSON)</button>
             {(TRANSITIONS[t.status] || []).map((s) => (
               <button type="button" key={s} className="primary"
