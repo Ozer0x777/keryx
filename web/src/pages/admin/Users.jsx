@@ -34,14 +34,13 @@ export default function Users() {
       role, clients: role === 'admin' ? [] : picked, password: fd.get('password') } }), 'Compte créé.')
     if (r) {
       setForm(null)
-      setSecret({ title: `Compte ${r.username}`, items: [['Code TOTP (URI)', r.totp_uri], ['Secret TOTP', r.totp_secret], ['Codes de secours', r.recovery_codes]] })
+      setMsg(`Compte ${r.username} créé. Transmettez-lui son mot de passe temporaire par un canal sûr : il activera lui-même sa double authentification à sa première connexion.`)
     }
   }
 
   const reset2fa = async (u) => {
-    if (!window.confirm(`Réinitialiser la 2FA de ${u.username} ? Ses sessions seront fermées.`)) return
-    const r = await run(() => api(`/admin/users/${encodeURIComponent(u.username)}/reset-2fa`, { method: 'POST' }), '2FA réinitialisée.')
-    if (r) setSecret({ title: `2FA de ${r.username}`, items: [['Code TOTP (URI)', r.totp_uri], ['Secret TOTP', r.totp_secret], ['Codes de secours', r.recovery_codes]] })
+    if (!window.confirm(`Réinitialiser la 2FA de ${u.username} ? Ses sessions seront fermées et il devra réenrôler son application.`)) return
+    await run(() => api(`/admin/users/${encodeURIComponent(u.username)}/reset-2fa`, { method: 'POST' }), `2FA de ${u.username} réinitialisée : l'utilisateur la réenrôlera à sa prochaine connexion (définissez-lui un mot de passe temporaire si besoin).`)
   }
   const resetPwd = async (u) => {
     const password = window.prompt(`Nouveau mot de passe pour ${u.username} (12 caractères minimum)`)
@@ -87,7 +86,7 @@ export default function Users() {
                 <td className="mono">{u.username}</td><td>{u.display_name}</td><td>{ROLES[u.role]}</td>
                 <td className="mono small">{u.clients.join(', ') || '—'}</td>
                 <td className="mono small">{formatUtc(u.last_login_at)}</td>
-                <td>{!u.active ? <span className="pill">Désactivé</span> : u.locked ? <span className="pill danger">Verrouillé</span> : <span className="pill ok">Actif</span>}</td>
+                <td>{!u.active ? <span className="pill">Désactivé</span> : !u.enrolled ? <span className="pill warn">À activer</span> : u.locked ? <span className="pill danger">Verrouillé</span> : <span className="pill ok">Actif</span>}</td>
                 <td><div className="row gap wrap">
                   <button type="button" className="small-btn" onClick={() => reset2fa(u)}>Réinit. 2FA</button>
                   <button type="button" className="small-btn" onClick={() => resetPwd(u)}>Mot de passe</button>

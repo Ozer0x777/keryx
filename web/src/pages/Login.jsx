@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api.js'
+import OneTime from '../components/OneTime.jsx'
 
 export default function Login({ onDone }) {
   const [step, setStep] = useState(1)
@@ -9,14 +10,21 @@ export default function Login({ onDone }) {
   const [useRecovery, setUseRecovery] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [enroll, setEnroll] = useState(null)
+  const [newPwd, setNewPwd] = useState('')
+  const [newPwd2, setNewPwd2] = useState('')
+  const [codes, setCodes] = useState(null)
 
   const submitPassword = async (e) => {
     e.preventDefault()
     setBusy(true); setError('')
     try {
-      await api('/auth/login', { method: 'POST', json: { username, password } })
+      const r = await api('/auth/login', { method: 'POST', json: { username, password } })
       setPassword('')
-      setStep(2)
+      if (r.next === 'enroll') {
+        setEnroll(await api('/auth/enroll/start', { method: 'POST' }))
+        setStep(3)
+      } else setStep(2)
     } catch (err) {
       setError(err.message)
     } finally { setBusy(false) }
@@ -31,6 +39,18 @@ export default function Login({ onDone }) {
     } catch (err) {
       setError(err.status === 401 && step === 2 && !/verrouill/i.test(err.message) ? 'Code invalide, ou session expirée : recommencez si besoin.' : err.message)
     } finally { setBusy(false) }
+  }
+
+  const submitEnroll = async (e) => {
+    e.preventDefault()
+    setError('')
+    if (newPwd !== newPwd2) { setError('Les deux mots de passe ne correspondent pas.'); return }
+    setBusy(true)
+    try {
+      const r = await api('/auth/enroll/finish', { method: 'POST', json: { code, new_password: newPwd } })
+      setNewPwd(''); setNewPwd2(''); setCode('')
+      setCodes(r.recovery_codes)
+    } catch (err) { setError(err.message) } finally { setBusy(false) }
   }
 
   return (
@@ -51,7 +71,31 @@ export default function Login({ onDone }) {
       </section>
       <main className="login-main">
         <div className="card login-card">
-          {step === 1 ? (
+          {step === 3 ? (
+            codes ? (
+              <div>
+                <h1>Compte activé</h1>
+                <OneTime title="Vos codes de secours" items={[['Codes de secours (usage unique)', codes]]} onClose={onDone} />
+              </div>
+            ) : (
+              <form onSubmit={submitEnroll}>
+                <span className="eyebrow">Première connexion</span>
+                <h1>Activer votre compte</h1>
+                <p className="muted">1. Ajoutez ce compte dans votre application d'authentification (FreeOTP, Aegis, Google Authenticator…) avec la clé ci-dessous.</p>
+                <p className="mono small" style={{ wordBreak: 'break-all' }} data-testid="totp-secret">{enroll?.totp_secret}</p>
+                <details><summary className="small">Adresse de configuration (otpauth)</summary><p className="mono small" style={{ wordBreak: 'break-all' }}>{enroll?.totp_uri}</p></details>
+                <p className="muted">2. Saisissez le code à 6 chiffres affiché, puis choisissez votre mot de passe personnel.</p>
+                <label htmlFor="ecode">Code TOTP</label>
+                <input id="ecode" className="otp" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.trim())} required />
+                <label htmlFor="np">Nouveau mot de passe (12 caractères minimum)</label>
+                <input id="np" type="password" autoComplete="new-password" minLength={12} value={newPwd} onChange={(e) => setNewPwd(e.target.value)} required />
+                <label htmlFor="np2">Confirmer le mot de passe</label>
+                <input id="np2" type="password" autoComplete="new-password" minLength={12} value={newPwd2} onChange={(e) => setNewPwd2(e.target.value)} required />
+                {error && <p className="error" role="alert">{error}</p>}
+                <button className="primary wide" disabled={busy}>Activer mon compte</button>
+              </form>
+            )
+          ) : step === 1 ? (
             <form onSubmit={submitPassword}>
               <span className="eyebrow">Étape 1 sur 2</span>
               <h1>Connexion</h1>

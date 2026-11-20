@@ -12,10 +12,9 @@ export default async ({ browser, stack, BASE, check, login }) => {
   await p.fill('input[name=username]', 'nouvel.analyste'); await p.fill('input[name=display_name]', 'Nouvel Analyste')
   await p.check('input[name=clients][value=NOVA]'); await p.fill('input[name=password]', 'un-mot-de-passe-solide')
   await p.getByRole('button', { name: 'Créer' }).click()
-  await p.waitForSelector('text=ne seront plus affichées')
-  check(await p.locator('.onetime').innerText().then((t) => t.includes('otpauth://')), 'URI TOTP affichée une seule fois')
-  await p.getByRole('button', { name: "J'ai noté ces valeurs" }).click()
-  check(await p.locator('text=nouvel.analyste').count() > 0, 'compte listé')
+  await p.waitForSelector('text=activera lui-même sa double authentification')
+  check(await p.locator('.onetime').count() === 0, 'aucun secret TOTP montré à l\'Admin')
+  check(await p.locator('tr', { hasText: 'nouvel.analyste' }).locator('text=À activer').count() === 1, 'compte marqué « À activer »')
   // clé d'API
   await p.getByRole('link', { name: "Clés d'API" }).click()
   await p.waitForSelector('text=wazuh-e2e')

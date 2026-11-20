@@ -113,7 +113,7 @@ Matrice complète : `docs/matrice-tracabilite.md` · exploitation : `docs/exploi
 - Chemins PostgreSQL (verrou d'ingestion, verrou consultatif, migrations, sauvegarde par pg_dump) non testés ni écrits ; tests sous SQLite seulement. PostgreSQL est prévu en dernier.
 - Jamais testé contre un vrai manager Wazuh (le script d'intégration est testé avec un serveur simulé).
 - Interface testée dans Chrome sans tête (parcours de chaque rôle) et contrôlée avec axe-core (WCAG 2.1 A/AA) ; pas d'audit RGAA complet ni de test d'intrusion.
-- Pas encore : Keycloak/OIDC, WebAuthn, enrôlement du TOTP par l'utilisateur lui-même, format ETSI ISI, horodatage RFC 3161, validation IODEF contre le schéma officiel complet, limites de débit partagées entre processus, stockage objet, PDF généré côté serveur (impression du navigateur à la place).
+- Pas encore : Keycloak/OIDC, WebAuthn, format ETSI ISI, horodatage RFC 3161, validation IODEF contre le schéma officiel complet, limites de débit partagées entre processus, stockage objet, PDF généré côté serveur (impression du navigateur à la place).
 
 Un outil ne qualifie pas un prestataire : Keryx fournit les registres, la traçabilité et le
 cloisonnement exigés par PDIS/PRIS, la qualification reste organisationnelle.

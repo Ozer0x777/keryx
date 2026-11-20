@@ -1,0 +1,26 @@
+import { PASSWORD, totp } from '../harness.mjs'
+
+// Le titulaire d'un compte créé par l'Admin active lui-même sa 2FA : l'Admin n'en voit jamais le secret.
+export default async ({ browser, BASE, check }) => {
+  const ctx = await browser.newContext({ viewport: { width: 1200, height: 900 } })
+  const p = await ctx.newPage()
+  p.errors = []; p.on('pageerror', (e) => p.errors.push(e.message))
+  await p.goto(`${BASE}/`)
+  await p.locator('input').first().fill('nouvel.analyste')
+  await p.locator('input[type=password]').fill('un-mot-de-passe-solide')
+  await p.getByRole('button', { name: 'Continuer' }).click()
+  await p.waitForSelector('text=Activer votre compte')
+  const secret = (await p.getByTestId('totp-secret').innerText()).trim()
+  check(/^[A-Z2-7]{16,}$/.test(secret), 'la clé TOTP est affichée à son titulaire')
+  await p.fill('#ecode', totp(secret))
+  await p.fill('#np', 'mon-mot-de-passe-perso-42'); await p.fill('#np2', 'mon-mot-de-passe-perso-42')
+  await p.getByRole('button', { name: 'Activer mon compte' }).click()
+  await p.waitForSelector('text=ne seront plus affichées')
+  const codes = (await p.locator('.onetime code').innerText()).trim().split(/\s+/)
+  check(codes.length === 10, '10 codes de secours affichés une seule fois')
+  await p.getByRole('button', { name: "J'ai noté ces valeurs" }).click()
+  await p.waitForSelector('.sidebar')
+  check(await p.locator('text=Test').count() >= 0 && (await p.locator('.sidebar').count()) === 1, 'connecté après activation')
+  check(p.errors.length === 0, 'aucune erreur JavaScript')
+  await ctx.close()
+}

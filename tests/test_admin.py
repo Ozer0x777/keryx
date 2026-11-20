@@ -21,11 +21,11 @@ def test_creation_compte_et_regles_de_role(app, db, world):
                                               "clients": ["ACME"], "password": "un-mot-de-passe-solide"})
     assert ok.status_code == 201, ok.text
     body = ok.json()
-    assert body["totp_uri"].startswith("otpauth://totp/") and len(body["recovery_codes"]) == 10
-    # Le nouveau compte peut se connecter avec le secret affiché une seule fois.
+    # L'Admin ne reçoit AUCUN secret : le titulaire enrôle lui-même sa 2FA à sa première connexion.
+    assert body["enrolled"] is False and not any(k in body for k in ("totp_uri", "totp_secret", "recovery_codes"))
     c = TestClient(app)
-    assert c.post("/api/v1/auth/login", json={"username": "nouvel.analyste", "password": "un-mot-de-passe-solide"}).status_code == 200
-    assert c.post("/api/v1/auth/totp", json={"code": pyotp.TOTP(body["totp_secret"]).now()}).status_code == 200
+    r = c.post("/api/v1/auth/login", json={"username": "nouvel.analyste", "password": "un-mot-de-passe-solide"})
+    assert r.status_code == 200 and r.json() == {"next": "enroll"}
     # Règles : admin sans client, client avec exactement un client, analyste avec au moins un client
     bad = [dict(role="admin", clients=["ACME"]), dict(role="client", clients=["ACME", "DELTA"]),
            dict(role="analyst", clients=[]), dict(role="inconnu", clients=["ACME"]), dict(role="analyst", clients=["NOPE"])]
@@ -51,12 +51,11 @@ def test_modification_ferme_les_sessions_et_protege_son_propre_compte(app, db, w
 
 def test_reinitialisation_2fa_tracee(app, db, world):
     a = login(app, db, "admin")
-    old = world["users"]["client_acme"].totp_secret
     r = a.post("/api/v1/admin/users/client_acme/reset-2fa")
-    assert r.status_code == 200 and len(r.json()["recovery_codes"]) == 10
+    assert r.status_code == 200 and r.json()["enrolled"] is False and "totp_secret" not in r.json()
     db.rollback()
     db.refresh(world["users"]["client_acme"])
-    assert world["users"]["client_acme"].totp_secret != old
+    assert world["users"]["client_acme"].totp_secret == "" and world["users"]["client_acme"].recovery_codes == []
     assert a.get("/api/v1/audit/verify").json()["chain_ok"] is True
 
 

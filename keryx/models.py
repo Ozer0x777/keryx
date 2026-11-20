@@ -8,6 +8,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     false,
+    true,
     JSON,
     Boolean,
     DateTime,
@@ -78,6 +79,9 @@ class User(Base):
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_totp_step: Mapped[int | None] = mapped_column(Integer, nullable=True)  # anti-rejeu TOTP
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # False : compte créé par un Admin, le titulaire n'a pas encore enrôlé son application TOTP ni choisi son
+    # mot de passe. Le secret TOTP est alors généré chez l'utilisateur et jamais montré à l'Admin.
+    enrolled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     # Préférences de notification dans l'interface : {"mention": true, "assignation": false, ...}

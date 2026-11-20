@@ -107,6 +107,11 @@ class LoginIn(BaseModel):
     _u = field_validator("username")(_no_control_chars)
 
 
+class EnrollIn(BaseModel):
+    code: str = Field(max_length=12)
+    new_password: str = Field(min_length=12, max_length=256)
+
+
 class TotpIn(BaseModel):
     code: str | None = Field(default=None, max_length=12)
     recovery_code: str | None = Field(default=None, max_length=32)
@@ -344,7 +349,64 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         audit.record(db, user.username, "auth.password_ok", "user", user.id, None, {"ip": ip})
         commit(db)
         _set_cookie(response, SESSION_COOKIE, token, settings, http_only=True, max_age=300)
-        return {"next": "totp"}
+        return {"next": "totp" if user.enrolled else "enroll"}
+
+    def promote(db: DbSession, s: Session, user: User, response: Response, ip: str, method: str) -> dict:
+        """Élève une session « mot de passe » en session complète (rotation du jeton : anti-fixation)."""
+        db.delete(s)
+        token, csrf = security.new_token(), security.new_token()
+        db.add(Session(token_hash=security.sha256(token), user_id=user.id, stage="full", csrf_token=csrf,
+                       expires_at=utcnow() + timedelta(hours=settings.session_hours)))
+        user.failed_attempts = 0
+        user.last_login_at = utcnow()
+        audit.record(db, user.username, "auth.login_success", "user", user.id, None, {"ip": ip, "method": method})
+        commit(db)
+        max_age = settings.session_hours * 3600
+        _set_cookie(response, SESSION_COOKIE, token, settings, http_only=True, max_age=max_age)
+        _set_cookie(response, CSRF_COOKIE, csrf, settings, http_only=False, max_age=max_age)
+        return {"csrf_token": csrf, "role": user.role, "display_name": user.display_name,
+                "recovery_codes_left": len(user.recovery_codes or [])}
+
+    def enrolling_user(request: Request, db: DbSession) -> tuple[Session, User, str]:
+        ip = client_ip(request)
+        s = _session_from_cookie(request, db)
+        if s is None or s.stage != "password":
+            raise HTTPException(401, "Étape mot de passe requise.")
+        user = db.get(User, s.user_id)
+        if user is None or not user.active or user.enrolled:
+            raise HTTPException(409, "Aucun enrôlement en attente pour ce compte.")
+        if not login_ip_limiter.allow(ip) or not login_user_limiter.allow(user.username.lower()):
+            raise HTTPException(429, "Trop de tentatives, réessayez plus tard.")
+        return s, user, ip
+
+    @app.post("/api/v1/auth/enroll/start")
+    def enroll_start(request: Request, db: DbSession = Depends(get_db)):
+        """Première connexion : le secret TOTP est généré ici et montré à son seul titulaire."""
+        s, user, _ip = enrolling_user(request, db)
+        secret = security.new_totp_secret()
+        user.totp_secret = box.encrypt(secret, f"totp:{user.id}")
+        audit.record(db, user.username, "auth.enroll_start", "user", user.id)
+        commit(db)
+        return {"totp_uri": security.totp_uri(secret, user.username), "totp_secret": secret}
+
+    @app.post("/api/v1/auth/enroll/finish")
+    def enroll_finish(body: EnrollIn, request: Request, response: Response, db: DbSession = Depends(get_db)):
+        s, user, ip = enrolling_user(request, db)
+        if not user.totp_secret:
+            raise HTTPException(409, "Démarrer l'enrôlement avant de le valider.")
+        step = security.verify_totp(box.decrypt(user.totp_secret, f"totp:{user.id}"), body.code, None)
+        if step is None:
+            audit.record(db, user.username, "auth.enroll_failed", "user", user.id, None, {"ip": ip})
+            commit(db)
+            raise HTTPException(401, "Code de vérification invalide.")
+        if security.verify_password(user.password_hash, body.new_password):
+            raise HTTPException(422, "Choisissez un mot de passe différent du mot de passe temporaire.")
+        user.password_hash = security.hash_password(body.new_password)
+        plain, hashed = security.new_recovery_codes()
+        user.recovery_codes, user.last_totp_step, user.enrolled = hashed, step, True
+        audit.record(db, user.username, "auth.enroll_done", "user", user.id)
+        out = promote(db, s, user, response, ip, "enrollment")
+        return {**out, "recovery_codes": plain}  # affichés une seule fois
 
     @app.post("/api/v1/auth/totp")
     def totp(body: TotpIn, request: Request, response: Response, db: DbSession = Depends(get_db)):
@@ -355,6 +417,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         user = db.get(User, s.user_id)
         if not login_ip_limiter.allow(ip) or not login_user_limiter.allow(user.username.lower()):
             raise HTTPException(429, "Trop de tentatives, réessayez plus tard.")
+        if not user.enrolled:
+            raise HTTPException(401, "Enrôlement de la double authentification requis.")
         if user.locked_until and as_utc(user.locked_until) > utcnow():
             # Verrouillé : aucune session intermédiaire ne doit permettre de continuer.
             db.execute(delete(Session).where(Session.user_id == user.id, Session.stage == "password"))
@@ -382,19 +446,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             audit.record(db, user.username, "auth.totp_failed", "user", user.id, None, {"ip": ip})
             commit(db)
             raise HTTPException(401, "Code de vérification invalide.")
-        db.delete(s)  # rotation du jeton à l'élévation (anti-fixation)
-        token, csrf = security.new_token(), security.new_token()
-        db.add(Session(token_hash=security.sha256(token), user_id=user.id, stage="full", csrf_token=csrf,
-                       expires_at=utcnow() + timedelta(hours=settings.session_hours)))
-        user.failed_attempts = 0
-        user.last_login_at = utcnow()
-        audit.record(db, user.username, "auth.login_success", "user", user.id, None, {"ip": ip, "method": method})
-        commit(db)
-        max_age = settings.session_hours * 3600
-        _set_cookie(response, SESSION_COOKIE, token, settings, http_only=True, max_age=max_age)
-        _set_cookie(response, CSRF_COOKIE, csrf, settings, http_only=False, max_age=max_age)
-        return {"csrf_token": csrf, "role": user.role, "display_name": user.display_name,
-                "recovery_codes_left": len(user.recovery_codes or [])}
+        return promote(db, s, user, response, ip, method)
 
     @app.post("/api/v1/auth/logout")
     def logout(request: Request, response: Response, user: User = Depends(current_user),

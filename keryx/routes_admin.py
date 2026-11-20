@@ -124,16 +124,14 @@ def register(app, ctx) -> None:
 
     def user_view(u: User) -> dict:
         return {"username": u.username, "display_name": u.display_name, "role": u.role, "email": u.email,
-                "active": u.active, "clients": [t.key for t in u.tenants],
+                "active": u.active, "enrolled": u.enrolled, "clients": [t.key for t in u.tenants],
                 "last_login_at": rfc3339(u.last_login_at), "recovery_codes_left": len(u.recovery_codes or []),
                 "locked": bool(u.locked_until and as_utc(u.locked_until) > utcnow())}
 
-    def new_second_factor(db: DbSession, u: User) -> dict:
-        secret = security.new_totp_secret()
-        plain, hashed = security.new_recovery_codes()
-        u.totp_secret = box.encrypt(secret, f"totp:{u.id}")
-        u.recovery_codes, u.last_totp_step = hashed, None
-        return {"totp_uri": security.totp_uri(secret, u.username), "totp_secret": secret, "recovery_codes": plain}
+    def require_enrollment(u: User) -> None:
+        """Le titulaire enrôle lui-même son application TOTP à sa prochaine connexion : l'Admin ne voit jamais
+        ce secret (séparation administrateur / opérateur, PDIS IV.3.9.d à h)."""
+        u.totp_secret, u.recovery_codes, u.last_totp_step, u.enrolled = "", [], None, False
 
     def drop_sessions(db: DbSession, u: User) -> None:
         db.execute(delete(Session).where(Session.user_id == u.id))
@@ -159,14 +157,13 @@ def register(app, ctx) -> None:
             raise HTTPException(409, "Cet identifiant existe déjà.")
         u = User(username=body.username, display_name=body.display_name, role=body.role, email=body.email,
                  password_hash=security.hash_password(body.password), totp_secret="", recovery_codes=[],
-                 tenants=tenants)
+                 enrolled=False, tenants=tenants)
         db.add(u)
         db.flush()
-        factor = new_second_factor(db, u)
         audit.record(db, user.username, "user.create", "user", u.id, None,
                      {"role": body.role, "clients": [t.key for t in tenants]})
         commit(db)
-        return {**user_view(u), **factor}  # affiché une seule fois
+        return user_view(u)  # mot de passe temporaire : le titulaire le change à sa première connexion
 
     @app.patch("/api/v1/admin/users/{username}")
     def users_patch(username: str, body: UserPatchIn, user: User = Depends(current_user),
@@ -204,12 +201,12 @@ def register(app, ctx) -> None:
         """Réinitialisation de la 2FA, réservée à l'Admin et tracée [plan : exigences fonctionnelles]."""
         require_role(user, "admin")
         u = get_user(db, username)
-        factor = new_second_factor(db, u)
+        require_enrollment(u)
         u.failed_attempts, u.locked_until = 0, None
         drop_sessions(db, u)
         audit.record(db, user.username, "user.reset_2fa", "user", u.id, None, {})
         commit(db)
-        return {**user_view(u), **factor}
+        return user_view(u)
 
     @app.post("/api/v1/admin/users/{username}/reset-password")
     def users_reset_password(username: str, body: PasswordResetIn, user: User = Depends(current_user),
