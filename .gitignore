@@ -5,3 +5,4 @@ run.sh
 __pycache__/
 *.pyc
 keryx/web_dist/
+e2e/node_modules/

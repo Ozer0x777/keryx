@@ -19,7 +19,7 @@ export default function Layout() {
     ? [['/admin', 'Administration']]
     : me.role === 'client'
       ? [['/tickets', 'Mes incidents']]
-      : [['/tickets', 'Tickets'], ['/kanban', 'Kanban']]
+      : [['/tickets', 'Tickets'], ['/kanban', 'Kanban'], ...(me.role === 'manager' ? [['/mitre', 'Table MITRE']] : [])]
   return (
     <div className="shell">
       <nav className="sidebar" aria-label="Navigation principale">
@@ -28,6 +28,7 @@ export default function Layout() {
         {links.map(([to, label]) => (
           <NavLink key={to} to={to} className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>{label}</NavLink>
         ))}
+        <NavLink to="/profil" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>Mon profil</NavLink>
         <div className="sidebar-user">
           <span className="avatar" aria-hidden="true">{initials}</span>
           <span className="who">

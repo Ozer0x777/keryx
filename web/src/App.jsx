@@ -5,6 +5,8 @@ import Layout from './components/Layout.jsx'
 import Admin from './pages/Admin.jsx'
 import Kanban from './pages/Kanban.jsx'
 import Login from './pages/Login.jsx'
+import Mitre from './pages/admin/Mitre.jsx'
+import Profile from './pages/Profile.jsx'
 import Ticket from './pages/Ticket.jsx'
 import Tickets from './pages/Tickets.jsx'
 
@@ -46,7 +48,9 @@ export default function App() {
           <Route path="/tickets" element={<Tickets />} />
           <Route path="/kanban" element={<Kanban />} />
           <Route path="/tickets/:ref" element={<Ticket />} />
-          <Route path="/admin" element={<Admin />} />
+          <Route path="/admin/*" element={<Admin />} />
+          <Route path="/mitre" element={<Mitre />} />
+          <Route path="/profil" element={<Profile />} />
         </Route>
         <Route path="*" element={<Navigate to={me ? home : '/connexion'} replace />} />
       </Routes>
