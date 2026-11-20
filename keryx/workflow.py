@@ -8,6 +8,9 @@ Règles :
 """
 from __future__ import annotations
 
+import html
+import re
+
 TRANSITIONS: dict[str, set[str]] = {
     "nouveau": {"en_evaluation"},
     "en_evaluation": {"faux_positif", "en_reponse"},
@@ -16,6 +19,12 @@ TRANSITIONS: dict[str, set[str]] = {
     "faux_positif": set(),
     "retour_experience": set(),
 }
+
+
+def _visible_text(html_value: str | None) -> str:
+    """Texte réellement visible d'un HTML assaini (« <p><br></p> » ne compte pas comme un REX)."""
+    text = re.sub(r"<[^>]*>", "", html_value or "")
+    return html.unescape(text).replace("\xa0", " ").strip()
 
 
 class TransitionError(ValueError):
@@ -30,7 +39,7 @@ def check_transition(current: str, target: str, verdict: str | None, rex_require
         raise TransitionError("Qualifier le ticket en faux positif avant de le clore comme tel.")
     if target == "en_reponse" and verdict not in ("vrai_positif_avere", "vrai_positif_non_avere"):
         raise TransitionError("Qualifier le ticket en vrai positif avant de passer en réponse.")
-    if target == "retour_experience" and not (rex_html or "").strip():
+    if target == "retour_experience" and not _visible_text(rex_html):
         raise TransitionError("Rédiger le retour d'expérience avant de clore cette étape.")
 
 
