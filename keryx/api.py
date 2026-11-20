@@ -30,7 +30,7 @@ from sqlalchemy.orm import Session as DbSession
 from starlette.background import BackgroundTask
 
 from . import attachments as att
-from . import audit, inbox, routes_admin, routes_reports, routes_work, security
+from . import audit, inbox, routes_admin, routes_ops, routes_reports, routes_work, security
 from .config import Settings
 from .db import Base, make_engine, make_session_factory
 from .ids import as_utc, rfc3339, utcnow
@@ -38,8 +38,8 @@ from .iodef import validate as iodef_validate
 from .ingest import AlertRejected, ingest_alert
 from .mitre import valid_technique
 from .models import (
-    LIFECYCLE, TLP, VERDICTS, ApiKey, Attachment, AuditEntry, Comment, CustodyEvent, RawAlert, Session,
-    Tenant, Ticket, TicketEvent, User,
+    LIFECYCLE, TLP, VERDICTS, ApiKey, Attachment, AuditEntry, Comment, CustodyEvent, MitreTechnique, RawAlert,
+    Session, Tenant, Ticket, TicketEvent, User,
 )
 from .notify import send_pending
 from .sanitize import clean_html
@@ -495,13 +495,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "occurrences": t.occurrences, "detected_at": rfc3339(t.detected_at),
             "last_seen_at": rfc3339(t.last_seen_at),
             "assignee": (users or {}).get(t.assignee_id).display_name if users and t.assignee_id in users else None,
-            "rex_en_attente": rex_pending(t.status, t.rex_required),
+            "rex_en_attente": rex_pending(t.status, t.rex_required), "crisis": t.crisis,
         }
 
     @app.get("/api/v1/tickets")
     def list_tickets(status: str | None = None, client: str | None = None, rex_en_attente: bool = False,
                      q: str | None = Query(default=None, max_length=200), assignee: str | None = None,
-                     overdue: bool = False, sort: str = "created", order: str = "desc",
+                     overdue: bool = False, crisis: bool = False, sort: str = "created", order: str = "desc",
                      limit: int = 100, offset: int = 0,
                      user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         limit, offset = max(1, min(limit, 500)), max(0, offset)
@@ -522,6 +522,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             query = query.where(Ticket.status == status)
         if rex_en_attente:
             query = query.where(Ticket.status == "cloture", Ticket.rex_required.is_(True))
+        if crisis:
+            query = query.where(Ticket.crisis.is_(True))
         if assignee == "me":
             query = query.where(Ticket.assignee_id == user.id)
         elif assignee == "none":
@@ -754,7 +756,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(422, f"Identifiants MITRE invalides : {', '.join(bad[:5])}")
         before = [m["id"] for m in t.mitre]
         known = {m["id"]: m for m in t.mitre}  # on garde nom et tactiques déjà connus
-        t.mitre = [known.get(x, {"id": x, "technique": "", "tactics": []}) for x in dict.fromkeys(body.techniques)]
+        ref = {r.technique_id: r for r in db.scalars(select(MitreTechnique).where(MitreTechnique.technique_id.in_(body.techniques)))}
+        t.mitre = [known.get(x) or {"id": x, "technique": ref[x].name if x in ref else "",
+                                    "tactics": ref[x].tactics if x in ref else []}
+                   for x in dict.fromkeys(body.techniques)]
         t.mitre_source = "manuel"
         t.updated_at = utcnow()
         event(db, t, user, "mitre_manuel", {"avant": before, "apres": [m["id"] for m in t.mitre]})
@@ -965,6 +970,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     routes_admin.register(app, ctx)
     routes_work.register(app, ctx)
     routes_reports.register(app, ctx)
+    routes_ops.register(app, ctx)
 
     # ---------------------------------------------------------------- interface web
     dist = settings.web_dist

@@ -39,6 +39,9 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("init-db")
     c = sub.add_parser("add-client"); c.add_argument("key"); c.add_argument("name")
+    sub.add_parser("purge", help="Supprime les alertes brutes arrivées en fin de rétention (--apply pour exécuter)").add_argument(
+        "--apply", action="store_true")
+    sub.add_parser("import-mitre", help="Importe le référentiel ATT&CK (fichier STIX 2.1)").add_argument("file")
     u = sub.add_parser("add-user")
     u.add_argument("username"); u.add_argument("display_name"); u.add_argument("role", choices=ROLES)
     u.add_argument("--clients", default="", help="clés clients séparées par des virgules")
@@ -146,6 +149,27 @@ def main(argv: list[str] | None = None) -> int:
         audit.record(db, actor, "client.contacts", "tenant", t.key, t.id, {"count": len(emails)})
         db.commit()
         print(f"{len(emails)} contact(s) enregistré(s) pour {t.key}.")
+        return 0
+
+    if args.cmd == "purge":
+        from . import retention
+        from .ids import utcnow
+        report = retention.run(db, settings, utcnow(), actor=actor, dry_run=not args.apply)
+        if args.apply:
+            db.commit()
+        for r in report:
+            print(f"{r['client']} : {r['alerts']} alerte(s) brute(s) antérieure(s) au {r['before']} ({r['months']} mois)"
+                  + ("" if args.apply else " [simulation]"))
+        return 0
+
+    if args.cmd == "import-mitre":
+        import json
+        from . import mitre_stix
+        with open(args.file, encoding="utf-8") as f:
+            added, updated = mitre_stix.import_bundle(db, json.load(f))
+        audit.record(db, actor, "mitre.import", None, None, None, {"ajoutees": added, "mises_a_jour": updated})
+        db.commit()
+        print(f"{added} technique(s) ajoutée(s), {updated} mise(s) à jour.")
         return 0
 
     if args.cmd == "checkpoint":

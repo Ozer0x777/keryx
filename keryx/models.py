@@ -167,6 +167,9 @@ class Ticket(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     qualified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Mode « crise » [PRIS VI.5.5.1] : registre des décisions, plan d'action, synthèse de crise
+    crisis: Mapped[bool] = mapped_column(Boolean, default=False)
+    crisis_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class RawAlert(Base):
@@ -344,3 +347,31 @@ class SavedFilter(Base):
     name: Mapped[str] = mapped_column(String(80))
     params: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+CRISIS_KINDS = ("decision", "action", "synthese")
+
+
+class CrisisEntry(Base):
+    """Entrée du registre de crise d'un ticket : décision, action du plan d'action ou point de synthèse.
+    [PRIS VI.5.5.1]"""
+    __tablename__ = "crisis_entries"
+    id: Mapped[str] = _id()
+    ticket_id: Mapped[str] = mapped_column(ForeignKey("tickets.id", ondelete="CASCADE"), index=True)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    body: Mapped[str] = mapped_column(Text)
+    owner: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    done: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_by: Mapped[str] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class MitreTechnique(Base):
+    """Référentiel MITRE ATT&CK importé (STIX 2.1) : nom et tactiques d'une technique."""
+    __tablename__ = "mitre_techniques"
+    technique_id: Mapped[str] = mapped_column(String(16), primary_key=True)
+    name: Mapped[str] = mapped_column(String(200))
+    tactics: Mapped[list] = mapped_column(JSON, default=list)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
