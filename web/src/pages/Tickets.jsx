@@ -9,18 +9,30 @@ export default function Tickets() {
   const { me } = useAuth()
   const [filters, setFilters] = useState({ status: '', client: '', rex_en_attente: false })
   const [items, setItems] = useState(null)
+  const [all, setAll] = useState(null) // synthèse : tous les statuts, indépendante du filtre de statut
+  const [total, setTotal] = useState(0)
   const [error, setError] = useState('')
   const isClient = me.role === 'client'
 
   useEffect(() => {
     let alive = true
+    setError('')
     api('/tickets', { params: { ...filters, rex_en_attente: filters.rex_en_attente || undefined, limit: 200 } })
-      .then((r) => alive && setItems(r.items))
+      .then((r) => { if (alive) { setItems(r.items); setTotal(r.total ?? r.items.length) } })
       .catch((e) => alive && setError(e.message))
     return () => { alive = false }
   }, [filters])
 
-  const count = (fn) => (items || []).filter(fn).length
+  useEffect(() => {
+    if (isClient) return undefined
+    let alive = true
+    api('/tickets', { params: { client: filters.client || undefined, limit: 500 } })
+      .then((r) => alive && setAll(r))
+      .catch(() => alive && setAll(null))
+    return () => { alive = false }
+  }, [filters.client, isClient])
+
+  const count = (fn) => (all?.items || []).filter(fn).length
   const stats = isClient ? [] : [
     ['À qualifier', count((t) => ['nouveau', 'en_evaluation'].includes(t.status)), 'nouveaux ou en évaluation'],
     ['En réponse', count((t) => t.status === 'en_reponse'), 'confinement / éradication'],
@@ -50,7 +62,7 @@ export default function Tickets() {
         <section className="stats" aria-label="Synthèse">
           {stats.map(([label, value, hint]) => (
             <div className="card stat" key={label}>
-              <span className="muted">{label}</span><strong>{items ? value : '…'}</strong><span className="muted small">{hint}</span>
+              <span className="muted">{label}</span><strong>{all ? value : '…'}</strong><span className="muted small">{hint}</span>
             </div>
           ))}
         </section>
@@ -80,6 +92,12 @@ export default function Tickets() {
       </section>
 
       {error && <p className="error" role="alert">{error}</p>}
+      {items && total > items.length && (
+        <p className="muted small" role="status">{items.length} tickets affichés sur {total} : affinez avec les filtres.</p>
+      )}
+      {all && !isClient && (all.total ?? 0) > all.items.length && (
+        <p className="muted small" role="status">Synthèse calculée sur les {all.items.length} tickets les plus récents (sur {all.total}).</p>
+      )}
       <div className="table-wrap card">
         <table className="grid">
           <thead>

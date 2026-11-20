@@ -22,7 +22,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session as DbSession
 from starlette.background import BackgroundTask
 
@@ -497,12 +497,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             q = q.where(Ticket.status == status)
         if rex_en_attente:
             q = q.where(Ticket.status == "cloture", Ticket.rex_required.is_(True))
+        total = db.scalar(select(func.count()).select_from(q.order_by(None).subquery()))
         tickets = db.scalars(q.limit(limit).offset(offset)).all()
         assignee_ids = {t.assignee_id for t in tickets if t.assignee_id}
         users = {u.id: u for u in db.scalars(select(User).where(User.id.in_(assignee_ids)))} if assignee_ids else {}
         audit.record(db, user.username, "ticket.list", None, None, None, {"count": len(tickets)})
         commit(db)
-        return {"items": [ticket_summary(t, tenants, users) for t in tickets], "limit": limit, "offset": offset}
+        return {"items": [ticket_summary(t, tenants, users) for t in tickets], "limit": limit, "offset": offset,
+                "total": total}
 
     def attachment_view(a: Attachment) -> dict:
         return {"id": a.id, "kind": a.kind, "filename": a.filename, "content_type": a.content_type, "size": a.size,

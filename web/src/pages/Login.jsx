@@ -29,7 +29,7 @@ export default function Login({ onDone }) {
       await api('/auth/totp', { method: 'POST', json: useRecovery ? { recovery_code: code } : { code } })
       await onDone()
     } catch (err) {
-      setError(err.status === 401 && step === 2 ? 'Code invalide, ou session expirée : recommencez si besoin.' : err.message)
+      setError(err.status === 401 && step === 2 && !/verrouill/i.test(err.message) ? 'Code invalide, ou session expirée : recommencez si besoin.' : err.message)
     } finally { setBusy(false) }
   }
 

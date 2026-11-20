@@ -117,10 +117,10 @@ export default function Ticket() {
 
       <div className="ticket-layout">
         <div className="ticket-main">
-          <Description t={t} enc={enc} canEdit={isTeam && open} run={run} onImage={uploadImage} />
+          <Description t={t} enc={enc} canEdit={isTeam && open} run={run} onImage={(f) => uploadImage(f, true)} />
           {isTeam && <AlertBlock t={t} />}
           <Attachments t={t} enc={enc} me={me} run={run} setNotice={setNotice} />
-          {isTeam && <Synthese t={t} enc={enc} run={run} onImage={uploadImage} />}
+          {isTeam && <Synthese t={t} enc={enc} run={run} onImage={(f) => uploadImage(f, false)} />}
           <Events t={t} />
           <Comments t={t} enc={enc} isClient={isClient} run={run} onImage={uploadImage} />
         </div>
@@ -319,6 +319,13 @@ function Synthese({ t, enc, run, onImage }) {
   )
 }
 
+function fmtDetail(v) {
+  if (v === null || v === undefined || v === '') return '—'
+  if (Array.isArray(v)) return v.map(fmtDetail).join(', ')
+  if (typeof v === 'object') return Object.entries(v).map(([k, x]) => `${k} : ${fmtDetail(x)}`).join(', ')
+  return String(v)
+}
+
 function Events({ t }) {
   return (
     <Section title="Registre des actions">
@@ -328,7 +335,7 @@ function Events({ t }) {
             <span className="mono small muted">{formatUtc(e.ts)}</span>
             <span className="strong">{e.actor}</span>
             <span>{e.action}{e.details && Object.keys(e.details).length > 0 && e.action !== 'description'
-              ? ` — ${Object.entries(e.details).map(([k, v]) => `${k} : ${Array.isArray(v) ? v.join(', ') : v}`).join(' · ')}` : ''}</span>
+              ? ` — ${Object.entries(e.details).map(([k, v]) => `${k} : ${fmtDetail(v)}`).join(' · ')}` : ''}</span>
           </li>
         ))}
       </ol>
@@ -353,7 +360,7 @@ function Comments({ t, enc, isClient, run, onImage }) {
         </div>
       ))}
       <h3>{isClient ? 'Votre réponse' : 'Nouveau commentaire'}</h3>
-      <RichEditor value={html} onChange={setHtml} label="Nouveau commentaire" onImage={onImage} />
+      <RichEditor value={html} onChange={setHtml} label="Nouveau commentaire" onImage={(f) => onImage(f, isClient || visible)} />
       <div className="row gap between">
         {!isClient ? <label className="check"><input type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)} /> Visible par le client</label> : <span />}
         <button type="button" className="dark" onClick={post}>Publier</button>

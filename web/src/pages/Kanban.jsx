@@ -6,10 +6,11 @@ import { KANBAN_COLUMNS, STATUS, TRANSITIONS } from '../labels.js'
 
 export default function Kanban() {
   const [items, setItems] = useState([])
+  const [total, setTotal] = useState(0)
   const [message, setMessage] = useState('')
   const [dragging, setDragging] = useState(null)
 
-  const load = useCallback(() => api('/tickets', { params: { limit: 500 } }).then((r) => setItems(r.items)), [])
+  const load = useCallback(() => api('/tickets', { params: { limit: 500 } }).then((r) => { setItems(r.items); setTotal(r.total ?? r.items.length) }), [])
   useEffect(() => { load().catch((e) => setMessage(e.message)) }, [load])
 
   const move = async (ticket, target) => {
@@ -45,6 +46,7 @@ export default function Kanban() {
         </div>
       </header>
       <p className="live" role="status" aria-live="polite">{message}</p>
+      {total > items.length && <p className="muted small" role="status">{items.length} tickets affichés sur {total} : les plus anciens ne figurent pas dans le tableau.</p>}
       <div className="kanban">
         {columns.map((col) => (
           <section key={col.status} className={`column${dragging ? ' droppable' : ''}`} aria-label={STATUS[col.status].label}
