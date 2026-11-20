@@ -56,7 +56,8 @@ export default function Ticket() {
   if (!t) return <p className="loading">Chargement…</p>
   const open = ['nouveau', 'en_evaluation', 'en_reponse'].includes(t.status)
 
-  const uploadImage = async (file) => {
+  // visible : l'image n'est montrée au client que si le contenu qui l'embarque l'est aussi.
+  const uploadImage = async (file, visible = false) => {
     const description = window.prompt("Description de l'image (registre de collecte)", "Capture d'écran")
     if (!description) return null
     const form = new FormData()
@@ -65,7 +66,7 @@ export default function Ticket() {
     form.append('collected_at', new Date().toISOString())
     form.append('method', isClient ? 'Capture fournie par le client' : "Capture d'écran par l'analyste")
     form.append('sensitivity', t.tlp)
-    form.append('visible_client', 'true')
+    form.append('visible_client', visible || isClient ? 'true' : 'false')
     try {
       const a = await api(`/tickets/${enc}/attachments`, { method: 'POST', form })
       await load()
