@@ -1,0 +1,8 @@
+# ADR-0018 — Horodatage de confiance (RFC 3161)
+
+- **Statut** : accepté (20/11/2026) ; testé contre une autorité locale (`openssl ts`), **jamais contre une autorité d'horodatage réelle**
+- **Décision** : une pièce ou un point de contrôle du journal d'audit peut être horodaté par une autorité d'horodatage (TSA) configurée (`KERYX_TSA_URL`, certificats d'autorité dans `KERYX_TSA_CA_FILE`). Désactivé par défaut. Seule l'empreinte du message `keryx-v1:<type>:<id>:<sha256>` quitte Keryx, jamais le contenu. La réponse est vérifiée avant d'être conservée (statut accordé, signature, chaîne jusqu'aux certificats configurés, empreinte et nonce de la demande) puis stockée avec la pièce ; elle peut être revérifiée à tout moment, hors ligne, et téléchargée (`.tsr`) pour être vérifiée par un tiers avec `openssl ts -verify`.
+- **Droits** : le jeton d'une pièce est lisible par qui lit la pièce ; celui d'un point de contrôle par l'Admin seulement. Horodater une pièce est une action tracée (chaîne de possession, registre des actions, audit).
+- **Choix à faire** : l'autorité. Le plan impose l'UE sans service externe : utiliser une autorité qualifiée eIDAS de l'UE, ou une autorité interne dont la racine est connue des destinataires. Aucune n'est recommandée ici, et la valeur probante dépend de ce choix.
+- **Exigences** : RFC 3161 ; ISO/IEC 27037 (intégrité des preuves) ; PRIS VI.5.3.c ; ISO/IEC 27002 8.15.
+- **Limite** : la bibliothèque de vérification impose un encodage DER strict ; certaines autorités produisent des réponses que celle-ci refuse. À essayer avec l'autorité retenue avant tout engagement.

@@ -30,7 +30,7 @@ Les références d'exigence sont reprises du plan de projet. Les normes ISO et E
 | PDIS IV.3.9.d ; RFC 6749, 7636, 9700 ; OIDC Core | SSO Keycloak : code + PKCE, jeton vérifié, liaison par courriel vérifié | `oidc.py`, `routes_oidc.py` | `test_oidc.py`, `60-sso.mjs` |
 | RFC 6265, ASVS V7 | Sessions : cookie HttpOnly, CSRF, rotation, inactivité | `api.py` | `test_access.py` |
 | RFC 7970, 8727 | Export IODEF JSON (sous-ensemble contrôlé) | `iodef.py` | `test_reports.py` |
-| RFC 3161 | Horodatage de confiance : **non fait** (autorité d'horodatage UE à choisir, dépendance ASN.1 à ajouter) | — | — |
+| RFC 3161 | Horodatage de confiance des pièces et du point de contrôle d'audit (autorité locale en test, à choisir en production) | `timestamping.py`, `routes_timestamp.py`, `Stamps.jsx` | `test_timestamp.py`, `70-horodatage.mjs` |
 | WCAG 2.1 A/AA (base du RGAA) | Contrôle automatisé axe-core sur 19 écrans de 3 rôles. Ne remplace pas un audit RGAA complet | `e2e/scenarios/90-accessibilite.mjs` | idem |
 | Plan : historique des versions du corps du ticket | Versions précédentes, auteur et date | `routes_work.body_history`, `Ticket.jsx` | `test_plan_manques.py`, `25-plan.mjs` |
 | Plan : enrichissement MITRE niveau 3 et validation par le référentiel | Propositions de table, identifiants validés contre ATT&CK importé | `routes_ops.mitre_suggestions`, `api.set_mitre` | `test_plan_manques.py` |

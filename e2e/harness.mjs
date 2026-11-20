@@ -1,5 +1,7 @@
 // Banc de test de parcours : base SQLite temporaire, serveur sur un port dédié, comptes de test, navigateur sans tête.
 import { spawn, execFileSync } from 'node:child_process'
+import { createServer } from 'node:http'
+import { writeFileSync } from 'node:fs'
 import { mkdtempSync, openSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -12,10 +14,33 @@ export const PORT = Number(process.env.E2E_PORT || 8100)
 export const BASE = `http://127.0.0.1:${PORT}`
 export const PASSWORD = 'correct-horse-battery-staple'
 
+// Autorité d'horodatage RFC 3161 locale (openssl ts), pour tester l'horodatage de bout en bout sans service externe.
+export function startTsa(dir) {
+  const sh = (cmd) => execFileSync('sh', ['-c', cmd], { cwd: dir, stdio: 'ignore' })
+  sh('openssl req -x509 -newkey rsa:2048 -nodes -keyout ca.key -out ca.pem -subj "/CN=Racine e2e" -days 30')
+  sh('openssl req -newkey rsa:2048 -nodes -keyout tsa.key -out tsa.csr -subj "/CN=TSA e2e"')
+  writeFileSync(`${dir}/ext.cnf`, 'basicConstraints=CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=critical,timeStamping\nsubjectKeyIdentifier=hash\n')
+  sh('openssl x509 -req -in tsa.csr -CA ca.pem -CAkey ca.key -CAcreateserial -out tsa.pem -days 30 -extfile ext.cnf')
+  writeFileSync(`${dir}/serial`, '01\n')
+  writeFileSync(`${dir}/tsa.cnf`, `[tsa]\ndefault_tsa = t\n[t]\ndir = ${dir}\nserial = ${dir}/serial\ncrypto_device = builtin\nsigner_cert = ${dir}/tsa.pem\nsigner_key = ${dir}/tsa.key\nsigner_digest = sha256\ndefault_policy = 1.2.3.4.1\ndigests = sha256\naccuracy = secs:1\nordering = yes\ntsa_name = yes\ness_cert_id_alg = sha256\n`)
+  const server = createServer((req, res) => {
+    const chunks = []
+    req.on('data', (c) => chunks.push(c)).on('end', () => {
+      writeFileSync(`${dir}/q.tsq`, Buffer.concat(chunks))
+      execFileSync('openssl', ['ts', '-reply', '-config', 'tsa.cnf', '-section', 't', '-queryfile', 'q.tsq', '-out', 'r.tsr'], { cwd: dir, stdio: 'ignore' })
+      res.writeHead(200, { 'Content-Type': 'application/timestamp-reply' }).end(readFileSync(`${dir}/r.tsr`))
+    })
+  })
+  const port = 18000 + Math.floor(Math.random() * 1500)
+  server.listen(port, '127.0.0.1')
+  return { url: `http://127.0.0.1:${port}/tsa`, ca: `${dir}/ca.pem`, stop: () => server.close() }
+}
+
 export function startStack() {
   const dir = mkdtempSync(join(tmpdir(), 'keryx-e2e-'))
+  const tsa = process.env.E2E_NO_TSA ? null : startTsa(mkdtempSync(join(tmpdir(), 'keryx-tsa-')))
   const key = execFileSync(PY, ['-m', 'keryx.cli', 'gen-key'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
-  const env = { ...process.env, KERYX_SECRET_KEY: key, KERYX_DATABASE_URL: `sqlite:///${dir}/e2e.db`, KERYX_ATTACHMENTS_DIR: `${dir}/pj`, KERYX_COOKIE_SECURE: 'false', KERYX_PUBLIC_URL: `http://localhost:${PORT}`, KERYX_LOGIN_IP_LIMIT: '1000', ...(process.env.E2E_KEYCLOAK ? { KERYX_OIDC_ALLOW_HTTP: 'true', KERYX_OIDC_PROVIDERS: JSON.stringify([{ name: 'soc', label: 'Compte SOC', issuer: `${process.env.E2E_KEYCLOAK}/realms/soc`, client_id: 'keryx', client_secret: 'keryx-secret-e2e' }]) } : {}), KERYX_LOGIN_USER_LIMIT: '1000', PYTHONWARNINGS: 'ignore' }
+  const env = { ...process.env, KERYX_SECRET_KEY: key, KERYX_DATABASE_URL: `sqlite:///${dir}/e2e.db`, KERYX_ATTACHMENTS_DIR: `${dir}/pj`, KERYX_COOKIE_SECURE: 'false', KERYX_PUBLIC_URL: `http://localhost:${PORT}`, KERYX_LOGIN_IP_LIMIT: '1000', ...(tsa ? { KERYX_TSA_URL: tsa.url, KERYX_TSA_CA_FILE: tsa.ca } : {}), ...(process.env.E2E_KEYCLOAK ? { KERYX_OIDC_ALLOW_HTTP: 'true', KERYX_OIDC_PROVIDERS: JSON.stringify([{ name: 'soc', label: 'Compte SOC', issuer: `${process.env.E2E_KEYCLOAK}/realms/soc`, client_id: 'keryx', client_secret: 'keryx-secret-e2e' }]) } : {}), KERYX_LOGIN_USER_LIMIT: '1000', PYTHONWARNINGS: 'ignore' }
   const cli = (...args) => execFileSync(PY, ['-m', 'keryx.cli', ...args], { cwd: ROOT, env: { ...env, KERYX_NEW_PASSWORD: PASSWORD }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
   execFileSync(PY, ['-m', 'alembic', 'upgrade', 'head'], { cwd: ROOT, env, stdio: 'ignore' })
   const seeds = {}
@@ -26,7 +51,7 @@ export function startStack() {
   }
   seeds.apiKey = /(kx_[\w-]+)/.exec(cli('add-api-key', 'ACME', 'wazuh-e2e'))[1]
   const server = spawn(PY, ['-m', 'uvicorn', 'keryx.api:create_app', '--factory', '--port', String(PORT)], { cwd: ROOT, env, stdio: ['ignore', openSync(`${dir}/server.log`, 'a'), openSync(`${dir}/server.log`, 'a')] })
-  return { dir, seeds, server, stop: () => server.kill('SIGTERM') }
+  return { dir, seeds, server, stop: () => { server.kill('SIGTERM'); tsa?.stop() } }
 }
 
 // Requête SQL directe sur la base de test (préparation de données que l'interface ne propose pas).

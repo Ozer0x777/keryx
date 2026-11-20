@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session as DbSession
 from starlette.background import BackgroundTask
 
 from . import attachments as att
-from . import audit, inbox, routes_admin, routes_oidc, routes_ops, routes_reports, routes_webauthn, routes_work, security
+from . import audit, inbox, routes_admin, routes_oidc, routes_ops, routes_reports, routes_timestamp, routes_webauthn, routes_work, security
 from .oidc import load_providers
 from .config import Settings
 from .db import Base, make_engine, make_session_factory
@@ -526,7 +526,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def me(request: Request, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         s = _session_from_cookie(request, db)
         return {"username": user.username, "display_name": user.display_name, "role": user.role,
-                "csrf_token": s.csrf_token if s else None,
+                "csrf_token": s.csrf_token if s else None, "features": {"timestamping": bool(settings.tsa_url)},
                 "clients": [{"key": t.key, "name": t.name} for t in user.tenants]}
 
     # ---------------------------------------------------------------- ingestion Wazuh
@@ -1106,13 +1106,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         client_ip=client_ip, assign_ticket=assign_ticket, ticket_summary=ticket_summary, promote=promote,
         login_ip_limiter=login_ip_limiter, login_user_limiter=login_user_limiter,
         count_second_factor_failure=count_second_factor_failure, open_session=open_session,
-        set_cookie=_set_cookie, SESSION_COOKIE=SESSION_COOKIE, CSRF_COOKIE=CSRF_COOKIE, oidc_providers=oidc_providers)
+        set_cookie=_set_cookie, load_attachment=load_attachment, SESSION_COOKIE=SESSION_COOKIE, CSRF_COOKIE=CSRF_COOKIE, oidc_providers=oidc_providers)
     routes_admin.register(app, ctx)
     routes_work.register(app, ctx)
     routes_reports.register(app, ctx)
     routes_ops.register(app, ctx)
     routes_webauthn.register(app, ctx)
     routes_oidc.register(app, ctx)
+    routes_timestamp.register(app, ctx)
 
     # ---------------------------------------------------------------- interface web
     dist = settings.web_dist

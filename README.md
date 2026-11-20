@@ -54,6 +54,7 @@ Le conteneur applique `alembic upgrade head` puis démarre. Dépendances install
 |---|---|---|
 | `KERYX_DATABASE_URL` | SQLite (tests) ou PostgreSQL, ex. `postgresql+psycopg://u:p@hôte/base` (production) | `sqlite:///./keryx.db` |
 | `KERYX_OIDC_PROVIDERS`, `KERYX_OIDC_ENFORCE`, `KERYX_OIDC_REQUIRED_ACR`, `KERYX_OIDC_ALLOW_HTTP` | SSO OpenID Connect (Keycloak), voir `docs/exploitation.md` et ADR-0017 | désactivé |
+| `KERYX_TSA_URL`, `KERYX_TSA_CA_FILE` | Horodatage de confiance RFC 3161 (autorité à choisir dans l'UE), voir ADR-0018 | désactivé |
 | `KERYX_LOGIN_USER_LIMIT` | Tentatives de connexion par identifiant et par 5 minutes | 10 |
 | `KERYX_LOGIN_IP_LIMIT` | Tentatives de connexion par adresse IP et par 5 minutes | 30 |
 | `KERYX_RATE_LIMIT_BACKEND` | `memory` (par processus) ou `db` (partagée entre processus) | `db` si PostgreSQL |
@@ -73,7 +74,7 @@ Le conteneur applique `alembic upgrade head` puis démarre. Dépendances install
 python -m pytest -q
 ```
 
-172 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
+177 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
 régressions des revues, migrations, notifications (SMTP simulé, relances), pièces jointes (clamd simulé, EICAR),
 administration, confort de travail, pilotage, conformité, sauvegarde, script d'intégration Wazuh.
 
@@ -108,6 +109,7 @@ cd e2e && npm ci && node run.mjs        # CHROME_PATH et KERYX_PYTHON si besoin
 | Pilotage : tableau de bord, registre par client (CSV), rapport périodique et d'incident imprimables | PDIS IV.2.1.bb |
 | Mode crise (registre des décisions, plan d'action, synthèse) | PRIS VI.5.5.1 ; ADR-0013 |
 | Journal d'audit consultable (contenu masqué à l'Admin), point de contrôle, import ATT&CK (STIX), rétention | PDIS IV.3.9.c, IV.2.2.w ; ADR-0014 |
+| Horodatage de confiance RFC 3161 des pièces et du point de contrôle d'audit | RFC 3161 ; ISO/IEC 27037 ; ADR-0018 |
 | Sauvegarde chiffrée et restauration vérifiée | PDIS IV.3.6 ; ADR-0015 |
 
 Matrice complète : `docs/matrice-tracabilite.md` · exploitation : `docs/exploitation.md` · SBOM : `python scripts/sbom.py`.
@@ -116,10 +118,10 @@ Matrice complète : `docs/matrice-tracabilite.md` · exploitation : `docs/exploi
 
 - Limites de débit en mémoire, par processus : un seul processus uvicorn tant qu'elles ne sont pas partagées (ADR-0010).
 - Quarantaine : fichier isolé et marqué, pas rezippé avec mot de passe (ADR-0008).
-- PostgreSQL 16 : la suite complète passe (172 tests, dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore). Non testé : haute disponibilité, réplication, très gros volumes.
+- PostgreSQL 16 : la suite complète passe (177 tests, dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore). Non testé : haute disponibilité, réplication, très gros volumes.
 - Jamais testé contre un vrai manager Wazuh (le script d'intégration est testé avec un serveur simulé).
 - Interface testée dans Chrome sans tête (parcours de chaque rôle) et contrôlée avec axe-core (WCAG 2.1 A/AA) ; pas d'audit RGAA complet ni de test d'intrusion.
-- Pas encore : déconnexion unique du SSO, traduction complète de l'interface en anglais (navigation, connexion, liste, Kanban et profil sont traduits ; les autres écrans retombent sur le français), format ETSI ISI, horodatage RFC 3161, validation IODEF contre le schéma officiel complet, stockage objet des pièces, PDF généré côté serveur (impression du navigateur à la place).
+- Pas encore : déconnexion unique du SSO, traduction complète de l'interface en anglais (navigation, connexion, liste, Kanban et profil sont traduits ; les autres écrans retombent sur le français), format ETSI ISI, validation IODEF contre le schéma officiel complet, stockage objet des pièces, PDF généré côté serveur (impression du navigateur à la place).
 
 Un outil ne qualifie pas un prestataire : Keryx fournit les registres, la traçabilité et le
 cloisonnement exigés par PDIS/PRIS, la qualification reste organisationnelle.

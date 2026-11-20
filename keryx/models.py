@@ -7,6 +7,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
+    LargeBinary,
     BigInteger,
     false,
     true,
@@ -425,3 +426,20 @@ class WebAuthnCredential(Base):
     name: Mapped[str] = mapped_column(String(80))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class Timestamp(Base):
+    """Jeton d'horodatage de confiance (RFC 3161) conservé avec la pièce ou le point de contrôle qu'il atteste.
+    Le message horodaté est « keryx-v1:<type>:<identifiant>:<empreinte> » : il lie le type, l'objet et son empreinte."""
+    __tablename__ = "timestamps"
+    id: Mapped[str] = _id()
+    object_type: Mapped[str] = mapped_column(String(24))      # attachment | audit
+    object_id: Mapped[str] = mapped_column(String(64), index=True)
+    tenant_id: Mapped[str | None] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
+    message: Mapped[str] = mapped_column(String(300))
+    token: Mapped[bytes] = mapped_column(LargeBinary)          # réponse RFC 3161 complète (DER)
+    gen_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    serial: Mapped[str] = mapped_column(String(80))
+    tsa_url: Mapped[str] = mapped_column(String(500))
+    created_by: Mapped[str] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

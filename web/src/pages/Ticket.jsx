@@ -4,6 +4,7 @@ import { api, downloadBlob } from '../api.js'
 import { useAuth } from '../App.jsx'
 import { Severity, Status, Tlp } from '../components/Badges.jsx'
 import Crisis from '../components/Crisis.jsx'
+import Stamps from '../components/Stamps.jsx'
 import RichEditor from '../components/RichEditor.jsx'
 import {
   DOMMAGES, formatUtc, IMPORTANCES, LIFECYCLE, MITRE_SOURCE, SCAN, STATUS, TLPS, TRANSITIONS, VERDICTS,
@@ -295,7 +296,8 @@ function Attachments({ t, enc, me, run, setNotice }) {
                 <tr key={a.id}>
                   <td><strong>{a.filename}</strong><div className="muted small">{a.description} · {a.sensitivity}{a.location ? ` · ${a.location}` : ''}</div></td>
                   <td className="small">{formatUtc(a.collected_at)}<div className="muted">{a.method}</div></td>
-                  <td className="mono small" title={a.sha256}>{a.sha256.slice(0, 12)}…{a.sha256.slice(-6)}</td>
+                  <td className="small"><span className="mono" title={a.sha256}>{a.sha256.slice(0, 12)}…{a.sha256.slice(-6)}</span>
+                    {a.lifecycle === 'conserve' && <Stamps attachmentId={a.id} canStamp={isTeam && !!me.features?.timestamping} />}</td>
                   <td><span className={`pill ${a.scan_status === 'quarantaine' ? 'danger' : a.scan_status === 'sain' ? 'ok' : ''}`}>{SCAN[a.scan_status]}</span></td>
                   <td>{a.kind === 'preuve_externe' ? 'Hors Keryx' : LIFECYCLE[a.lifecycle]}</td>
                   <td className="row gap">

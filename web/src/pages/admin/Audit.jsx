@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../../api.js'
 import AuditViewer from '../../components/AuditViewer.jsx'
 
@@ -6,6 +6,12 @@ export default function Audit() {
   const [chain, setChain] = useState(null)
   const [error, setError] = useState('')
   const [cp, setCp] = useState(null)
+  const [stamps, setStamps] = useState({ enabled: false, items: [] })
+  const [stampMsg, setStampMsg] = useState('')
+  const loadStamps = () => api('/audit/timestamps').then(setStamps).catch(() => {})
+  useEffect(() => { loadStamps() }, [])
+  const stampCheckpoint = async () => { setStampMsg(''); try { const r = await api('/audit/checkpoint/timestamp', { method: 'POST' }); setStampMsg(`Point de contrôle ${r.seq} horodaté (série ${r.serial}).`); loadStamps() } catch (e) { setError(e.message) } }
+  const verifyStamp = async (id) => { try { const r = await api(`/timestamps/${id}/verify`, { method: 'POST' }); setStampMsg(r.valid ? 'Jeton valide.' : `Jeton NON valide : ${r.error}`) } catch (e) { setError(e.message) } }
   const verify = async () => {
     setChain(null)
     try { setChain(await api('/audit/verify')) } catch (e) { setError(e.message) }
@@ -27,6 +33,15 @@ export default function Audit() {
         <header className="section-head"><h2>Point de contrôle</h2><button type="button" onClick={checkpoint}>Générer</button></header>
         <p className="muted small">À archiver hors de Keryx (coffre, ticket de changement) : il permet de détecter la suppression des dernières entrées.</p>
         {cp && <p className="mono small" style={{ wordBreak: 'break-all' }}>{cp.value}</p>}
+        {stamps.enabled && (
+          <>
+            <h3>Horodatage de confiance (RFC 3161)</h3>
+            <p className="muted small">Fait attester par une autorité d'horodatage l'état du journal à cet instant : seule l'empreinte du point de contrôle quitte Keryx.</p>
+            <button type="button" onClick={stampCheckpoint}>Horodater le point de contrôle actuel</button>
+            <p className="live" role="status">{stampMsg}</p>
+            <ul className="found">{stamps.items.map((t) => <li key={t.id} className="small"><span className="mono">n° {t.seq}</span> · {t.gen_time} · <button type="button" className="link" onClick={() => verifyStamp(t.id)}>Vérifier</button></li>)}</ul>
+          </>
+        )}
       </section>
       <AuditViewer />
     </>

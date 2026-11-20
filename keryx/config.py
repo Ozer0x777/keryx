@@ -82,6 +82,11 @@ class Settings:
     # Exige cette valeur dans la revendication « acr » du jeton (ex. niveau d'authentification MFA du realm). Vide = non contrôlé.
     oidc_required_acr: str | None = field(default_factory=lambda: os.environ.get("KERYX_OIDC_REQUIRED_ACR"))
 
+    # Horodatage de confiance RFC 3161 : URL de l'autorité d'horodatage (à choisir dans l'UE) et fichier PEM de ses
+    # certificats d'autorité (racine, et intermédiaires éventuels). Désactivé si l'URL est vide.
+    tsa_url: str | None = field(default_factory=lambda: os.environ.get("KERYX_TSA_URL") or None)
+    tsa_ca_file: str | None = field(default_factory=lambda: os.environ.get("KERYX_TSA_CA_FILE") or None)
+
     # Interface web (fichiers construits par Vite)
     web_dist: str = field(default_factory=lambda: os.environ.get(
         "KERYX_WEB_DIST", os.path.join(os.path.dirname(__file__), "web_dist")))
