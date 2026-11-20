@@ -53,4 +53,11 @@ export default {
   'Mot de passe modifié. Vos autres sessions ont été fermées.': 'Password changed. Your other sessions were closed.',
   // Divers
   'Imprimer / PDF': 'Print / PDF', 'Annuler': 'Cancel', 'Enregistrer': 'Save', 'Supprimer': 'Delete',
+  // Clés de sécurité
+  'Utiliser ma clé de sécurité': 'Use my security key', 'Clé de sécurité annulée ou non reconnue.': 'Security key cancelled or not recognised.',
+  'Clé de sécurité enregistrée.': 'Security key registered.', 'Retirer cette clé de sécurité ?': 'Remove this security key?',
+  'Clés de sécurité': 'Security keys', 'Clés de sécurité (WebAuthn)': 'Security keys (WebAuthn)',
+  'Une clé de sécurité peut remplacer le code TOTP à la connexion. Le TOTP et vos codes de secours restent utilisables si vous perdez la clé.': 'A security key can replace the TOTP code at sign-in. TOTP and your recovery codes remain usable if you lose the key.',
+  'ajoutée le': 'added on', 'utilisée le': 'used on', 'Retirer': 'Remove', 'Nom de la clé': 'Key name', 'Ajouter une clé': 'Add a key',
+  'Ce navigateur ne prend pas en charge les clés de sécurité.': 'This browser does not support security keys.',
 }

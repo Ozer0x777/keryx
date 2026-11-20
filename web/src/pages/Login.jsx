@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api } from '../api.js'
 import OneTime from '../components/OneTime.jsx'
 import { getLang, LANGS, setLang, t } from '../i18n.js'
+import { getAssertion, webauthnSupported } from '../webauthn.js'
 
 export default function Login({ onDone }) {
   const [step, setStep] = useState(1)
@@ -12,6 +13,7 @@ export default function Login({ onDone }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [enroll, setEnroll] = useState(null)
+  const [hasKey, setHasKey] = useState(false)
   const [activation, setActivation] = useState('')
   const [newPwd, setNewPwd] = useState('')
   const [newPwd2, setNewPwd2] = useState('')
@@ -24,7 +26,7 @@ export default function Login({ onDone }) {
       const r = await api('/auth/login', { method: 'POST', json: { username, password } })
       setPassword('')
       if (r.next === 'enroll') setStep(4)
-      else setStep(2)
+      else { setHasKey(!!r.webauthn && webauthnSupported()); setStep(2) }
     } catch (err) {
       setError(err.message)
     } finally { setBusy(false) }
@@ -38,6 +40,16 @@ export default function Login({ onDone }) {
       setActivation('')
       setStep(3)
     } catch (err) { setError(err.message) } finally { setBusy(false) }
+  }
+
+  const useSecurityKey = async () => {
+    setBusy(true); setError('')
+    try {
+      const options = await api('/auth/webauthn/begin', { method: 'POST' })
+      const credential = await getAssertion(options)
+      await api('/auth/webauthn/finish', { method: 'POST', json: { credential } })
+      await onDone()
+    } catch (err) { setError(err.name === 'NotAllowedError' ? t('Clé de sécurité annulée ou non reconnue.') : err.message) } finally { setBusy(false) }
   }
 
   const submitCode = async (e) => {
@@ -147,6 +159,7 @@ export default function Login({ onDone }) {
                 </button>
                 <button type="button" className="link" onClick={() => { setStep(1); setCode(''); setError('') }}>{t('Retour')}</button>
               </div>
+              {hasKey && <button type="button" className="wide" onClick={useSecurityKey} disabled={busy}>{t('Utiliser ma clé de sécurité')}</button>}
               <p className="muted small">{t('Après plusieurs échecs, le compte est verrouillé 15 minutes.')}</p>
             </form>
           )}

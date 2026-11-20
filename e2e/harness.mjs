@@ -15,7 +15,7 @@ export const PASSWORD = 'correct-horse-battery-staple'
 export function startStack() {
   const dir = mkdtempSync(join(tmpdir(), 'keryx-e2e-'))
   const key = execFileSync(PY, ['-m', 'keryx.cli', 'gen-key'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
-  const env = { ...process.env, KERYX_SECRET_KEY: key, KERYX_DATABASE_URL: `sqlite:///${dir}/e2e.db`, KERYX_ATTACHMENTS_DIR: `${dir}/pj`, KERYX_COOKIE_SECURE: 'false', PYTHONWARNINGS: 'ignore' }
+  const env = { ...process.env, KERYX_SECRET_KEY: key, KERYX_DATABASE_URL: `sqlite:///${dir}/e2e.db`, KERYX_ATTACHMENTS_DIR: `${dir}/pj`, KERYX_COOKIE_SECURE: 'false', KERYX_PUBLIC_URL: `http://localhost:${PORT}`, KERYX_LOGIN_IP_LIMIT: '1000', PYTHONWARNINGS: 'ignore' }
   const cli = (...args) => execFileSync(PY, ['-m', 'keryx.cli', ...args], { cwd: ROOT, env: { ...env, KERYX_NEW_PASSWORD: PASSWORD }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
   execFileSync(PY, ['-m', 'alembic', 'upgrade', 'head'], { cwd: ROOT, env, stdio: 'ignore' })
   const seeds = {}
@@ -40,7 +40,7 @@ export async function launch() {
   return chromium.launch({ executablePath: process.env.CHROME_PATH || '/opt/google/chrome/chrome', args: ['--no-sandbox'] })
 }
 
-let lastStep = {}
+export const lastStep = {}   // dernier pas TOTP utilisé par compte (un code ne sert qu une fois)
 export async function login(browser, stack, name) {
   const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } })
   const page = await ctx.newPage()

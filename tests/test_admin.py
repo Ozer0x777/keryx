@@ -25,7 +25,7 @@ def test_creation_compte_et_regles_de_role(app, db, world):
     assert body["enrolled"] is False and not any(k in body for k in ("totp_uri", "totp_secret", "recovery_codes"))
     c = TestClient(app)
     r = c.post("/api/v1/auth/login", json={"username": "nouvel.analyste", "password": "un-mot-de-passe-solide"})
-    assert r.status_code == 200 and r.json() == {"next": "enroll"}
+    assert r.status_code == 200 and r.json()["next"] == "enroll"
     # Règles : admin sans client, client avec exactement un client, analyste avec au moins un client
     bad = [dict(role="admin", clients=["ACME"]), dict(role="client", clients=["ACME", "DELTA"]),
            dict(role="analyst", clients=[]), dict(role="inconnu", clients=["ACME"]), dict(role="analyst", clients=["NOPE"])]

@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session as DbSession
 from starlette.background import BackgroundTask
 
 from . import attachments as att
-from . import audit, inbox, routes_admin, routes_ops, routes_reports, routes_work, security
+from . import audit, inbox, routes_admin, routes_ops, routes_reports, routes_webauthn, routes_work, security
 from .config import Settings
 from .db import Base, make_engine, make_session_factory
 from .ids import as_utc, rfc3339, utcnow
@@ -41,7 +41,7 @@ from .ingest import AlertRejected, ingest_alert
 from .mitre import valid_technique
 from .models import (
     LIFECYCLE, TLP, VERDICTS, ApiKey, Attachment, AuditEntry, Comment, CustodyEvent, MitreTechnique, RateHit, RawAlert,
-    Session, Tenant, Ticket, TicketEvent, User,
+    Session, WebAuthnCredential, Tenant, Ticket, TicketEvent, User,
 )
 from .notify import retry_failed, send_pending
 from .sanitize import clean_html
@@ -217,7 +217,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def limiter(name: str, limit: int, window_s: int):
         return DbRateLimiter(SessionLocal, name, limit, window_s) if shared else RateLimiter(limit, window_s)
 
-    login_ip_limiter = limiter("login_ip", 30, 300)
+    login_ip_limiter = limiter("login_ip", settings.login_ip_limit, 300)
     login_user_limiter = limiter("login_user", 10, 300)
     ingest_fail_limiter = limiter("ingest_fail", 20, 60)
     ingest_limiter = limiter("ingest", 600, 60)
@@ -386,7 +386,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         audit.record(db, user.username, "auth.password_ok", "user", user.id, None, {"ip": ip})
         commit(db)
         _set_cookie(response, SESSION_COOKIE, token, settings, http_only=True, max_age=300)
-        return {"next": "totp" if user.enrolled else "enroll"}
+        has_key = bool(db.scalars(select(WebAuthnCredential.id).where(WebAuthnCredential.user_id == user.id).limit(1)).first())
+        return {"next": "totp" if user.enrolled else "enroll", "webauthn": has_key and user.enrolled}
+
+    def count_second_factor_failure(db: DbSession, user: User, ip: str) -> None:
+        """Échec du second facteur (TOTP, code de secours ou clé de sécurité) : compte, verrouille, journalise."""
+        failures = db.execute(update(User).where(User.id == user.id)
+                              .values(failed_attempts=User.failed_attempts + 1)
+                              .returning(User.failed_attempts)).scalar_one()
+        db.refresh(user)
+        if failures >= settings.max_failed_logins:
+            _lock(user)
+            db.execute(delete(Session).where(Session.user_id == user.id, Session.stage == "password"))
+        audit.record(db, user.username, "auth.totp_failed", "user", user.id, None, {"ip": ip})
+        commit(db)
 
     def promote(db: DbSession, s: Session, user: User, response: Response, ip: str, method: str) -> dict:
         """Élève une session « mot de passe » en session complète (rotation du jeton : anti-fixation)."""
@@ -481,15 +494,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if remaining is not None:
                 user.recovery_codes, ok, method = remaining, True, "recovery_code"
         if not ok:
-            failures = db.execute(update(User).where(User.id == user.id)
-                                  .values(failed_attempts=User.failed_attempts + 1)
-                                  .returning(User.failed_attempts)).scalar_one()
-            db.refresh(user)
-            if failures >= settings.max_failed_logins:
-                _lock(user)
-                db.execute(delete(Session).where(Session.user_id == user.id, Session.stage == "password"))
-            audit.record(db, user.username, "auth.totp_failed", "user", user.id, None, {"ip": ip})
-            commit(db)
+            count_second_factor_failure(db, user, ip)
             raise HTTPException(401, "Code de vérification invalide.")
         return promote(db, s, user, response, ip, method)
 
@@ -1086,11 +1091,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         settings=settings, box=box, SessionLocal=SessionLocal, get_db=get_db, current_user=current_user,
         require_role=require_role, require_open=require_open, commit=commit, load_ticket=load_ticket,
         visible_tenant_ids=visible_tenant_ids, event=event, session_from_cookie=_session_from_cookie,
-        client_ip=client_ip, assign_ticket=assign_ticket, ticket_summary=ticket_summary)
+        client_ip=client_ip, assign_ticket=assign_ticket, ticket_summary=ticket_summary, promote=promote,
+        login_ip_limiter=login_ip_limiter, login_user_limiter=login_user_limiter,
+        count_second_factor_failure=count_second_factor_failure)
     routes_admin.register(app, ctx)
     routes_work.register(app, ctx)
     routes_reports.register(app, ctx)
     routes_ops.register(app, ctx)
+    routes_webauthn.register(app, ctx)
 
     # ---------------------------------------------------------------- interface web
     dist = settings.web_dist

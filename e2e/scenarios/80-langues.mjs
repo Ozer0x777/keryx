@@ -1,5 +1,5 @@
 // Internationalisation : l'interface s'affiche en anglais sur choix de l'utilisateur, le français reste le repli.
-import { BASE, totp, PASSWORD } from '../harness.mjs'
+import { BASE, lastStep, totp, PASSWORD } from '../harness.mjs'
 
 export default async ({ browser, stack, check }) => {
   const ctx = await browser.newContext({ viewport: { width: 1300, height: 900 } })
@@ -15,6 +15,7 @@ export default async ({ browser, stack, check }) => {
   await p.waitForTimeout(1200)
   // Un code TOTP ne sert qu'une fois par pas de 30 s : attendre le pas suivant (l'analyste s'est déjà connecté plus tôt)
   await new Promise((r) => setTimeout(r, 31000 - (Date.now() % 30000)))
+  lastStep.analyste = Math.floor(Date.now() / 30000)
   await p.locator('input').first().fill(totp(stack.seeds.analyste.secret))
   await p.getByRole('button', { name: 'Verify' }).click()
   await p.waitForSelector('.sidebar')

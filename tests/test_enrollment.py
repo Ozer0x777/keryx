@@ -21,7 +21,7 @@ def create(app, db, world, username="nouveau"):
 def test_parcours_complet_d_enrolement(app, db, world):
     act = create(app, db, world)
     c = TestClient(app)
-    assert c.post("/api/v1/auth/login", json={"username": "nouveau", "password": TEMP}).json() == {"next": "enroll"}
+    assert c.post("/api/v1/auth/login", json={"username": "nouveau", "password": TEMP}).json()["next"] == "enroll"
     # Tant que l'enrôlement n'est pas fait : ni TOTP, ni accès
     assert c.post("/api/v1/auth/totp", json={"code": "123456"}).status_code == 401
     assert c.get("/api/v1/tickets").status_code == 401
@@ -51,7 +51,7 @@ def test_connexion_normale_apres_enrolement(app, db, world):
     code = pyotp.TOTP(start["totp_secret"]).now()
     done = c.post("/api/v1/auth/enroll/finish", json={"code": code, "new_password": "un-autre-mot-de-passe"}).json()
     c2 = TestClient(app)
-    assert c2.post("/api/v1/auth/login", json={"username": "suivant", "password": "un-autre-mot-de-passe"}).json() == {"next": "totp"}
+    assert c2.post("/api/v1/auth/login", json={"username": "suivant", "password": "un-autre-mot-de-passe"}).json()["next"] == "totp"
     assert c2.post("/api/v1/auth/enroll/start", json={"activation_code": act}).status_code == 409          # déjà enrôlé : le secret ne peut pas être écrasé
     assert c2.post("/api/v1/auth/totp", json={"code": code}).status_code == 401  # le code d'enrôlement ne rejoue pas
     assert c2.post("/api/v1/auth/totp", json={"recovery_code": done["recovery_codes"][0]}).status_code == 200
@@ -67,7 +67,7 @@ def test_reinitialisation_2fa_impose_un_nouvel_enrolement(app, db, world):
     assert old.get("/api/v1/me").status_code == 401                       # sessions fermées
     act = adm.post("/api/v1/admin/users/analyst_acme/reset-password", json={"password": TEMP}).json()["enrollment_code"]
     c = TestClient(app)
-    assert c.post("/api/v1/auth/login", json={"username": "analyst_acme", "password": TEMP}).json() == {"next": "enroll"}
+    assert c.post("/api/v1/auth/login", json={"username": "analyst_acme", "password": TEMP}).json()["next"] == "enroll"
     start = c.post("/api/v1/auth/enroll/start", json={"activation_code": act}).json()
     r = c.post("/api/v1/auth/enroll/finish", json={"code": pyotp.TOTP(start["totp_secret"]).now(), "new_password": "mot-de-passe-definitif-9"})
     assert r.status_code == 200

@@ -26,6 +26,7 @@ Les références d'exigence sont reprises du plan de projet. Les normes ISO et E
 | PRIS IV.3.q | Quarantaine des codes malveillants | `attachments.py` | `test_attachments.py` |
 | ISO/IEC 27035-1 | Cycle de vie des incidents, liens et fusion, mesure des délais | `workflow.py`, `routes_work.py`, `routes_reports.py` | `test_workflow_audit.py`, `test_work.py`, `test_reports.py` |
 | RFC 6238, 9106 | TOTP, Argon2id, enrôlement du TOTP par le titulaire, code d'activation à usage unique | `security.py`, `api.enroll_*` | `test_access.py`, `test_unit.py`, `test_enrollment.py`, `15-enrolement.mjs` |
+| W3C WebAuthn ; plan : clés FIDO2 en option | Clés de sécurité comme second facteur | `routes_webauthn.py`, `webauthn.js` | `test_webauthn.py`, `50-webauthn.mjs` |
 | RFC 6265, ASVS V7 | Sessions : cookie HttpOnly, CSRF, rotation, inactivité | `api.py` | `test_access.py` |
 | RFC 7970, 8727 | Export IODEF JSON (sous-ensemble contrôlé) | `iodef.py` | `test_reports.py` |
 | RFC 3161 | Horodatage de confiance : **non fait** (autorité d'horodatage UE à choisir, dépendance ASN.1 à ajouter) | — | — |

@@ -3,6 +3,7 @@ import { api } from '../api.js'
 import { useAuth } from '../App.jsx'
 import OneTime from '../components/OneTime.jsx'
 import { getLang, LANGS, setLang, t } from '../i18n.js'
+import { createCredential, webauthnSupported } from '../webauthn.js'
 import { formatUtc, ROLES } from '../labels.js'
 
 export default function Profile() {
@@ -10,8 +11,27 @@ export default function Profile() {
   const [sessions, setSessions] = useState(null)
   const [secret, setSecret] = useState(null)
   const [prefs, setPrefs] = useState(null)
+  const [keys, setKeys] = useState([])
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
+  const loadKeys = useCallback(() => api('/me/webauthn').then((r) => setKeys(r.items)).catch(() => {}), [])
+  useEffect(() => { loadKeys() }, [loadKeys])
+  const addKey = async (e) => {
+    e.preventDefault()
+    const form = e.target
+    const fd = new FormData(form)
+    setError(''); setMsg('')
+    try {
+      const options = await api('/me/webauthn/register/begin', { method: 'POST', json: { password: fd.get('password') } })
+      const credential = await createCredential(options)
+      await api('/me/webauthn/register/finish', { method: 'POST', json: { credential, name: fd.get('name') } })
+      form.reset(); setMsg(t('Clé de sécurité enregistrée.')); loadKeys()
+    } catch (err) { setError(err.name === 'NotAllowedError' ? t('Clé de sécurité annulée ou non reconnue.') : err.message) }
+  }
+  const dropKey = async (id) => {
+    if (!window.confirm(t('Retirer cette clé de sécurité ?'))) return
+    try { await api(`/me/webauthn/${id}`, { method: 'DELETE' }); loadKeys() } catch (err) { setError(err.message) }
+  }
   const load = useCallback(() => api('/me/sessions').then((r) => setSessions(r.items)).catch((e) => setError(e.message)), [])
   useEffect(() => { load() }, [load])
   useEffect(() => { if (me.role !== 'admin') api('/me/preferences').then(setPrefs).catch(() => {}) }, [me.role])
@@ -61,6 +81,18 @@ export default function Profile() {
           <label>Confirmer le nouveau mot de passe<input name="confirm" type="password" minLength={12} required autoComplete="new-password" /></label>
           <button className="primary">Modifier</button>
         </form>
+      </section>
+      <section className="card section" aria-label={t('Clés de sécurité')}>
+        <header className="section-head"><h2>{t('Clés de sécurité (WebAuthn)')}</h2></header>
+        <p className="muted small">{t("Une clé de sécurité peut remplacer le code TOTP à la connexion. Le TOTP et vos codes de secours restent utilisables si vous perdez la clé.")}</p>
+        {keys.length > 0 && <ul className="found">{keys.map((k) => <li key={k.id}>{k.name} <span className="muted small">· {t('ajoutée le')} {formatUtc(k.created_at)}{k.last_used_at ? ` · ${t('utilisée le')} ${formatUtc(k.last_used_at)}` : ''}</span> <button type="button" className="small-btn danger" onClick={() => dropKey(k.id)}>{t('Retirer')}</button></li>)}</ul>}
+        {webauthnSupported() ? (
+          <form onSubmit={addKey} className="row gap wrap">
+            <label>{t('Nom de la clé')}<input name="name" required maxLength={80} placeholder="YubiKey bureau" /></label>
+            <label>{t('Mot de passe')}<input name="password" type="password" required autoComplete="current-password" /></label>
+            <button style={{ marginBottom: 10 }}>{t('Ajouter une clé')}</button>
+          </form>
+        ) : <p className="muted small">{t("Ce navigateur ne prend pas en charge les clés de sécurité.")}</p>}
       </section>
       <section className="card section" aria-label="Codes de secours">
         <header className="section-head"><h2>Codes de secours</h2></header>

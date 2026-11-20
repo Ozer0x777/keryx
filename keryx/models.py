@@ -110,6 +110,7 @@ class Session(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     stage: Mapped[str] = mapped_column(String(16))
     csrf_token: Mapped[str] = mapped_column(String(64))
+    webauthn_challenge: Mapped[str | None] = mapped_column(String(200), nullable=True)  # défi en cours (base64url)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -396,3 +397,17 @@ class RateHit(Base):
     id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
     key: Mapped[str] = mapped_column(String(200), index=True)
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class WebAuthnCredential(Base):
+    """Clé de sécurité WebAuthn / FIDO2, second facteur en option à la place du TOTP. [RFC 8809 ; W3C WebAuthn]
+    La clé publique ne permet pas de se connecter : seul l'authentificateur détient la clé privée."""
+    __tablename__ = "webauthn_credentials"
+    id: Mapped[str] = _id()
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    credential_id: Mapped[str] = mapped_column(String(512), unique=True)   # base64url
+    public_key: Mapped[str] = mapped_column(Text)                          # base64url (COSE)
+    sign_count: Mapped[int] = mapped_column(BigInteger, default=0)
+    name: Mapped[str] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

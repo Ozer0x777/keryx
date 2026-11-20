@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session as DbSession
 from . import audit, notify, security
 from .ids import as_utc, rfc3339, utcnow
 from .mitre import valid_technique
-from .models import (ROLES, ApiKey, MitreMapping, Notification, Session, Tenant, Ticket, User)
+from .models import (ROLES, ApiKey, MitreMapping, Notification, Session, Tenant, Ticket, User, WebAuthnCredential)
 
 SILENT_KEY_HOURS = 24
 
@@ -130,6 +130,9 @@ def register(app, ctx) -> None:
                 "last_login_at": rfc3339(u.last_login_at), "recovery_codes_left": len(u.recovery_codes or []),
                 "locked": bool(u.locked_until and as_utc(u.locked_until) > utcnow())}
 
+    def drop_webauthn(db: DbSession, u: User) -> None:
+        db.execute(delete(WebAuthnCredential).where(WebAuthnCredential.user_id == u.id))
+
     def require_enrollment(u: User) -> None:
         """Le titulaire enrôle lui-même son application TOTP à sa prochaine connexion : l'Admin ne voit jamais
         ce secret (séparation administrateur / opérateur, PDIS IV.3.9.d à h)."""
@@ -221,6 +224,7 @@ def register(app, ctx) -> None:
         require_role(user, "admin")
         u = get_user(db, username)
         require_enrollment(u)
+        drop_webauthn(db, u)  # une réinitialisation de la 2FA retire aussi les clés de sécurité
         u.failed_attempts, u.locked_until = 0, None
         drop_sessions(db, u)
         grant = issue_enroll_code(u)

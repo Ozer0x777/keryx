@@ -34,6 +34,8 @@ class Settings:
     cookie_secure: bool = field(default_factory=lambda: _bool("KERYX_COOKIE_SECURE", True))
     session_hours: int = field(default_factory=lambda: _int("KERYX_SESSION_HOURS", 8))
     max_failed_logins: int = 5
+    # Tentatives de connexion par adresse IP et par 5 minutes. À relever derrière un proxy partagé (ADR-0010).
+    login_ip_limit: int = field(default_factory=lambda: _int("KERYX_LOGIN_IP_LIMIT", 30))
     lockout_minutes: int = 15
 
     # Notifications : référence + lien uniquement (PDIS IV.2.3.g)

@@ -9,4 +9,5 @@ nh3>=0.3,<0.4
 cryptography>=50
 python-multipart>=0.0.32
 psycopg[binary]>=3.2,<4          # pilote PostgreSQL (production)
+webauthn>=2.5,<3                  # clés de sécurité FIDO2 (second facteur en option)
 pillow>=12.3,<13
