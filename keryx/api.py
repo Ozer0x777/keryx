@@ -726,7 +726,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if sensitivity not in TLP:
             raise HTTPException(422, f"Sensibilité attendue parmi : {', '.join(TLP)}.")
         declared = request.headers.get("content-length")
-        if declared and declared.isdigit() and int(declared) > settings.max_attachment_bytes + 64 * 1024:
+        if not (declared and declared.isdigit()):
+            # Sans Content-Length (envoi chunked), le corps serait entièrement écrit sur disque avant tout contrôle.
+            raise HTTPException(411, "En-tête Content-Length obligatoire pour déposer une pièce.")
+        if int(declared) > settings.max_attachment_bytes + 64 * 1024:
             raise HTTPException(413, "Fichier trop volumineux (20 Mo maximum) : déclarer une preuve externe.")
         data = file.file.read(settings.max_attachment_bytes + 1)
         try:
@@ -736,6 +739,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         status, detail = att.scan(prepared.content, settings)
         quarantined = status == "quarantaine"
         storage = att.store(settings, prepared.content, quarantined)
+        try:
+            return _record_attachment(db, t, user, file, prepared, storage, status, detail, quarantined,
+                                      description, collected_at, method, sensitivity, visible_client)
+        except BaseException:
+            att.destroy(settings, storage, quarantined)  # pas de fichier orphelin si la base échoue
+            raise
+
+    def _record_attachment(db, t, user, file, prepared, storage, status, detail, quarantined,
+                           description, collected_at, method, sensitivity, visible_client):
         a = Attachment(
             ticket_id=t.id, tenant_id=t.tenant_id, kind=prepared.kind,
             filename=att.safe_filename(file.filename or "fichier"), storage_name=storage,
@@ -788,7 +800,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 raise HTTPException(409, "Fichier en quarantaine : confirmer le téléchargement et indiquer un motif.")
         if a.kind == "fichier" and (not motif or len(motif) < 3):
             raise HTTPException(422, "Indiquer le motif du téléchargement (chaîne de possession).")
-        data = att.read(settings, a.storage_name, quarantined)
+        try:
+            data = att.read(settings, a.storage_name, quarantined)
+        except FileNotFoundError:
+            raise HTTPException(410, "Fichier introuvable sur le stockage : signaler à l'administrateur.")
         db.add(CustodyEvent(attachment_id=a.id, actor=user.username,
                             action="telechargement" if a.kind == "fichier" else "consultation",
                             reason=(motif or "")[:500]))
@@ -822,12 +837,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(409, "Cette pièce n'est plus conservée.")
         if body.lifecycle == "detruit":
             require_role(user, "manager")
-            if a.storage_name:
-                att.destroy(settings, a.storage_name, a.scan_status == "quarantaine")
         a.lifecycle = body.lifecycle
         db.add(CustodyEvent(attachment_id=a.id, actor=user.username, action=body.lifecycle, reason=body.reason))
         event(db, t, user, "piece_jointe_" + body.lifecycle, {"id": a.id, "sha256": a.sha256, "motif": body.reason})
         commit(db)
+        # Suppression du fichier seulement une fois la destruction enregistrée en base.
+        if body.lifecycle == "detruit" and a.storage_name:
+            att.destroy(settings, a.storage_name, a.scan_status == "quarantaine")
         return attachment_view(a)
 
     # ---------------------------------------------------------------- administration
