@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { api } from './api.js'
 import Layout from './components/Layout.jsx'
 import Admin from './pages/Admin.jsx'
+import AuditPage from './pages/AuditPage.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Kanban from './pages/Kanban.jsx'
 import Login from './pages/Login.jsx'
@@ -55,6 +56,7 @@ export default function App() {
           <Route path="/admin/*" element={<Admin />} />
           <Route path="/mitre" element={<Mitre />} />
           <Route path="/pilotage" element={<Dashboard />} />
+          <Route path="/audit" element={<AuditPage />} />
           <Route path="/rapports" element={<Reports />} />
           <Route path="/profil" element={<Profile />} />
         </Route>

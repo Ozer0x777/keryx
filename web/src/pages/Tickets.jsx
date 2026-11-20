@@ -196,7 +196,7 @@ export default function Tickets() {
               <tr key={t.ref} className={t.overdue ? 'overdue' : ''}>
                 {!isClient && <td><input type="checkbox" aria-label={`Sélectionner ${t.ref}`} checked={picked.has(t.ref)} onChange={() => toggle(t.ref)} /></td>}
                 <td className="mono"><Link to={`/tickets/${encodeURIComponent(t.ref)}`}>{t.ref}</Link></td>
-                <td className="strong">{t.title}{t.overdue && <span className="pill danger" style={{ marginLeft: 8 }}>En retard</span>}</td>
+                <td className="strong">{t.title}{t.overdue && <span className="pill danger" style={{ marginLeft: 8 }}>En retard</span>}{t.crisis && <span className="pill danger" style={{ marginLeft: 8 }}>CRISE</span>}</td>
                 {me.clients.length > 1 && <td>{t.client}</td>}
                 <td><Severity value={t.criticite_initiale} /></td>
                 <td><Severity value={t.gravite} /></td>

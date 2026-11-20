@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { api, downloadBlob } from '../api.js'
 import { useAuth } from '../App.jsx'
 import { Severity, Status, Tlp } from '../components/Badges.jsx'
+import Crisis from '../components/Crisis.jsx'
 import RichEditor from '../components/RichEditor.jsx'
 import {
   DOMMAGES, formatUtc, IMPORTANCES, LIFECYCLE, MITRE_SOURCE, SCAN, STATUS, TLPS, TRANSITIONS, VERDICTS,
@@ -119,8 +120,10 @@ export default function Ticket() {
       <p className="live" role="status" aria-live="polite">{notice}</p>
       {t.rex_en_attente && <p className="banner warn">Incident {t.gravite || t.criticite_initiale} clôturé : le retour d'expérience est obligatoire (section Synthèse).</p>}
 
+      {t.crisis && <p className="banner danger" role="status">MODE CRISE actif sur ce ticket : toute décision et toute action sont consignées dans le registre de crise.</p>}
       <div className="ticket-layout">
         <div className="ticket-main">
+          {isTeam && <Crisis t={t} enc={enc} isManager={me.role === 'manager'} open={open} onChange={load} />}
           <Description t={t} enc={enc} canEdit={isTeam && open} run={run} onImage={(f) => uploadImage(f, true)} />
           {isTeam && <AlertBlock t={t} />}
           <Attachments t={t} enc={enc} me={me} run={run} setNotice={setNotice} />
@@ -426,6 +429,13 @@ function Qualification({ t, enc, run, open }) {
 
 function Mitre({ t, enc, run, open }) {
   const [text, setText] = useState(t.mitre.join(', '))
+  const [q, setQ] = useState('')
+  const [found, setFound] = useState([])
+  useEffect(() => {
+    if (q.trim().length < 2) { setFound([]); return undefined }
+    const h = setTimeout(() => api('/mitre/techniques', { params: { q } }).then((r) => setFound(r.items)).catch(() => setFound([])), 250)
+    return () => clearTimeout(h)
+  }, [q])
   return (
     <section className="card section" aria-label="MITRE ATT&CK">
       <h2>MITRE ATT&amp;CK</h2>
@@ -440,6 +450,12 @@ function Mitre({ t, enc, run, open }) {
       <p className="muted small">Source : <strong>{MITRE_SOURCE[t.mitre_source]}</strong></p>
       {open && (
         <>
+          <label>Rechercher une technique (nom ou identifiant)<input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="ex. brute force" /></label>
+          {found.length > 0 && (
+            <ul className="found">{found.map((f) => (
+              <li key={f.id}><button type="button" className="link" onClick={() => { setText((x) => [...new Set([...x.split(/[\s,;]+/).filter(Boolean), f.id])].join(', ')); setQ('') }}>
+                <span className="mono">{f.id}</span> {f.name}</button></li>))}</ul>
+          )}
           <label>Techniques (ex. T1110, T1543.003)<input className="mono" value={text} onChange={(e) => setText(e.target.value)} /></label>
           <button type="button" onClick={() => run(() => api(`/tickets/${enc}/mitre`, {
             method: 'POST', json: { techniques: text.split(/[\s,;]+/).filter(Boolean).map((x) => x.toUpperCase()) },

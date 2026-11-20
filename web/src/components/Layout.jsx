@@ -20,7 +20,7 @@ export default function Layout() {
     ? [['/admin', 'Administration']]
     : me.role === 'client'
       ? [['/tickets', 'Mes incidents']]
-      : [['/tickets', 'Tickets'], ['/kanban', 'Kanban'], ['/pilotage', 'Pilotage'], ['/rapports', 'Rapports'], ...(me.role === 'manager' ? [['/mitre', 'Table MITRE']] : [])]
+      : [['/tickets', 'Tickets'], ['/kanban', 'Kanban'], ['/pilotage', 'Pilotage'], ['/rapports', 'Rapports'], ...(me.role === 'manager' ? [['/mitre', 'Table MITRE'], ['/audit', "Journal d'audit"]] : [])]
   return (
     <div className="shell">
       <nav className="sidebar" aria-label="Navigation principale">

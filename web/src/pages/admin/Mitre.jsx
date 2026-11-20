@@ -4,6 +4,7 @@ import { api } from '../../api.js'
 export default function Mitre() {
   const [items, setItems] = useState(null)
   const [error, setError] = useState('')
+  const [msg, setMsg] = useState('')
   const load = useCallback(() => api('/mitre/mappings').then((r) => setItems(r.items)).catch((e) => setError(e.message)), [])
   useEffect(() => { load() }, [load])
   const add = async (e) => {
@@ -17,6 +18,14 @@ export default function Mitre() {
       e.target.reset(); load()
     } catch (err) { setError(err.message) }
   }
+  const importStix = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setError(''); setMsg('')
+    const form = new FormData(); form.append('file', file)
+    try { const r = await api('/mitre/import', { method: 'POST', form }); setMsg(`${r.added} technique(s) ajoutée(s), ${r.updated} mise(s) à jour (${r.total} au total).`) } catch (err) { setError(err.message) }
+  }
   const remove = async (m) => {
     if (!window.confirm(`Supprimer la correspondance ${m.technique} ?`)) return
     try { await api(`/mitre/mappings/${m.id}`, { method: 'DELETE' }); load() } catch (err) { setError(err.message) }
@@ -26,6 +35,12 @@ export default function Mitre() {
       <header className="section-head"><h2>Table de correspondance MITRE ATT&amp;CK</h2></header>
       <p className="muted small">Utilisée quand Wazuh ne fournit pas la technique : d'abord l'identifiant de règle, puis le groupe de règles.</p>
       {error && <p className="error" role="alert">{error}</p>}
+      <p className="live" role="status">{msg}</p>
+      <div className="subform">
+        <label>Importer le référentiel ATT&amp;CK (fichier STIX 2.1, par exemple enterprise-attack.json téléchargé hors de Keryx)
+          <input type="file" accept=".json,application/json" onChange={importStix} /></label>
+        <p className="muted small">Fournit le nom et les tactiques des techniques corrigées à la main. Aucune connexion sortante : le fichier est déposé ici.</p>
+      </div>
       <form className="row gap wrap" onSubmit={add}>
         <label>Type<select name="scope"><option value="group">Groupe de règles</option><option value="rule">Identifiant de règle</option></select></label>
         <label>Valeur<input name="target" required placeholder="authentication_failures" /></label>
