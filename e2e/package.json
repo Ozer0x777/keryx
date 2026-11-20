@@ -1,1 +1,1 @@
-{ "name": "keryx-e2e", "private": true, "type": "module", "dependencies": { "playwright-core": "1.49.1" } }
+{"name":"keryx-e2e","private":true,"type":"module","dependencies":{"axe-core":"^4.10.2","playwright-core":"1.49.1"}}

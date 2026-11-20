@@ -29,7 +29,7 @@ export default function AuditViewer() {
         <button className="primary" style={{ marginBottom: 10 }}>Filtrer</button>
       </form>
       {error && <p className="error" role="alert">{error}</p>}
-      <div className="table-wrap"><table className="grid">
+      <div className="table-wrap" tabIndex={0} role="region" aria-label="Entrées du journal d'audit"><table className="grid">
         <thead><tr><th scope="col" className="num">N°</th><th scope="col">Date</th><th scope="col">Auteur</th><th scope="col">Action</th><th scope="col">Objet</th><th scope="col">Client</th><th scope="col">Détails</th></tr></thead>
         <tbody>
           {items === null && <tr><td colSpan="7" className="muted">Chargement…</td></tr>}
