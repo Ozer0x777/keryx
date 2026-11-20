@@ -373,4 +373,11 @@ export default {
   "Enregistrer": "Save",
   "Rapport d'incidents": "Incident report", 'Déposer un fichier ({n} Mo max)': 'Upload a file ({n} MB max)',
   'Pour une preuve de plus de {n} Mo (image disque, dump mémoire, pcap) conservée hors de Keryx, sur un support hors ligne.': 'For evidence larger than {n} MB (disk image, memory dump, pcap) kept outside Keryx, on offline media.',
+  // ETSI ISI
+  'Qui et/ou pourquoi': 'Who and/or why', 'Quoi': 'What', 'Comment': 'How', "Statut de l'incident": 'Incident status',
+  'Vulnérabilité(s) exploitée(s)': 'Vulnerability(ies) exploited', 'Type de cible': 'Type of asset', 'Conséquence (C-I-D)': 'Consequence (C-I-A)',
+  "Type d'impact": 'Type of impact', 'précision': 'detail', 'Précision (Annexe B, sous-liste)': 'Detail (Annex B sub-list)',
+  'Classification ETSI ISI': 'ETSI ISI classification', 'Classification ETSI ISI enregistrée.': 'ETSI ISI classification saved.',
+  'ETSI GS ISI 002 : les axes marqués * sont obligatoires pour exporter.': 'ETSI GS ISI 002: axes marked * are mandatory for export.',
+  'Catégorie': 'Category', '3 au plus': 'at most 3', 'Exporter (IODEF 2.0, ETSI ISI)': 'Export (IODEF 2.0, ETSI ISI)',
 }

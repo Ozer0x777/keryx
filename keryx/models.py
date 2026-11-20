@@ -126,6 +126,8 @@ class Session(Base):
     stage: Mapped[str] = mapped_column(String(16))
     csrf_token: Mapped[str] = mapped_column(String(64))
     webauthn_challenge: Mapped[str | None] = mapped_column(String(200), nullable=True)  # défi en cours (base64url)
+    sso_provider: Mapped[str | None] = mapped_column(String(40), nullable=True)   # session ouverte par SSO : fournisseur
+    sso_id_token: Mapped[str | None] = mapped_column(Text, nullable=True)         # jeton d'identité chiffré, pour la déconnexion unique
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -198,6 +200,8 @@ class Ticket(Base):
     # Mode « crise » [PRIS VI.5.5.1] : registre des décisions, plan d'action, synthèse de crise
     crisis: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     crisis_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Classification ETSI GS ISI 002 (modèle d'événement) : axes qui décrivent l'incident, voir keryx/isi.py
+    isi: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class RawAlert(Base):

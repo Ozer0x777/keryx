@@ -185,7 +185,8 @@ def test_malware_en_quarantaine_jamais_supprime(settings, db, request):
     world = request.getfixturevalue("world")
     ingest(app, world["keys"]["ACME"], ALERT_SSH_BRUTEFORCE)
     a = login(app, db, "analyst_acme")
-    r = upload(a, zip_bytes("eicar.com", EICAR), visible_client="true")
+    original = zip_bytes("eicar.com", EICAR)   # une seule fabrication : l'en-tête ZIP contient l'heure courante
+    r = upload(a, original, visible_client="true")
     assert r.status_code == 201 and r.json()["scan_status"] == "quarantaine"
     att_id = r.json()["id"]
     # Analyste : confirmation + motif obligatoires, servi en octet-stream sous un nom explicite
@@ -195,7 +196,6 @@ def test_malware_en_quarantaine_jamais_supprime(settings, db, request):
     assert dl.headers["content-type"] == "application/octet-stream"
     # Ré-archivé avec mot de passe : ni en clair sur disque, ni dans la réponse ; le contenu d'origine reste intact
     import pyzipper
-    original = zip_bytes("eicar.com", EICAR)
     assert EICAR not in dl.content and original not in dl.content
     with pyzipper.AESZipFile(io.BytesIO(dl.content)) as z:
         z.setpassword(b"infected")

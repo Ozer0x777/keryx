@@ -75,7 +75,7 @@ Le conteneur applique `alembic upgrade head` puis démarre. Dépendances install
 python -m pytest -q
 ```
 
-188 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
+193 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
 régressions des revues, migrations, notifications (SMTP simulé, relances), pièces jointes (clamd simulé, EICAR),
 administration, confort de travail, pilotage, conformité, sauvegarde, script d'intégration Wazuh.
 
@@ -103,6 +103,7 @@ cd e2e && npm ci && node run.mjs        # CHROME_PATH et KERYX_PYTHON si besoin
 | Journal d'audit scellé HMAC, point de contrôle externe, export syslog | PDIS IV.3.9.c, ISO 27002 8.15, RFC 5424 ; ADR-0007 |
 | Revue des comptes et des droits | PDIS IV.3.4.b |
 | Export IODEF JSON (sous-ensemble) | RFC 7970, RFC 8727 |
+| Classification ETSI GS ISI 002 (8 axes, dictionnaire de l'Annexe B) et export IODEF 2.0 recommandé par l'ETSI | PDIS IV.2.1.y ; ADR-0020 |
 | Erreurs Problem Details, UUIDv7, dates RFC 3339 UTC, no-store, HSTS | RFC 9457, 9562, 3339, 9111, 6797 |
 | Migrations Alembic | ISO 27002 8.32 ; ADR-0005 |
 | Administration dans l'interface : comptes, clients (grille, SLA, rétention), clés d'API, MITRE, revue, état du système | PDIS IV.3.4.b, IV.3.9.d à h ; ADR-0011 |
@@ -120,10 +121,10 @@ Matrice complète : `docs/matrice-tracabilite.md` · exploitation : `docs/exploi
 
 - Limites de débit en mémoire, par processus : un seul processus uvicorn tant qu'elles ne sont pas partagées (ADR-0010).
 - Quarantaine : archive ZIP chiffrée (mot de passe « infected ») ; les pièces mises en quarantaine avant cette version restent stockées telles quelles (ADR-0019).
-- PostgreSQL 16 : la suite complète passe (188 tests, dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore). Non testé : haute disponibilité, réplication, très gros volumes.
+- PostgreSQL 16 : la suite complète passe (193 tests, dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore). Non testé : haute disponibilité, réplication, très gros volumes.
 - Jamais testé contre un vrai manager Wazuh (le script d'intégration est testé avec un serveur simulé).
 - Interface testée dans Chrome sans tête (parcours de chaque rôle) et contrôlée avec axe-core (WCAG 2.1 A/AA) ; pas d'audit RGAA complet ni de test d'intrusion.
-- Pas encore : déconnexion unique du SSO, format ETSI ISI, validation IODEF contre le schéma officiel complet, PDF généré côté serveur (impression du navigateur à la place).
+- Pas encore : validation IODEF contre le schéma officiel complet, PDF généré côté serveur (impression du navigateur à la place).
 
 Un outil ne qualifie pas un prestataire : Keryx fournit les registres, la traçabilité et le
 cloisonnement exigés par PDIS/PRIS, la qualification reste organisationnelle.

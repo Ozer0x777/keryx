@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session as DbSession
 from starlette.background import BackgroundTask
 
 from . import attachments as att
-from . import audit, inbox, routes_admin, routes_oidc, routes_ops, routes_reports, routes_timestamp, routes_webauthn, routes_work, security
+from . import audit, inbox, routes_admin, routes_oidc, routes_ops, routes_isi, routes_reports, routes_timestamp, routes_webauthn, routes_work, security
 from .oidc import load_providers
 from .config import Settings
 from .db import Base, make_engine, make_session_factory
@@ -415,10 +415,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         db.delete(s)
         return open_session(db, user, response, ip, method)
 
-    def open_session(db: DbSession, user: User, response: Response, ip: str, method: str) -> dict:
-        """Ouvre une session complète neuve (jeton neuf, CSRF neuf) et pose les cookies."""
+    def open_session(db: DbSession, user: User, response: Response, ip: str, method: str,
+                     sso: tuple[str, str] | None = None) -> dict:
+        """Ouvre une session complète neuve (jeton neuf, CSRF neuf) et pose les cookies.
+        `sso` = (fournisseur, jeton d'identité) : conservé chiffré pour la déconnexion unique."""
         token, csrf = security.new_token(), security.new_token()
-        db.add(Session(token_hash=security.sha256(token), user_id=user.id, stage="full", csrf_token=csrf,
+        th = security.sha256(token)
+        db.add(Session(token_hash=th, user_id=user.id, stage="full", csrf_token=csrf,
+                       sso_provider=sso[0] if sso else None,
+                       sso_id_token=box.encrypt(sso[1], f"sso:{th}") if sso else None,
                        expires_at=utcnow() + timedelta(hours=settings.session_hours)))
         user.failed_attempts = 0
         user.last_login_at = utcnow()
@@ -515,13 +520,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def logout(request: Request, response: Response, user: User = Depends(current_user),
                db: DbSession = Depends(get_db)):
         s = _session_from_cookie(request, db)
+        redirect = None
         if s:
+            if s.sso_provider and s.sso_id_token and getattr(ctx, "sso_logout_url", None):
+                # Déconnexion unique : la session du fournisseur d'identité se ferme aussi (OIDC RP-Initiated Logout)
+                try:
+                    redirect = ctx.sso_logout_url(s.sso_provider, box.decrypt(s.sso_id_token, f"sso:{s.token_hash}"))
+                except Exception:  # noqa: BLE001 - la déconnexion locale ne doit jamais échouer
+                    log.exception("Déconnexion unique impossible")
             db.delete(s)
-        audit.record(db, user.username, "auth.logout", "user", user.id)
+        audit.record(db, user.username, "auth.logout", "user", user.id, None, {"sso": bool(redirect)})
         commit(db)
         response.delete_cookie(SESSION_COOKIE, path="/")
         response.delete_cookie(CSRF_COOKIE, path="/")
-        return {"status": "ok"}
+        return {"status": "ok", "redirect": redirect}
 
     @app.get("/api/v1/me")
     def me(request: Request, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
@@ -694,6 +706,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "rule": {"id": t.rule_id, "level": t.rule_level, "description": t.rule_description, "groups": t.rule_groups},
             "agent": {"id": t.agent_id, "name": t.agent_name, "ip": t.agent_ip},
             "mitre_detail": t.mitre, "classification": t.classification,
+            "isi": t.isi if not is_client else None,
             "attachment_max_mb": db.get(Tenant, t.tenant_id).max_attachment_mb or 20,
             "severity_hint": {d: gravite(d, t.importance, db.get(Tenant, t.tenant_id).severity_grid) for d in DOMMAGES}
             if not is_client else None,
@@ -1125,6 +1138,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     routes_webauthn.register(app, ctx)
     routes_oidc.register(app, ctx)
     routes_timestamp.register(app, ctx)
+    routes_isi.register(app, ctx)
 
     # ---------------------------------------------------------------- interface web
     dist = settings.web_dist

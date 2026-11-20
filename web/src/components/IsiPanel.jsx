@@ -1,0 +1,69 @@
+import { useEffect, useState } from 'react'
+import { api, downloadBlob } from '../api.js'
+import { t as tr } from '../i18n.js'
+
+const AXIS_TITLES = {
+  who_why: 'Qui et/ou pourquoi', what: 'Quoi', how: 'Comment', status: 'Statut de l\'incident', vulnerability: 'Vulnérabilité(s) exploitée(s)',
+  asset: 'Type de cible', cia: 'Conséquence (C-I-D)', impact: "Type d'impact",
+}
+
+// Classification ETSI GS ISI 002 (clause 4.4 et Annexe B). Les intitulés des listes sont ceux, anglais, de la norme.
+export default function IsiPanel({ t, enc, run, open }) {
+  const [dict, setDict] = useState(null)
+  const [v, setV] = useState(t.isi || {})
+  const [msg, setMsg] = useState('')
+  useEffect(() => { api('/isi/dictionary').then(setDict).catch(() => {}) }, [])
+  useEffect(() => { setV(t.isi || {}) }, [t.isi])
+  if (!dict) return null
+  const set = (k, val) => setV((x) => ({ ...x, [k]: val }))
+  const setDetail = (k, val) => setV((x) => ({ ...x, detail: { ...(x.detail || {}), [k]: val } }))
+  const toggleVuln = (code) => setV((x) => {
+    const cur = x.vulnerability || []
+    const next = cur.includes(code) ? cur.filter((c) => c !== code) : [...cur, code].slice(0, 3)
+    return { ...x, vulnerability: next }
+  })
+  const save = () => run(() => api(`/tickets/${enc}/isi`, { method: 'PUT', json: v }), tr('Classification ETSI ISI enregistrée.'))
+  const exportDoc = async () => {
+    setMsg('')
+    try { downloadBlob(new Blob([JSON.stringify(await api(`/tickets/${enc}/isi/iodef`), null, 2)], { type: 'application/json' }), `${t.ref}-etsi-isi.json`) } catch (e) { setMsg(e.message) }
+  }
+  const select = (axis, options) => (
+    <label key={axis}>{tr(AXIS_TITLES[axis])}{dict.mandatory.includes(axis) ? ' *' : ''}
+      <select value={v[axis] || ''} disabled={!open} onChange={(e) => set(axis, e.target.value || undefined)}>
+        <option value="">—</option>
+        {options.map((o) => <option key={o.code} value={o.code}>{o.ref} — {o.label}</option>)}
+      </select>
+      {v[axis] && <input aria-label={`${tr(AXIS_TITLES[axis])} : ${tr('précision')}`} placeholder={tr('Précision (Annexe B, sous-liste)')} maxLength={200} disabled={!open}
+        value={v.detail?.[axis] || ''} onChange={(e) => setDetail(axis, e.target.value)} />}
+    </label>
+  )
+  return (
+    <section className="card section" aria-label={tr('Classification ETSI ISI')}>
+      <h2>{tr('Classification ETSI ISI')}</h2>
+      <p className="muted small">{tr("ETSI GS ISI 002 : les axes marqués * sont obligatoires pour exporter.")}</p>
+      <label>{tr('Catégorie')}
+        <select value={v.category || ''} disabled={!open} onChange={(e) => set('category', e.target.value || undefined)}>
+          <option value="">—</option>
+          {Object.entries(dict.categories).map(([k, l]) => <option key={k} value={k}>{k} — {l}</option>)}
+        </select>
+      </label>
+      {select('who_why', dict.axes.who_why)}
+      {select('what', dict.axes.what)}
+      {select('how', dict.how)}
+      {select('status', dict.axes.status)}
+      <fieldset className="fieldset"><legend>{tr(AXIS_TITLES.vulnerability)} ({tr('3 au plus')})</legend>
+        {dict.axes.vulnerability.map((o) => (
+          <label key={o.code} className="check"><input type="checkbox" disabled={!open} checked={(v.vulnerability || []).includes(o.code)} onChange={() => toggleVuln(o.code)} /> {o.ref} — {o.label}</label>
+        ))}
+      </fieldset>
+      {select('asset', dict.axes.asset)}
+      {select('cia', dict.axes.cia)}
+      {select('impact', dict.axes.impact)}
+      <div className="row gap wrap">
+        {open && <button type="button" className="primary" onClick={save}>{tr('Enregistrer')}</button>}
+        <button type="button" onClick={exportDoc}>{tr('Exporter (IODEF 2.0, ETSI ISI)')}</button>
+      </div>
+      {msg && <p className="error" role="alert">{msg}</p>}
+    </section>
+  )
+}

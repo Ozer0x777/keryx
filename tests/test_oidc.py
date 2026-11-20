@@ -100,7 +100,8 @@ class FakeIdp(Discovery):
     exchanged: list = []
 
     def meta(self):
-        return {"authorization_endpoint": "https://idp.example/auth", "token_endpoint": "https://idp.example/token", "jwks_uri": "https://idp.example/jwks"}
+        return {"authorization_endpoint": "https://idp.example/auth", "token_endpoint": "https://idp.example/token", "jwks_uri": "https://idp.example/jwks",
+                "end_session_endpoint": "https://idp.example/logout"}
 
     def keys(self, force=False):
         return [JWK]
@@ -228,3 +229,26 @@ def test_delier_le_sso_reserve_a_ladmin(sso, db, world):
     assert login(sso, db, "admin").post("/api/v1/admin/users/analyst_acme/unlink-sso").status_code == 200
     db.expire_all()
     assert db.scalars(select(User).where(User.username == "analyst_acme")).one().oidc_sub is None
+
+
+def test_deconnexion_unique(sso, db, world):
+    c = TestClient(sso)
+    q = begin(c)
+    c.get("/api/v1/auth/oidc/soc/callback", params={"code": "c", "state": q["state"][0]}, follow_redirects=False)
+    c.headers["X-CSRF-Token"] = c.cookies.get("keryx_csrf")
+    from keryx.models import Session
+    row = db.scalars(select(Session).where(Session.stage == "full")).one()
+    assert row.sso_provider == "soc" and row.sso_id_token.startswith("v1:") and "eyJ" not in row.sso_id_token   # jeton conservé chiffré
+    r = c.post("/api/v1/auth/logout")
+    url = urlparse(r.json()["redirect"])
+    qs = parse_qs(url.query)
+    assert url.netloc == "idp.example" and url.path == "/logout"
+    assert qs["post_logout_redirect_uri"] == ["https://keryx.local/connexion"] and qs["client_id"] == [CLIENT]
+    assert jwt.decode(qs["id_token_hint"][0], options={"verify_signature": False})["sub"] == "sub-1"   # indice : le jeton reçu
+    assert c.get("/api/v1/me").status_code == 401
+    db.rollback()   # fin du snapshot de lecture de ce test
+    assert db.scalars(select(Session).where(Session.stage == "full")).first() is None
+    # Une session locale (mot de passe + TOTP) ne redirige nulle part
+    from .conftest import login
+    local = login(sso, db, "manager")
+    assert local.post("/api/v1/auth/logout").json() == {"status": "ok", "redirect": None}

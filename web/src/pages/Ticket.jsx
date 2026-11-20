@@ -5,6 +5,7 @@ import { api, downloadBlob } from '../api.js'
 import { useAuth } from '../App.jsx'
 import { Severity, Status, Tlp } from '../components/Badges.jsx'
 import Crisis from '../components/Crisis.jsx'
+import IsiPanel from '../components/IsiPanel.jsx'
 import Stamps from '../components/Stamps.jsx'
 import RichEditor from '../components/RichEditor.jsx'
 import {
@@ -137,6 +138,7 @@ export default function Ticket() {
           <aside className="ticket-aside" aria-label={tr("Pilotage du ticket")}>
             <Qualification t={t} enc={enc} run={run} open={open} />
             <Mitre t={t} enc={enc} run={run} open={open} />
+            <IsiPanel t={t} enc={enc} run={run} open={open} />
             <Assignment t={t} enc={enc} run={run} open={open} />
             <Links t={t} enc={enc} run={run} open={open} />
             <Details t={t} />

@@ -1,6 +1,6 @@
 # Matrice de traçabilité (exigence → fonction → code → test)
 
-Les références d'exigence sont reprises du plan de projet. Les normes ISO et ETSI étant payantes, leur texte exact n'a pas été consulté : les renvois qui les concernent sont à confronter à la norme avant toute homologation.
+Les références d'exigence sont reprises du plan de projet. Les normes ISO étant payantes, leur texte exact n'a pas été consulté : les renvois qui les concernent sont à confronter à la norme avant toute homologation. Les documents ETSI GS ISI sont publics et ont été lus (ISI 002 V1.2.1).
 
 | Exigence | Fonction | Code | Test |
 |---|---|---|---|
@@ -9,7 +9,7 @@ Les références d'exigence sont reprises du plan de projet. Les normes ISO et E
 | PDIS IV.2.1.q | Qualification obligatoire avant réponse | `workflow.py`, `api.qualify` | `test_workflow_audit.py` |
 | PDIS IV.2.1.e, r, s | Grille de gravité par client ; délais cibles (SLA) par client | `severity.py`, `sla.py`, `routes_admin.clients_patch` | `test_workflow_audit.py`, `test_admin.py`, `test_work.py` |
 | PDIS IV.2.1.bb | Registre chronologique par client, export CSV | `routes_reports.registry` | `test_reports.py` |
-| PDIS IV.2.1.y | Export IODEF (contrôle structurel). Format ETSI ISI : **non fait**, spécification à consulter | `api.export_iodef`, `iodef.py` | `test_reports.py` |
+| PDIS IV.2.1.y | Export IODEF (contrôle structurel) ; classification ETSI GS ISI 002 et export IODEF 2.0 « ETSI ISI » (clause 7.4) | `api.export_iodef`, `iodef.py`, `isi.py`, `routes_isi.py`, `IsiPanel.jsx` | `test_reports.py`, `test_isi.py`, `26-etsi-isi.mjs` |
 | PDIS IV.2.2.w | Rétention paramétrable, purge tracée | `retention.py`, `routes_ops.retention_run` | `test_ops.py` |
 | PDIS IV.2.3.g, h, j | Notification par référence seule, registre, relance des échecs | `notify.py` | `test_notifications.py` |
 | PDIS IV.2.3.l | Portail client (rôle Client) | `api.py`, `Tickets.jsx`, `Ticket.jsx` | `test_access.py`, `20-travail.mjs` |

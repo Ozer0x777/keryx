@@ -105,6 +105,14 @@ class Discovery:
                        "code_challenge_method": "S256"})
         return f"{self.meta()['authorization_endpoint']}?{q}"
 
+    def logout_url(self, id_token_hint: str, post_logout_redirect_uri: str) -> str | None:
+        """Adresse de déconnexion du fournisseur (OIDC RP-Initiated Logout 1.0), ou None s'il ne la propose pas."""
+        endpoint = self.meta().get("end_session_endpoint")
+        if not endpoint:
+            return None
+        return f"{endpoint}?" + urlencode({"id_token_hint": id_token_hint, "client_id": self.p.client_id,
+                                           "post_logout_redirect_uri": post_logout_redirect_uri})
+
     def exchange(self, code: str, redirect_uri: str, verifier: str) -> str:
         data = {"grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri,
                 "client_id": self.p.client_id, "code_verifier": verifier}

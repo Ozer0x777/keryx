@@ -7,5 +7,6 @@
 - **Double authentification** : portée par le realm Keycloak (à imposer dans Keycloak). Keryx peut exiger une valeur de `acr` (`KERYX_OIDC_REQUIRED_ACR`) ; sans elle, il fait confiance au realm.
 - **SSO obligatoire** : `KERYX_OIDC_ENFORCE=true` désactive la connexion locale des comptes non Admin (l'Admin garde un accès de secours local).
 - **Exigences** : PDIS IV.3.9.d (annuaire centralisé et dédié) ; RFC 6749, 7636 (PKCE), 9700 (sécurité OAuth 2.0) ; OpenID Connect Core 1.0 ; plan, décision 1 (Keycloak dédié).
-- **Limites** : pas de déconnexion unique (fermer la session Keryx ne ferme pas celle de Keycloak), pas d'attribution des rôles depuis Keycloak, pas de SAML pour le tableau de bord Wazuh (hors périmètre de Keryx).
+- **Déconnexion unique** : une session ouverte par SSO conserve (chiffré) le jeton d'identité ; « Se déconnecter » redirige vers la déconnexion du fournisseur (OIDC RP-Initiated Logout : `id_token_hint`, `client_id`, `post_logout_redirect_uri` = page de connexion Keryx, à déclarer dans le client Keycloak) qui ferme aussi sa session. Pas de déconnexion initiée par Keycloak (back-channel) : une session fermée côté Keycloak reste valable dans Keryx jusqu'à son expiration.
+- **Limites** : pas d'attribution des rôles depuis Keycloak, pas de SAML pour le tableau de bord Wazuh (hors périmètre de Keryx).
 - **Tests** : unitaires (jetons falsifiés, rejeu d'état, liaison, mode obligatoire) et parcours navigateur contre un vrai Keycloak (`E2E_KEYCLOAK=http://localhost:8180 node run.mjs`, scénario `60-sso.mjs`).

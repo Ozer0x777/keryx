@@ -37,6 +37,13 @@ def register(app, ctx) -> None:
         commit(db)
         return RedirectResponse(f"/connexion?sso_error={quote(code)}", status_code=303)
 
+    def sso_logout_url(name: str, id_token: str) -> str | None:
+        if name not in providers:
+            return None
+        return discoveries[name].logout_url(id_token, f"{settings.public_url.rstrip('/')}/connexion")
+
+    ctx.sso_logout_url = sso_logout_url
+
     @app.get("/api/v1/auth/providers")
     def list_providers():
         return {"items": [{"name": p.name, "label": p.label} for p in providers.values()],
@@ -109,7 +116,7 @@ def register(app, ctx) -> None:
             s = db.get(Session, security.sha256(old))
             if s is not None:
                 db.delete(s)
-        ctx.open_session(db, user, resp, ip, "sso")
+        ctx.open_session(db, user, resp, ip, "sso", sso=(name, id_token))
         return resp
 
     @app.post("/api/v1/admin/users/{username}/unlink-sso")

@@ -37,8 +37,10 @@ export default function App() {
   }, [navigate])
 
   const logout = async () => {
-    try { await api('/auth/logout', { method: 'POST' }) } catch { /* déjà déconnecté */ }
+    let target = null
+    try { target = (await api('/auth/logout', { method: 'POST' })).redirect } catch { /* déjà déconnecté */ }
     setMe(null)
+    if (target) { window.location.assign(target); return }  // déconnexion unique : le fournisseur d'identité ferme aussi sa session
     navigate('/connexion')
   }
 

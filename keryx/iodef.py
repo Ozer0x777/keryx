@@ -13,8 +13,8 @@ PURPOSES = {"traceback", "mitigation", "reporting", "watch", "other", "ext-value
 
 def validate(doc: dict) -> list[str]:
     errors: list[str] = []
-    if doc.get("version") != "2.0":
-        errors.append("version : « 2.0 » attendu")
+    if doc.get("version") not in ("2.0", "2.00"):
+        errors.append("version : « 2.0 » ou « 2.00 » attendu")
     incidents = doc.get("Incident")
     if not isinstance(incidents, list) or not incidents:
         return errors + ["Incident : au moins un incident est obligatoire"]
