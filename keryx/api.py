@@ -69,6 +69,9 @@ class RateLimiter:
 
     def allow(self, key: str) -> bool:
         now = time.monotonic()
+        if len(self.hits) > 5000:  # purge des clés expirées (identifiants choisis par l'appelant)
+            for k in [k for k, v in self.hits.items() if not v or now - v[-1] > self.window]:
+                del self.hits[k]
         q = self.hits[key]
         while q and now - q[0] > self.window:
             q.popleft()
