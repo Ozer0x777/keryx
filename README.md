@@ -70,7 +70,7 @@ Le conteneur applique `alembic upgrade head` puis démarre. Dépendances install
 python -m pytest -q
 ```
 
-147 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
+159 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
 régressions des revues, migrations, notifications (SMTP simulé, relances), pièces jointes (clamd simulé, EICAR),
 administration, confort de travail, pilotage, conformité, sauvegarde, script d'intégration Wazuh.
 
@@ -113,10 +113,10 @@ Matrice complète : `docs/matrice-tracabilite.md` · exploitation : `docs/exploi
 
 - Limites de débit en mémoire, par processus : un seul processus uvicorn tant qu'elles ne sont pas partagées (ADR-0010).
 - Quarantaine : fichier isolé et marqué, pas rezippé avec mot de passe (ADR-0008).
-- PostgreSQL 16 : la suite complète passe (147 tests, dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore). Non testé : haute disponibilité, réplication, très gros volumes.
+- PostgreSQL 16 : la suite complète passe (159 tests, dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore). Non testé : haute disponibilité, réplication, très gros volumes.
 - Jamais testé contre un vrai manager Wazuh (le script d'intégration est testé avec un serveur simulé).
 - Interface testée dans Chrome sans tête (parcours de chaque rôle) et contrôlée avec axe-core (WCAG 2.1 A/AA) ; pas d'audit RGAA complet ni de test d'intrusion.
-- Pas encore : Keycloak/OIDC, WebAuthn, format ETSI ISI, horodatage RFC 3161, validation IODEF contre le schéma officiel complet, stockage objet des pièces, PDF généré côté serveur (impression du navigateur à la place).
+- Pas encore : Keycloak/OIDC, WebAuthn, traduction complète de l'interface en anglais (navigation, connexion, liste, Kanban et profil sont traduits ; les autres écrans retombent sur le français), format ETSI ISI, horodatage RFC 3161, validation IODEF contre le schéma officiel complet, stockage objet des pièces, PDF généré côté serveur (impression du navigateur à la place).
 
 Un outil ne qualifie pas un prestataire : Keryx fournit les registres, la traçabilité et le
 cloisonnement exigés par PDIS/PRIS, la qualification reste organisationnelle.

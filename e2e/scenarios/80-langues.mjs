@@ -1,0 +1,34 @@
+// Internationalisation : l'interface s'affiche en anglais sur choix de l'utilisateur, le français reste le repli.
+import { BASE, totp, PASSWORD } from '../harness.mjs'
+
+export default async ({ browser, stack, check }) => {
+  const ctx = await browser.newContext({ viewport: { width: 1300, height: 900 } })
+  const p = await ctx.newPage()
+  p.errors = []; p.on('pageerror', (e) => p.errors.push(e.message))
+  await p.goto(`${BASE}/`)
+  await p.selectOption('#lang', 'en')                       // sélecteur de langue de l'écran de connexion
+  await p.waitForSelector('text=Security incident management')
+  check(await p.locator('h1', { hasText: 'Sign in' }).count() === 1, 'connexion en anglais')
+  await p.locator('input').first().fill('analyste')
+  await p.locator('input[type=password]').fill(PASSWORD)
+  await p.getByRole('button', { name: 'Continue' }).click()
+  await p.waitForTimeout(1200)
+  // Un code TOTP ne sert qu'une fois par pas de 30 s : attendre le pas suivant (l'analyste s'est déjà connecté plus tôt)
+  await new Promise((r) => setTimeout(r, 31000 - (Date.now() % 30000)))
+  await p.locator('input').first().fill(totp(stack.seeds.analyste.secret))
+  await p.getByRole('button', { name: 'Verify' }).click()
+  await p.waitForSelector('.sidebar')
+  check(await p.locator('h1', { hasText: 'Ticket queue' }).count() === 1, 'liste des tickets en anglais')
+  check(await p.locator('.nav-link', { hasText: 'Dashboard' }).count() === 1, 'navigation en anglais')
+  await p.waitForSelector('tbody .status')
+  check(await p.locator('.status', { hasText: /New|Under assessment/ }).count() > 0, 'statuts traduits')
+  await p.goto(`${BASE}/tickets/ACME-1`)
+  await p.waitForSelector('text=Description')
+  check(await p.locator('text=Qualification').count() > 0, 'écran non encore traduit : repli sur le français sans erreur')
+  await p.goto(`${BASE}/profil`)
+  await p.selectOption('select >> nth=0', 'fr')
+  await p.waitForSelector('h1:has-text("Mon profil")')
+  check(true, 'retour au français depuis le profil')
+  check(p.errors.length === 0, 'aucune erreur JavaScript')
+  await ctx.close()
+}

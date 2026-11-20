@@ -30,4 +30,8 @@ Les références d'exigence sont reprises du plan de projet. Les normes ISO et E
 | RFC 7970, 8727 | Export IODEF JSON (sous-ensemble contrôlé) | `iodef.py` | `test_reports.py` |
 | RFC 3161 | Horodatage de confiance : **non fait** (autorité d'horodatage UE à choisir, dépendance ASN.1 à ajouter) | — | — |
 | WCAG 2.1 A/AA (base du RGAA) | Contrôle automatisé axe-core sur 19 écrans de 3 rôles. Ne remplace pas un audit RGAA complet | `e2e/scenarios/90-accessibilite.mjs` | idem |
+| Plan : historique des versions du corps du ticket | Versions précédentes, auteur et date | `routes_work.body_history`, `Ticket.jsx` | `test_plan_manques.py`, `25-plan.mjs` |
+| Plan : enrichissement MITRE niveau 3 et validation par le référentiel | Propositions de table, identifiants validés contre ATT&CK importé | `routes_ops.mitre_suggestions`, `api.set_mitre` | `test_plan_manques.py` |
+| PRIS VI.2.4 ; plan : limite de pièce configurable par client | Taille maximale 1 à 20 Mo par client | `api.upload_attachment`, `routes_admin.clients_patch` | `test_plan_manques.py` |
+| Plan : langue (i18n prévue dès le départ) | Mécanisme `t()` FR/EN, écrans principaux traduits | `web/src/i18n.js`, `i18n.en.js` | `80-langues.mjs` |
 | ISO/IEC 27002 8.25, 8.28 | SBOM CycloneDX, tests automatisés, CI | `scripts/sbom.py`, `.github/workflows/ci.yml` | — |

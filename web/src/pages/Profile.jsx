@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { useAuth } from '../App.jsx'
 import OneTime from '../components/OneTime.jsx'
+import { getLang, LANGS, setLang, t } from '../i18n.js'
 import { formatUtc, ROLES } from '../labels.js'
 
 export default function Profile() {
@@ -44,10 +45,14 @@ export default function Profile() {
 
   return (
     <>
-      <header className="page-head"><div><h1>Mon profil</h1><p className="muted">{me.display_name} · {ROLES[me.role]}</p></div></header>
+      <header className="page-head"><div><h1>{t('Mon profil')}</h1><p className="muted">{me.display_name} · {ROLES[me.role]}</p></div></header>
       {error && <p className="error" role="alert">{error}</p>}
       <p className="live" role="status">{msg}</p>
       {secret && <OneTime {...secret} onClose={() => setSecret(null)} />}
+      <section className="card section" aria-label={t('Langue')}>
+        <header className="section-head"><h2>{t('Langue')}</h2></header>
+        <label>{t('Langue')}<select value={getLang()} onChange={(e) => setLang(e.target.value)}>{Object.entries(LANGS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+      </section>
       <section className="card section" aria-label="Mot de passe">
         <header className="section-head"><h2>Changer de mot de passe</h2></header>
         <form onSubmit={changePassword} className="narrow">

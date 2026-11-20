@@ -9,6 +9,9 @@ import '@fontsource/ibm-plex-mono/400.css'
 import '@fontsource/ibm-plex-mono/500.css'
 import './styles.css'
 import App from './App.jsx'
+import { initLang } from './i18n.js'
+
+initLang()
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>

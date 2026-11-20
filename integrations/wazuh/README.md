@@ -58,3 +58,24 @@ apparaît bien à cet emplacement dans le JSON des alertes.
 
 Définir `KERYX_SYSLOG_HOST` et `KERYX_SYSLOG_PORT` sur le serveur Keryx : chaque entrée du
 journal d'audit est envoyée en syslog RFC 5424, ce qui permet au SOC de superviser son propre outil.
+
+## Rétention des alertes côté Wazuh : 12 mois (à relever)
+
+Le plan de projet fixe 12 mois pour les index `wazuh-alerts-*` (PDIS IV.2.2.w : 6 mois minimum ; PDIS IV.2.1.ee : analyse rétroactive sur 6 mois à la demande). Les exemples de la documentation Wazuh sont à 90 jours : à relever. Exemple de politique ISM (Wazuh indexer, onglet Dev Tools) :
+
+```json
+PUT _plugins/_ism/policies/wazuh-alerts-12-mois
+{
+  "policy": {
+    "description": "Conserver les alertes Wazuh 12 mois puis les supprimer",
+    "default_state": "hot",
+    "states": [
+      { "name": "hot", "actions": [], "transitions": [ { "state_name": "delete", "conditions": { "min_index_age": "365d" } } ] },
+      { "name": "delete", "actions": [ { "delete": {} } ], "transitions": [] }
+    ],
+    "ism_template": [ { "index_patterns": ["wazuh-alerts-*"], "priority": 100 } ]
+  }
+}
+```
+
+Cette politique n'a pas été exécutée sur un indexer depuis Keryx : la tester sur un environnement de recette, et valider la durée avec le DPO. Côté Keryx, la rétention des alertes brutes se règle par client (Administration > Clients) et par `KERYX_RETENTION_MONTHS`.

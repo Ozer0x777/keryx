@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import { Severity, Tlp } from '../components/Badges.jsx'
+import { t as tr } from '../i18n.js'
 import { KANBAN_COLUMNS, STATUS, TRANSITIONS } from '../labels.js'
 
 export default function Kanban() {
@@ -38,15 +39,15 @@ export default function Kanban() {
     <>
       <header className="page-head">
         <div>
-          <h1>Kanban des incidents</h1>
-          <p className="muted">Colonnes = phases ISO/IEC 27035 · glisser une carte change son statut (journalisé). Les faux positifs sont rangés avec les tickets clos.</p>
+          <h1>{tr('Kanban des incidents')}</h1>
+          <p className="muted">{tr('Colonnes = phases ISO/IEC 27035 · glisser une carte change son statut (journalisé). Les faux positifs sont rangés avec les tickets clos.')}</p>
         </div>
-        <div className="segmented" role="group" aria-label="Type de vue">
-          <Link to="/tickets">Liste</Link>
+        <div className="segmented" role="group" aria-label={tr('Type de vue')}>
+          <Link to="/tickets">{tr('Liste')}</Link>
           <Link to="/kanban" className="on" aria-current="page">Kanban</Link>
         </div>
       </header>
-      <label className="check"><input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} /> Mes tickets seulement</label>
+      <label className="check"><input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} /> {tr('Mes tickets seulement')}</label>
       <p className="live" role="status" aria-live="polite">{message}</p>
       {total > items.length && <p className="muted small" role="status">{items.length} tickets affichés sur {total} : les plus anciens ne figurent pas dans le tableau.</p>}
       <div className="kanban">

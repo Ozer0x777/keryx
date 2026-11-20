@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api.js'
+import { t } from '../i18n.js'
 import { formatUtc } from '../labels.js'
 
-const KINDS = { assignation: 'Ticket affecté', mention: 'Vous avez été mentionné', echeance: 'Échéance dépassée', reponse_client: 'Réponse du client' }
+const KINDS = { get assignation() { return t('Ticket affecté') }, get mention() { return t('Vous avez été mentionné') }, get echeance() { return t('Échéance dépassée') }, get reponse_client() { return t('Réponse du client') } }
 
 // Cloche : nombre de notifications non lues (relevé toutes les 60 s) et liste. Référence et nature seulement.
 export default function NotificationBell() {
@@ -36,12 +37,12 @@ export default function NotificationBell() {
   return (
     <div className="bell" ref={ref}>
       <button type="button" className="nav-link bell-btn" aria-expanded={open} aria-haspopup="true" onClick={toggle}>
-        Notifications{unread > 0 && <span className="bell-count" aria-label={`${unread} non lue(s)`}>{unread}</span>}
+        {t('Notifications')}{unread > 0 && <span className="bell-count" aria-label={`${unread} non lue(s)`}>{unread}</span>}
       </button>
       {open && (
         <div className="bell-panel card" role="region" aria-label="Notifications">
-          <div className="row between"><strong>Notifications</strong>{unread > 0 && <button type="button" className="link" onClick={readAll}>Tout marquer comme lu</button>}</div>
-          {items.length === 0 && <p className="muted small">Aucune notification.</p>}
+          <div className="row between"><strong>{t('Notifications')}</strong>{unread > 0 && <button type="button" className="link" onClick={readAll}>{t('Tout marquer comme lu')}</button>}</div>
+          {items.length === 0 && <p className="muted small">{t('Aucune notification.')}</p>}
           <ul>
             {items.map((n) => (
               <li key={n.id} className={n.read ? '' : 'unread'}>

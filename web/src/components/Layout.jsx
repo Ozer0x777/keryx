@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../App.jsx'
+import { t } from '../i18n.js'
 import { ROLES } from '../labels.js'
 import NotificationBell from './NotificationBell.jsx'
 
@@ -17,28 +18,28 @@ export default function Layout() {
   const { me, logout } = useAuth()
   const initials = me.display_name.split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase()
   const links = me.role === 'admin'
-    ? [['/admin', 'Administration']]
+    ? [['/admin', t('Administration')]]
     : me.role === 'client'
-      ? [['/tickets', 'Mes incidents']]
-      : [['/tickets', 'Tickets'], ['/kanban', 'Kanban'], ['/pilotage', 'Pilotage'], ['/rapports', 'Rapports'], ...(me.role === 'manager' ? [['/mitre', 'Table MITRE'], ['/audit', "Journal d'audit"]] : [])]
+      ? [['/tickets', t('Mes incidents')]]
+      : [['/tickets', t('Tickets')], ['/kanban', t('Kanban')], ['/pilotage', t('Pilotage')], ['/rapports', t('Rapports')], ...(me.role === 'manager' ? [['/mitre', t('Table MITRE')], ['/audit', t("Journal d'audit")]] : [])]
   return (
     <div className="shell">
-      <nav className="sidebar" aria-label="Navigation principale">
+      <nav className="sidebar" aria-label={t('Navigation principale')}>
         <div className="brand"><Shield /><span>Keryx</span></div>
-        <div className="nav-section">{{ client: 'Portail client', admin: 'Administration' }[me.role] || 'Détection'}</div>
+        <div className="nav-section">{{ client: t('Portail client'), admin: t('Administration') }[me.role] || t('Détection')}</div>
         {links.map(([to, label]) => (
           <NavLink key={to} to={to} className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>{label}</NavLink>
         ))}
         {me.role !== 'admin' && <NotificationBell />}
-        <NavLink to="/profil" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>Mon profil</NavLink>
+        <NavLink to="/profil" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>{t('Mon profil')}</NavLink>
         <div className="sidebar-user">
           <span className="avatar" aria-hidden="true">{initials}</span>
           <span className="who">
             <span className="name">{me.display_name}</span>
-            <span className="role">{ROLES[me.role]} · 2FA active</span>
+            <span className="role">{ROLES[me.role]} · {t('2FA active')}</span>
           </span>
         </div>
-        <button type="button" className="nav-logout" onClick={logout}>Se déconnecter</button>
+        <button type="button" className="nav-logout" onClick={logout}>{t('Se déconnecter')}</button>
       </nav>
       <main className="content">
         <Outlet />
