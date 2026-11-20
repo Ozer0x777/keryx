@@ -64,3 +64,22 @@ def test_fusion_ne_baisse_pas_la_criticite(app, db, world, alert):
     assert ingest(app, world["keys"]["ACME"], hi).json()["status"] == "merged"
     a = login(app, db, "analyst_acme")
     assert a.get("/api/v1/tickets/ACME-1").json()["criticite_initiale"] == "Élevée"
+
+
+def test_commentaire_refuse_sur_ticket_clos(app, db, world, alert):
+    ingest(app, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE))
+    a = login(app, db, "analyst_acme")
+    assert a.post("/api/v1/tickets/ACME-1/comments", json={"body_html": "<p>ok</p>", "visible_client": False}).status_code == 201
+    _close_as_false_positive(a)
+    r = a.post("/api/v1/tickets/ACME-1/comments", json={"body_html": "<p>tard</p>", "visible_client": False})
+    assert r.status_code == 409
+
+
+def test_version_precedente_bornee(app, db, world, alert):
+    ingest(app, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE))
+    a = login(app, db, "analyst_acme")
+    a.put("/api/v1/tickets/ACME-1/body", json={"body_html": "<p>" + "x" * 90_000 + "</p>"})
+    a.put("/api/v1/tickets/ACME-1/body", json={"body_html": "<p>court</p>"})
+    ev = [e for e in a.get("/api/v1/tickets/ACME-1").json()["events"] if e["action"] == "description"]
+    d = ev[-1]["details"]
+    assert d["tronquee"] is True and len(d["version_precedente"]) == 20_000 and d["version_precedente_longueur"] > 90_000

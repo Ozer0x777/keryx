@@ -6,6 +6,7 @@ Erreurs au format Problem Details [RFC 9457]. Sessions par cookie HttpOnly/Secur
 """
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import json
 import logging
@@ -57,6 +58,9 @@ def problem(status: int, title: str, detail: str | None = None) -> JSONResponse:
     if detail:
         body["detail"] = detail
     return JSONResponse(body, status_code=status, media_type=PROBLEM, headers={"Cache-Control": "no-store"})
+
+
+MAX_VERSION_CHARS = 20_000
 
 
 class RateLimiter:
@@ -625,6 +629,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/v1/tickets/{ref}/comments", status_code=201)
     def add_comment(ref: str, body: CommentIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         t = load_ticket(db, user, ref)
+        require_open(t)  # ticket clos : plus d'échanges (rouvrir ou ouvrir un nouveau ticket)
         visible = True if user.role == "client" else body.visible_client
         clean = clean_html(body.body_html)
         if not clean.strip():
@@ -643,7 +648,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         t.body_html = clean_html(body.body_html)
         t.updated_at = utcnow()
         # Historique : la version précédente est conservée dans le registre des actions.
-        event(db, t, user, "description", {"version_precedente": previous})
+        # Taille bornée : au-delà de 20 000 caractères, l'empreinte et la longueur de la version complète
+        # restent tracées (le registre d'audit et la base ne grossissent pas de 200 ko à chaque modification).
+        kept = previous if len(previous or "") <= MAX_VERSION_CHARS else (previous or "")[:MAX_VERSION_CHARS]
+        event(db, t, user, "description", {
+            "version_precedente": kept,
+            "version_precedente_sha256": hashlib.sha256((previous or "").encode("utf-8")).hexdigest(),
+            "version_precedente_longueur": len(previous or ""),
+            "tronquee": len(previous or "") > MAX_VERSION_CHARS,
+        })
         commit(db)
         return {"ref": t.ref, "body_html": t.body_html}
 
