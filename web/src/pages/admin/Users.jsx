@@ -1,3 +1,4 @@
+import { t as tr } from '../../i18n.js'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../api.js'
 import OneTime from '../../components/OneTime.jsx'
@@ -35,7 +36,7 @@ export default function Users() {
     const picked = fd.getAll('clients')
     const r = await run(() => api('/admin/users', { method: 'POST', json: {
       username: fd.get('username'), display_name: fd.get('display_name'), email: fd.get('email') || null,
-      role, clients: role === 'admin' ? [] : picked, password: fd.get('password') } }), 'Compte créé.')
+      role, clients: role === 'admin' ? [] : picked, password: fd.get('password') } }), tr('Compte créé.'))
     if (r) {
       setForm(null)
       setMsg(grantMsg(r, `Compte ${r.username} créé. Transmettez-lui son mot de passe temporaire par un canal sûr : il activera lui-même sa double authentification à sa première connexion.`))
@@ -50,19 +51,19 @@ export default function Users() {
   const resetPwd = async (u) => {
     const password = window.prompt(`Nouveau mot de passe pour ${u.username} (12 caractères minimum)`)
     if (!password) return
-    const r = await run(() => api(`/admin/users/${encodeURIComponent(u.username)}/reset-password`, { method: 'POST', json: { password } }), 'Mot de passe réinitialisé.')
-    if (r && r.activation) setMsg(grantMsg(r, 'Mot de passe réinitialisé.'))
+    const r = await run(() => api(`/admin/users/${encodeURIComponent(u.username)}/reset-password`, { method: 'POST', json: { password } }), tr('Mot de passe réinitialisé.'))
+    if (r && r.activation) setMsg(grantMsg(r, tr('Mot de passe réinitialisé.')))
   }
   const toggle = (u) => {
     if (u.active && !window.confirm(`Désactiver ${u.username} ?`)) return
-    run(() => api(`/admin/users/${encodeURIComponent(u.username)}`, { method: 'PATCH', json: { active: !u.active } }), u.active ? 'Compte désactivé.' : 'Compte réactivé.')
+    run(() => api(`/admin/users/${encodeURIComponent(u.username)}`, { method: 'PATCH', json: { active: !u.active } }), u.active ? tr('Compte désactivé.') : tr('Compte réactivé.'))
   }
 
   return (
-    <section className="card section" aria-label="Comptes">
+    <section className="card section" aria-label={tr("Comptes")}>
       <header className="section-head">
-        <h2>Comptes</h2>
-        <button type="button" className="primary" onClick={() => setForm(form ? null : {})}>Nouveau compte</button>
+        <h2>{tr("Comptes")}</h2>
+        <button type="button" className="primary" onClick={() => setForm(form ? null : {})}>{tr("Nouveau compte")}</button>
       </header>
       {error && <p className="error" role="alert">{error}</p>}
       <p className="live" role="status">{msg}</p>
@@ -70,34 +71,34 @@ export default function Users() {
       {form && (
         <form className="subform" onSubmit={create}>
           <div className="grid2">
-            <label>Identifiant<input name="username" required pattern="[A-Za-z0-9._-]{3,64}" autoComplete="off" /></label>
-            <label>Nom affiché<input name="display_name" required /></label>
+            <label>{tr("Identifiant")}<input name="username" required pattern="[A-Za-z0-9._-]{3,64}" autoComplete="off" /></label>
+            <label>{tr("Nom affiché")}<input name="display_name" required /></label>
             <label>Courriel (facultatif)<input name="email" type="email" /></label>
-            <label>Rôle<select name="role" defaultValue="analyst">{Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+            <label>{tr("Rôle")}<select name="role" defaultValue="analyst">{Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
           </div>
           <fieldset className="fieldset"><legend>Clients (aucun pour un Admin, un seul pour un Client)</legend>
             {clients.map((c) => <label key={c.key} className="check"><input type="checkbox" name="clients" value={c.key} /> {c.key} — {c.name}</label>)}
           </fieldset>
           <label>Mot de passe initial (12 caractères minimum)<input name="password" type="password" minLength={12} required autoComplete="new-password" /></label>
-          <div className="row gap end"><button type="button" onClick={() => setForm(null)}>Annuler</button><button className="primary">Créer</button></div>
+          <div className="row gap end"><button type="button" onClick={() => setForm(null)}>{tr("Annuler")}</button><button className="primary">{tr("Créer")}</button></div>
         </form>
       )}
       <div className="table-wrap">
         <table className="grid">
-          <thead><tr><th scope="col">Identifiant</th><th scope="col">Nom</th><th scope="col">Rôle</th><th scope="col">Clients</th><th scope="col">Dernière connexion</th><th scope="col">État</th><th scope="col">Actions</th></tr></thead>
+          <thead><tr><th scope="col">{tr("Identifiant")}</th><th scope="col">{tr("Nom")}</th><th scope="col">{tr("Rôle")}</th><th scope="col">{tr("Clients")}</th><th scope="col">{tr("Dernière connexion")}</th><th scope="col">{tr("État")}</th><th scope="col">{tr("Actions")}</th></tr></thead>
           <tbody>
-            {items === null && <tr><td colSpan="7" className="muted">Chargement…</td></tr>}
+            {items === null && <tr><td colSpan="7" className="muted">{tr("Chargement…")}</td></tr>}
             {items?.map((u) => (
               <tr key={u.username}>
                 <td className="mono">{u.username}</td><td>{u.display_name}</td><td>{ROLES[u.role]}</td>
                 <td className="mono small">{u.clients.join(', ') || '—'}</td>
                 <td className="mono small">{formatUtc(u.last_login_at)}</td>
-                <td>{!u.active ? <span className="pill">Désactivé</span> : !u.enrolled ? <span className="pill warn">À activer</span> : u.locked ? <span className="pill danger">Verrouillé</span> : <span className="pill ok">Actif</span>}{u.sso && <span className="pill" title="Identité fédérée liée (SSO)" style={{ marginLeft: 6 }}>SSO</span>}</td>
+                <td>{!u.active ? <span className="pill">{tr("Désactivé")}</span> : !u.enrolled ? <span className="pill warn">{tr("À activer")}</span> : u.locked ? <span className="pill danger">{tr("Verrouillé")}</span> : <span className="pill ok">{tr("Actif")}</span>}{u.sso && <span className="pill" title={tr("Identité fédérée liée (SSO)")} style={{ marginLeft: 6 }}>{tr("SSO")}</span>}</td>
                 <td><div className="row gap wrap">
-                  <button type="button" className="small-btn" onClick={() => reset2fa(u)}>Réinit. 2FA</button>
-                  <button type="button" className="small-btn" onClick={() => resetPwd(u)}>Mot de passe</button>
-                  {u.sso && <button type="button" className="small-btn" onClick={() => window.confirm(`Délier l'identité SSO de ${u.username} ? Elle sera liée de nouveau à sa prochaine connexion SSO.`) && run(() => api(`/admin/users/${encodeURIComponent(u.username)}/unlink-sso`, { method: 'POST' }), 'Identité SSO déliée.')}>Délier SSO</button>}
-                  <button type="button" className="small-btn danger" onClick={() => toggle(u)}>{u.active ? 'Désactiver' : 'Réactiver'}</button>
+                  <button type="button" className="small-btn" onClick={() => reset2fa(u)}>{tr("Réinit. 2FA")}</button>
+                  <button type="button" className="small-btn" onClick={() => resetPwd(u)}>{tr("Mot de passe")}</button>
+                  {u.sso && <button type="button" className="small-btn" onClick={() => window.confirm(`Délier l'identité SSO de ${u.username} ? Elle sera liée de nouveau à sa prochaine connexion SSO.`) && run(() => api(`/admin/users/${encodeURIComponent(u.username)}/unlink-sso`, { method: 'POST' }), tr('Identité SSO déliée.'))}>{tr("Délier SSO")}</button>}
+                  <button type="button" className="small-btn danger" onClick={() => toggle(u)}>{u.active ? tr('Désactiver') : tr('Réactiver')}</button>
                 </div></td>
               </tr>
             ))}

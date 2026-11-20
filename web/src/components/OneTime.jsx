@@ -1,3 +1,4 @@
+import { t as tr } from '../i18n.js'
 import { useState } from 'react'
 
 // Secret affiché une seule fois (mot de passe temporaire, clé d'API, URI TOTP, codes de secours).
@@ -15,12 +16,12 @@ export default function OneTime({ title, items, onClose }) {
             <dt>{label}</dt>
             <dd><code className="mono">{Array.isArray(value) ? value.join('  ') : value}</code>{' '}
               <button type="button" className="small-btn" onClick={() => copy(label, Array.isArray(value) ? value.join('\n') : value)}>
-                {copied === label ? 'Copié' : 'Copier'}
+                {copied === label ? tr('Copié') : 'Copier'}
               </button></dd>
           </div>
         ))}
       </dl>
-      <button type="button" onClick={onClose}>J'ai noté ces valeurs</button>
+      <button type="button" onClick={onClose}>{tr("J'ai noté ces valeurs")}</button>
     </div>
   )
 }

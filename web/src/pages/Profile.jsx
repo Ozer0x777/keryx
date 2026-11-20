@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { useAuth } from '../App.jsx'
 import OneTime from '../components/OneTime.jsx'
-import { getLang, LANGS, setLang, t } from '../i18n.js'
+import { getLang, LANGS, setLang, t, t as tr } from '../i18n.js'
 import { createCredential, webauthnSupported } from '../webauthn.js'
 import { formatUtc, ROLES } from '../labels.js'
 
@@ -44,10 +44,10 @@ export default function Profile() {
     e.preventDefault()
     const fd = new FormData(e.target)
     setError(''); setMsg('')
-    if (fd.get('new') !== fd.get('confirm')) { setError('Les deux mots de passe ne correspondent pas.'); return }
+    if (fd.get('new') !== fd.get('confirm')) { setError(tr('Les deux mots de passe ne correspondent pas.')); return }
     try {
       await api('/me/password', { method: 'POST', json: { current: fd.get('current'), new: fd.get('new') } })
-      e.target.reset(); setMsg('Mot de passe modifié. Vos autres sessions ont été fermées.'); load()
+      e.target.reset(); setMsg(tr('Mot de passe modifié. Vos autres sessions ont été fermées.')); load()
     } catch (err) { setError(err.message) }
   }
   const regen = async (e) => {
@@ -56,7 +56,7 @@ export default function Profile() {
     setError(''); setMsg('')
     try {
       const r = await api('/me/recovery-codes', { method: 'POST', json: { password: fd.get('password') } })
-      e.target.reset(); setSecret({ title: 'Nouveaux codes de secours (les anciens sont invalides)', items: [['Codes de secours', r.recovery_codes]] })
+      e.target.reset(); setSecret({ title: tr('Nouveaux codes de secours (les anciens sont invalides)'), items: [['Codes de secours', r.recovery_codes]] })
     } catch (err) { setError(err.message) }
   }
   const revoke = async (id) => {
@@ -73,13 +73,13 @@ export default function Profile() {
         <header className="section-head"><h2>{t('Langue')}</h2></header>
         <select className="narrow-select" aria-label={t('Langue')} value={getLang()} onChange={(e) => setLang(e.target.value)}>{Object.entries(LANGS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
       </section>
-      <section className="card section" aria-label="Mot de passe">
-        <header className="section-head"><h2>Changer de mot de passe</h2></header>
+      <section className="card section" aria-label={tr("Mot de passe")}>
+        <header className="section-head"><h2>{tr("Changer de mot de passe")}</h2></header>
         <form onSubmit={changePassword} className="narrow">
-          <label>Mot de passe actuel<input name="current" type="password" required autoComplete="current-password" /></label>
+          <label>{tr("Mot de passe actuel")}<input name="current" type="password" required autoComplete="current-password" /></label>
           <label>Nouveau mot de passe (12 caractères minimum)<input name="new" type="password" minLength={12} required autoComplete="new-password" /></label>
-          <label>Confirmer le nouveau mot de passe<input name="confirm" type="password" minLength={12} required autoComplete="new-password" /></label>
-          <button className="primary">Modifier</button>
+          <label>{tr("Confirmer le nouveau mot de passe")}<input name="confirm" type="password" minLength={12} required autoComplete="new-password" /></label>
+          <button className="primary">{tr("Modifier")}</button>
         </form>
       </section>
       <section className="card section" aria-label={t('Clés de sécurité')}>
@@ -88,35 +88,35 @@ export default function Profile() {
         {keys.length > 0 && <ul className="found">{keys.map((k) => <li key={k.id}>{k.name} <span className="muted small">· {t('ajoutée le')} {formatUtc(k.created_at)}{k.last_used_at ? ` · ${t('utilisée le')} ${formatUtc(k.last_used_at)}` : ''}</span> <button type="button" className="small-btn danger" onClick={() => dropKey(k.id)}>{t('Retirer')}</button></li>)}</ul>}
         {webauthnSupported() ? (
           <form onSubmit={addKey} className="row gap wrap">
-            <label>{t('Nom de la clé')}<input name="name" required maxLength={80} placeholder="YubiKey bureau" /></label>
+            <label>{t('Nom de la clé')}<input name="name" required maxLength={80} placeholder={tr("YubiKey bureau")} /></label>
             <label>{t('Mot de passe')}<input name="password" type="password" required autoComplete="current-password" /></label>
             <button>{t('Ajouter une clé')}</button>
           </form>
         ) : <p className="muted small">{t("Ce navigateur ne prend pas en charge les clés de sécurité.")}</p>}
       </section>
-      <section className="card section" aria-label="Codes de secours">
-        <header className="section-head"><h2>Codes de secours</h2></header>
+      <section className="card section" aria-label={tr("Codes de secours")}>
+        <header className="section-head"><h2>{tr("Codes de secours")}</h2></header>
         <p className="muted small">Génère 10 nouveaux codes à usage unique ; les précédents cessent de fonctionner.</p>
         <form onSubmit={regen} className="row gap wrap">
-          <label>Mot de passe<input name="password" type="password" required autoComplete="current-password" /></label>
-          <button>Régénérer</button>
+          <label>{tr("Mot de passe")}<input name="password" type="password" required autoComplete="current-password" /></label>
+          <button>{tr("Régénérer")}</button>
         </form>
       </section>
       {prefs && (
-        <section className="card section" aria-label="Notifications">
-          <header className="section-head"><h2>Notifications dans l'interface</h2></header>
+        <section className="card section" aria-label={tr("Notifications")}>
+          <header className="section-head"><h2>{tr("Notifications dans l'interface")}</h2></header>
           {prefs.kinds.map((k) => (
-            <label key={k} className="check"><input type="checkbox" checked={prefs.prefs[k]} onChange={(e) => setPref(k, e.target.checked)} /> {{ assignation: 'Ticket qui m\'est affecté', mention: 'Mention dans un commentaire', echeance: 'Échéance dépassée', reponse_client: 'Réponse d\'un client' }[k]}</label>
+            <label key={k} className="check"><input type="checkbox" checked={prefs.prefs[k]} onChange={(e) => setPref(k, e.target.checked)} /> {{ assignation: 'Ticket qui m\'est affecté', mention: 'Mention dans un commentaire', echeance: 'Échéance dépassée', reponse_client: tr('Réponse d\'un client') }[k]}</label>
           ))}
         </section>
       )}
-      <section className="card section" aria-label="Sessions">
-        <header className="section-head"><h2>Sessions actives</h2></header>
+      <section className="card section" aria-label={tr("Sessions")}>
+        <header className="section-head"><h2>{tr("Sessions actives")}</h2></header>
         <div className="table-wrap"><table className="grid">
-          <thead><tr><th scope="col">Ouverte le</th><th scope="col">Dernière activité</th><th scope="col"><span className="sr-only">Action</span></th></tr></thead>
+          <thead><tr><th scope="col">{tr("Ouverte le")}</th><th scope="col">{tr("Dernière activité")}</th><th scope="col"><span className="sr-only">{tr("Action")}</span></th></tr></thead>
           <tbody>{sessions?.map((s) => (
             <tr key={s.id}><td className="mono small">{formatUtc(s.created_at)}</td><td className="mono small">{formatUtc(s.last_seen_at)}</td>
-              <td><button type="button" className="small-btn danger" onClick={() => revoke(s.id)}>Fermer</button></td></tr>))}
+              <td><button type="button" className="small-btn danger" onClick={() => revoke(s.id)}>{tr("Fermer")}</button></td></tr>))}
           </tbody></table></div>
       </section>
     </>

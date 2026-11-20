@@ -123,7 +123,7 @@ Matrice complète : `docs/matrice-tracabilite.md` · exploitation : `docs/exploi
 - PostgreSQL 16 : la suite complète passe (188 tests, dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore). Non testé : haute disponibilité, réplication, très gros volumes.
 - Jamais testé contre un vrai manager Wazuh (le script d'intégration est testé avec un serveur simulé).
 - Interface testée dans Chrome sans tête (parcours de chaque rôle) et contrôlée avec axe-core (WCAG 2.1 A/AA) ; pas d'audit RGAA complet ni de test d'intrusion.
-- Pas encore : déconnexion unique du SSO, traduction complète de l'interface en anglais (navigation, connexion, liste, Kanban et profil sont traduits ; les autres écrans retombent sur le français), format ETSI ISI, validation IODEF contre le schéma officiel complet, PDF généré côté serveur (impression du navigateur à la place).
+- Pas encore : déconnexion unique du SSO, format ETSI ISI, validation IODEF contre le schéma officiel complet, PDF généré côté serveur (impression du navigateur à la place).
 
 Un outil ne qualifie pas un prestataire : Keryx fournit les registres, la traçabilité et le
 cloisonnement exigés par PDIS/PRIS, la qualification reste organisationnelle.

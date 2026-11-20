@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../App.jsx'
-import { t } from '../i18n.js'
+import { t, t as tr } from '../i18n.js'
 import { ROLES } from '../labels.js'
 import NotificationBell from './NotificationBell.jsx'
 
@@ -25,7 +25,7 @@ export default function Layout() {
   return (
     <div className="shell">
       <nav className="sidebar" aria-label={t('Navigation principale')}>
-        <div className="brand"><Shield /><span>Keryx</span></div>
+        <div className="brand"><Shield /><span>{tr("Keryx")}</span></div>
         <div className="nav-section">{{ client: t('Portail client'), admin: t('Administration') }[me.role] || t('Détection')}</div>
         {links.map(([to, label]) => (
           <NavLink key={to} to={to} className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>{label}</NavLink>

@@ -44,7 +44,7 @@ export default function Kanban() {
         </div>
         <div className="segmented" role="group" aria-label={tr('Type de vue')}>
           <Link to="/tickets">{tr('Liste')}</Link>
-          <Link to="/kanban" className="on" aria-current="page">Kanban</Link>
+          <Link to="/kanban" className="on" aria-current="page">{tr("Kanban")}</Link>
         </div>
       </header>
       <label className="check"><input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} /> {tr('Mes tickets seulement')}</label>
@@ -66,19 +66,19 @@ export default function Kanban() {
                 <Link to={`/tickets/${encodeURIComponent(t.ref)}`} className="kcard-title">{t.title}</Link>
                 <div className="row wrap gap">
                   <Severity value={t.gravite || t.criticite_initiale} />
-                  <span className="mono chip">{t.mitre[0] || 'MITRE ?'}</span>
+                  <span className="mono chip">{t.mitre[0] || tr('MITRE ?')}</span>
                   <Tlp value={t.tlp} />
-                  {t.status === 'faux_positif' && <span className="pill">Faux positif</span>}
-                  {t.rex_en_attente && <span className="pill warn">REX</span>}
-                  {t.overdue && <span className="pill danger">En retard</span>}
+                  {t.status === 'faux_positif' && <span className="pill">{tr("Faux positif")}</span>}
+                  {t.rex_en_attente && <span className="pill warn">{tr("REX")}</span>}
+                  {t.overdue && <span className="pill danger">{tr("En retard")}</span>}
                 </div>
                 <div className="row gap small muted">
                   <span className="mono ref">{t.ref}</span><span>{t.client}</span>
-                  <span className="push">{t.assignee || 'non assigné'}</span>
+                  <span className="push">{t.assignee || tr('non assigné')}</span>
                 </div>
                 <label className="sr-only" htmlFor={`mv-${t.ref}`}>Changer le statut de {t.ref}</label>
                 <select id={`mv-${t.ref}`} className="move" value="" onChange={(e) => move(t, e.target.value)}>
-                  <option value="">Déplacer…</option>
+                  <option value="">{tr("Déplacer…")}</option>
                   {(TRANSITIONS[t.status] || []).map((s) => <option key={s} value={s}>{STATUS[s].label}</option>)}
                 </select>
               </article>

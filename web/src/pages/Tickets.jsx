@@ -7,7 +7,7 @@ import { t as tr } from '../i18n.js'
 import { formatUtc, MITRE_SOURCE, STATUS } from '../labels.js'
 
 const EMPTY = { status: '', client: '', rex_en_attente: false, q: '', assignee: '', overdue: false, sort: 'created', order: 'desc' }
-const VIEWS = [['Tous', {}], ['Mes tickets', { assignee: 'me' }], ['Non assignés', { assignee: 'none' }], ['En retard', { overdue: true }]]
+const VIEWS = [['Tous', {}], ['Mes tickets', { assignee: 'me' }], [tr('Non assignés'), { assignee: 'none' }], ['En retard', { overdue: true }]]
 
 function SortHeader({ label, col, filters, set }) {
   const on = filters.sort === col
@@ -94,7 +94,7 @@ export default function Tickets() {
         {!isClient && (
           <div className="segmented" role="group" aria-label={tr('Type de vue')}>
             <Link to="/tickets" className="on" aria-current="page">{tr('Liste')}</Link>
-            <Link to="/kanban">Kanban</Link>
+            <Link to="/kanban">{tr("Kanban")}</Link>
           </div>
         )}
       </header>
@@ -140,7 +140,7 @@ export default function Tickets() {
         {me.clients.length > 1 && (
           <label className="filter">{tr('Client')}
             <select value={filters.client} onChange={(e) => set({ client: e.target.value })}>
-              <option value="">Tous</option>
+              <option value="">{tr("Tous")}</option>
               {me.clients.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
             </select>
           </label>
@@ -180,13 +180,13 @@ export default function Tickets() {
         <table className="grid">
           <thead>
             <tr>
-              {!isClient && <th scope="col"><span className="sr-only">Sélection</span></th>}
+              {!isClient && <th scope="col"><span className="sr-only">{tr("Sélection")}</span></th>}
               <SortHeader label={tr('Réf.')} col="ref" filters={filters} set={set} /><th scope="col">{tr('Titre')}</th>
               {me.clients.length > 1 && <th scope="col">{tr('Client')}</th>}
               <th scope="col">{tr('Criticité')}</th><th scope="col">{tr('Gravité')}</th><SortHeader label={tr('Statut')} col="status" filters={filters} set={set} />
               <th scope="col">MITRE ATT&amp;CK</th>
               {!isClient && <th scope="col">{tr('Assigné')}</th>}
-              <SortHeader label={tr('Détecté')} col="detected" filters={filters} set={set} /><th scope="col">TLP</th>
+              <SortHeader label={tr('Détecté')} col="detected" filters={filters} set={set} /><th scope="col">{tr("TLP")}</th>
               <SortHeader label={tr('Occur.')} col="occurrences" filters={filters} set={set} />
             </tr>
           </thead>
@@ -197,11 +197,11 @@ export default function Tickets() {
               <tr key={t.ref} className={t.overdue ? 'overdue' : ''}>
                 {!isClient && <td><input type="checkbox" aria-label={`Sélectionner ${t.ref}`} checked={picked.has(t.ref)} onChange={() => toggle(t.ref)} /></td>}
                 <td className="mono"><Link to={`/tickets/${encodeURIComponent(t.ref)}`}>{t.ref}</Link></td>
-                <td className="strong title-cell">{t.title}{t.overdue && <span className="pill danger" style={{ marginLeft: 8 }}>{tr('En retard')}</span>}{t.crisis && <span className="pill danger" style={{ marginLeft: 8 }}>CRISE</span>}</td>
+                <td className="strong title-cell">{t.title}{t.overdue && <span className="pill danger" style={{ marginLeft: 8 }}>{tr('En retard')}</span>}{t.crisis && <span className="pill danger" style={{ marginLeft: 8 }}>{tr("CRISE")}</span>}</td>
                 {me.clients.length > 1 && <td className="mono small" title={t.client}>{t.client_key}</td>}
                 <td><Severity value={t.criticite_initiale} /></td>
                 <td><Severity value={t.gravite} /></td>
-                <td><Status value={t.status} />{t.rex_en_attente && <span className="pill warn">REX</span>}</td>
+                <td><Status value={t.status} />{t.rex_en_attente && <span className="pill warn">{tr("REX")}</span>}</td>
                 <td title={`${tr('Source')} : ${MITRE_SOURCE[t.mitre_source]}`}><span className="mono">{t.mitre.join(', ') || '—'}</span></td>
                 {!isClient && <td>{t.assignee || '—'}</td>}
                 <td className="mono small">{formatUtc(t.detected_at)}</td>

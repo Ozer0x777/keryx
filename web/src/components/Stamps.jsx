@@ -1,3 +1,4 @@
+import { t as tr } from '../i18n.js'
 import { useCallback, useEffect, useState } from 'react'
 import { api, downloadBlob } from '../api.js'
 import { formatUtc } from '../labels.js'
@@ -15,9 +16,9 @@ export default function Stamps({ attachmentId, canStamp }) {
   return (
     <div className="stamps small">
       {data.items.map((t) => (
-        <div key={t.id}><span className="pill ok">Horodaté</span> {formatUtc(t.gen_time)} <button type="button" className="link" onClick={() => verify(t.id)}>Vérifier</button> · <button type="button" className="link" onClick={() => token(t)}>Jeton .tsr</button></div>
+        <div key={t.id}><span className="pill ok">{tr("Horodaté")}</span> {formatUtc(t.gen_time)} <button type="button" className="link" onClick={() => verify(t.id)}>{tr("Vérifier")}</button> · <button type="button" className="link" onClick={() => token(t)}>{tr("Jeton .tsr")}</button></div>
       ))}
-      {canStamp && data.enabled && <button type="button" className="small-btn" onClick={stamp}>{data.items.length ? 'Horodater de nouveau' : 'Horodater (RFC 3161)'}</button>}
+      {canStamp && data.enabled && <button type="button" className="small-btn" onClick={stamp}>{data.items.length ? tr('Horodater de nouveau') : tr('Horodater (RFC 3161)')}</button>}
       {msg && <div role="status" className={msg.includes('NON') ? 'error' : 'muted'}>{msg}</div>}
     </div>
   )

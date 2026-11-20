@@ -1,3 +1,4 @@
+import { t as tr } from '../i18n.js'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { formatUtc } from '../labels.js'
@@ -18,22 +19,22 @@ export default function AuditViewer() {
   useEffect(() => { query() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
   return (
-    <section className="card section" aria-label="Consultation du journal">
-      <header className="section-head"><h2>Consulter le journal</h2></header>
+    <section className="card section" aria-label={tr("Consultation du journal")}>
+      <header className="section-head"><h2>{tr("Consulter le journal")}</h2></header>
       <form className="filters" onSubmit={(e) => { e.preventDefault(); query() }}>
-        <label className="filter">Auteur<input value={f.actor} onChange={set('actor')} /></label>
-        <label className="filter">Action (début)<input value={f.action} onChange={set('action')} placeholder="ticket." /></label>
-        <label className="filter">Client<input value={f.client} onChange={set('client')} placeholder="ACME" /></label>
-        <label className="filter">Du<input type="date" value={f.from} onChange={set('from')} /></label>
-        <label className="filter">Au<input type="date" value={f.to} onChange={set('to')} /></label>
-        <button className="primary">Filtrer</button>
+        <label className="filter">{tr("Auteur")}<input value={f.actor} onChange={set('actor')} /></label>
+        <label className="filter">Action (début)<input value={f.action} onChange={set('action')} placeholder={tr("ticket.")} /></label>
+        <label className="filter">{tr("Client")}<input value={f.client} onChange={set('client')} placeholder={tr("ACME")} /></label>
+        <label className="filter">{tr("Du")}<input type="date" value={f.from} onChange={set('from')} /></label>
+        <label className="filter">{tr("Au")}<input type="date" value={f.to} onChange={set('to')} /></label>
+        <button className="primary">{tr("Filtrer")}</button>
       </form>
       {error && <p className="error" role="alert">{error}</p>}
-      <div className="table-wrap" tabIndex={0} role="region" aria-label="Entrées du journal d'audit"><table className="grid">
-        <thead><tr><th scope="col" className="num">N°</th><th scope="col">Date</th><th scope="col">Auteur</th><th scope="col">Action</th><th scope="col">Objet</th><th scope="col">Client</th><th scope="col">Détails</th></tr></thead>
+      <div className="table-wrap" tabIndex={0} role="region" aria-label={tr("Entrées du journal d'audit")}><table className="grid">
+        <thead><tr><th scope="col" className="num">N°</th><th scope="col">{tr("Date")}</th><th scope="col">{tr("Auteur")}</th><th scope="col">{tr("Action")}</th><th scope="col">{tr("Objet")}</th><th scope="col">{tr("Client")}</th><th scope="col">{tr("Détails")}</th></tr></thead>
         <tbody>
-          {items === null && <tr><td colSpan="7" className="muted">Chargement…</td></tr>}
-          {items?.length === 0 && <tr><td colSpan="7" className="muted">Aucune entrée.</td></tr>}
+          {items === null && <tr><td colSpan="7" className="muted">{tr("Chargement…")}</td></tr>}
+          {items?.length === 0 && <tr><td colSpan="7" className="muted">{tr("Aucune entrée.")}</td></tr>}
           {items?.map((e) => (
             <tr key={e.seq}>
               <td className="num mono small">{e.seq}</td><td className="mono small">{formatUtc(e.ts)}</td><td className="small">{e.actor}</td>
@@ -43,7 +44,7 @@ export default function AuditViewer() {
           ))}
         </tbody>
       </table></div>
-      {next && <p><button type="button" onClick={() => query(next)}>Charger les entrées plus anciennes</button></p>}
+      {next && <p><button type="button" onClick={() => query(next)}>{tr("Charger les entrées plus anciennes")}</button></p>}
     </section>
   )
 }

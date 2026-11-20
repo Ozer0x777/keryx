@@ -1,3 +1,4 @@
+import { t as tr } from '../i18n.js'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
@@ -33,24 +34,24 @@ export default function RichEditor({ value, onChange, label, onImage, templates,
   }
   return (
     <div className="editor">
-      <div className="toolbar" role="toolbar" aria-label="Mise en forme">
+      <div className="toolbar" role="toolbar" aria-label={tr("Mise en forme")}>
         {btn('H2', 'Titre', () => editor.chain().focus().toggleHeading({ level: 2 }).run(), editor.isActive('heading', { level: 2 }))}
         {btn('B', 'Gras', () => editor.chain().focus().toggleBold().run(), editor.isActive('bold'))}
         {btn('I', 'Italique', () => editor.chain().focus().toggleItalic().run(), editor.isActive('italic'))}
-        {btn('•', 'Liste à puces', () => editor.chain().focus().toggleBulletList().run(), editor.isActive('bulletList'))}
-        {btn('1.', 'Liste numérotée', () => editor.chain().focus().toggleOrderedList().run(), editor.isActive('orderedList'))}
-        {btn('{ }', 'Bloc de code', () => editor.chain().focus().toggleCodeBlock().run(), editor.isActive('codeBlock'))}
+        {btn('•', tr('Liste à puces'), () => editor.chain().focus().toggleBulletList().run(), editor.isActive('bulletList'))}
+        {btn('1.', tr('Liste numérotée'), () => editor.chain().focus().toggleOrderedList().run(), editor.isActive('orderedList'))}
+        {btn('{ }', tr('Bloc de code'), () => editor.chain().focus().toggleCodeBlock().run(), editor.isActive('codeBlock'))}
         {btn('↗', 'Lien', setLink, editor.isActive('link'))}
         {templates?.length > 0 && (
-          <select className="tpl" aria-label="Insérer un modèle" value="" onChange={(e) => {
+          <select className="tpl" aria-label={tr("Insérer un modèle")} value="" onChange={(e) => {
             const m = templates.find((x) => x.id === e.target.value)
             if (m) editor.chain().focus().insertContent(m.body_html).run()
           }}>
-            <option value="">Modèle…</option>
+            <option value="">{tr("Modèle…")}</option>
             {templates.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
         )}
-        {onImage && btn('▣', 'Image (PNG, JPEG, WebP)', () => fileRef.current?.click(), false)}
+        {onImage && btn('▣', tr('Image (PNG, JPEG, WebP)'), () => fileRef.current?.click(), false)}
         {onImage && (
           <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden
             onChange={async (e) => {

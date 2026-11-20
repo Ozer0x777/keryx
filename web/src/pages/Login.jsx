@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api.js'
 import OneTime from '../components/OneTime.jsx'
-import { getLang, LANGS, setLang, t } from '../i18n.js'
+import { getLang, LANGS, setLang, t, t as tr } from '../i18n.js'
 import { getAssertion, webauthnSupported } from '../webauthn.js'
 
 const SSO_ERRORS = {
@@ -88,12 +88,12 @@ export default function Login({ onDone }) {
 
   return (
     <div className="login">
-      <section className="login-side" aria-label="Présentation">
+      <section className="login-side" aria-label={tr("Présentation")}>
         <span className="brand big">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#5B8DEF" strokeWidth="2" aria-hidden="true">
             <path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" /><path d="M9 12l2 2 4-4" />
           </svg>
-          <span>Keryx</span>
+          <span>{tr("Keryx")}</span>
         </span>
         <p className="tagline">{t('Gestion des incidents de sécurité')}</p>
         <ul>
@@ -108,7 +108,7 @@ export default function Login({ onDone }) {
             codes ? (
               <div>
                 <h1>{t('Compte activé')}</h1>
-                <OneTime title="Vos codes de secours" items={[['Codes de secours (usage unique)', codes]]} onClose={onDone} />
+                <OneTime title={tr("Vos codes de secours")} items={[[tr('Codes de secours (usage unique)'), codes]]} onClose={onDone} />
               </div>
             ) : (
               <form onSubmit={submitEnroll}>
@@ -117,8 +117,8 @@ export default function Login({ onDone }) {
                 <p className="muted">1. Ajoutez ce compte dans votre application d'authentification (FreeOTP, Aegis, Google Authenticator…) avec la clé ci-dessous.</p>
                 <p className="mono small" style={{ wordBreak: 'break-all' }} data-testid="totp-secret">{enroll?.totp_secret}</p>
                 <details><summary className="small">Adresse de configuration (otpauth)</summary><p className="mono small" style={{ wordBreak: 'break-all' }}>{enroll?.totp_uri}</p></details>
-                <p className="muted">2. Saisissez le code à 6 chiffres affiché, puis choisissez votre mot de passe personnel.</p>
-                <label htmlFor="ecode">Code TOTP</label>
+                <p className="muted">{tr("2. Saisissez le code à 6 chiffres affiché, puis choisissez votre mot de passe personnel.")}</p>
+                <label htmlFor="ecode">{tr("Code TOTP")}</label>
                 <input id="ecode" className="otp" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.trim())} required />
                 <label htmlFor="np">{t('Nouveau mot de passe (12 caractères minimum)')}</label>
                 <input id="np" type="password" autoComplete="new-password" minLength={12} value={newPwd} onChange={(e) => setNewPwd(e.target.value)} required />
@@ -130,13 +130,13 @@ export default function Login({ onDone }) {
             )
           ) : step === 4 ? (
             <form onSubmit={submitActivation}>
-              <span className="eyebrow">Première connexion</span>
+              <span className="eyebrow">{tr("Première connexion")}</span>
               <h1>{t("Code d'activation")}</h1>
               <p className="muted">Saisissez le code d'activation qui vous a été remis (par courriel ou par votre administrateur).</p>
               <label htmlFor="act">{t("Code d'activation")}</label>
               <input id="act" autoComplete="off" value={activation} onChange={(e) => setActivation(e.target.value)} required />
               {error && <p className="error" role="alert">{error}</p>}
-              <button className="primary wide" disabled={busy}>Continuer</button>
+              <button className="primary wide" disabled={busy}>{tr("Continuer")}</button>
             </form>
           ) : step === 1 ? (
             <form onSubmit={submitPassword}>
@@ -183,7 +183,7 @@ export default function Login({ onDone }) {
           )}
         </div>
         <p className="lang-switch">
-          <label className="sr-only" htmlFor="lang">Langue / Language</label>
+          <label className="sr-only" htmlFor="lang">{tr("Langue / Language")}</label>
           <select id="lang" value={getLang()} onChange={(e) => setLang(e.target.value)}>
             {Object.entries(LANGS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>

@@ -1,8 +1,9 @@
+import { t as tr } from '../i18n.js'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { formatUtc } from '../labels.js'
 
-const KINDS = { decision: 'Décisions', action: "Plan d'action", synthese: 'Synthèse de crise' }
+const KINDS = { decision: tr('Décisions'), action: tr("Plan d'action"), synthese: tr('Synthèse de crise') }
 
 // Registre de crise d'un ticket. [PRIS VI.5.5.1] Texte brut : jamais interprété comme du HTML.
 export default function Crisis({ t, enc, isManager, open, onChange }) {
@@ -14,7 +15,7 @@ export default function Crisis({ t, enc, isManager, open, onChange }) {
 
   const call = async (fn) => { setError(''); try { setC(await fn()); onChange?.() } catch (e) { setError(e.message) } }
   const toggle = (active) => {
-    const reason = window.prompt(active ? 'Motif de l\'ouverture du mode crise' : 'Motif de la clôture de la crise')
+    const reason = window.prompt(active ? tr('Motif de l\'ouverture du mode crise') : tr('Motif de la clôture de la crise'))
     if (!reason) return
     call(() => api(`/tickets/${enc}/crisis`, { method: 'POST', json: { active, reason } }))
   }
@@ -28,24 +29,24 @@ export default function Crisis({ t, enc, isManager, open, onChange }) {
   if (!c) return error ? <p className="error" role="alert">{error}</p> : null
   if (!c.active) {
     return open ? (
-      <section className="card section" aria-label="Mode crise">
-        <header className="section-head"><h2>Mode crise</h2><button type="button" className="danger" onClick={() => toggle(true)}>Ouvrir le mode crise</button></header>
+      <section className="card section" aria-label={tr("Mode crise")}>
+        <header className="section-head"><h2>{tr("Mode crise")}</h2><button type="button" className="danger" onClick={() => toggle(true)}>{tr("Ouvrir le mode crise")}</button></header>
         <p className="muted small">Active le registre des décisions, le plan d'action et la synthèse de crise (PRIS VI.5.5.1).</p>
         {error && <p className="error" role="alert">{error}</p>}
       </section>
     ) : null
   }
   return (
-    <section className="card section crisis" aria-label="Mode crise">
+    <section className="card section crisis" aria-label={tr("Mode crise")}>
       <header className="section-head">
-        <h2>Mode crise <span className="pill danger">ACTIF depuis {formatUtc(c.started_at)}</span></h2>
-        {isManager && <button type="button" onClick={() => toggle(false)}>Clore la crise</button>}
+        <h2>{tr("Mode crise")} <span className="pill danger">ACTIF depuis {formatUtc(c.started_at)}</span></h2>
+        {isManager && <button type="button" onClick={() => toggle(false)}>{tr("Clore la crise")}</button>}
       </header>
       {error && <p className="error" role="alert">{error}</p>}
       {Object.entries(KINDS).map(([k, label]) => (
         <div key={k}>
           <h3>{label}</h3>
-          {c.items.filter((e) => e.kind === k).length === 0 && <p className="muted small">Aucune entrée.</p>}
+          {c.items.filter((e) => e.kind === k).length === 0 && <p className="muted small">{tr("Aucune entrée.")}</p>}
           <ul className="crisis-list">
             {c.items.filter((e) => e.kind === k).map((e) => (
               <li key={e.id} className={e.done ? 'done' : ''}>
@@ -63,12 +64,12 @@ export default function Crisis({ t, enc, isManager, open, onChange }) {
       {open && (
         <form className="subform" onSubmit={add}>
           <div className="grid2">
-            <label>Type<select value={kind} onChange={(e) => setKind(e.target.value)}>{Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
-            {kind === 'action' && <label>Responsable<input name="owner" maxLength={120} /></label>}
+            <label>{tr("Type")}<select value={kind} onChange={(e) => setKind(e.target.value)}>{Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+            {kind === 'action' && <label>{tr("Responsable")}<input name="owner" maxLength={120} /></label>}
           </div>
-          {kind === 'action' && <label>Échéance<input type="datetime-local" name="due_at" /></label>}
-          <label>Contenu<textarea name="body" required maxLength={5000} rows={3} /></label>
-          <div className="row end"><button className="primary">Ajouter au registre</button></div>
+          {kind === 'action' && <label>{tr("Échéance")}<input type="datetime-local" name="due_at" /></label>}
+          <label>{tr("Contenu")}<textarea name="body" required maxLength={5000} rows={3} /></label>
+          <div className="row end"><button className="primary">{tr("Ajouter au registre")}</button></div>
         </form>
       )}
     </section>

@@ -1,3 +1,4 @@
+import { t as tr } from '../i18n.js'
 // Graphiques sans bibliothèque ni ressource externe. Chaque graphique a un équivalent texte (tableau ou libellés).
 export function BarList({ rows, colors = {}, label }) {
   const max = Math.max(1, ...rows.map((r) => r.value))
@@ -5,8 +6,8 @@ export function BarList({ rows, colors = {}, label }) {
     <ul className="barlist" aria-label={label}>
       {rows.map((r) => (
         <li key={r.label}>
-          <span className="bl-label">{r.label}</span>
-          <span className="bl-track" aria-hidden="true"><span className="bl-fill" style={{ width: `${(100 * r.value) / max}%`, background: colors[r.label] || 'var(--accent)' }} /></span>
+          <span className="bl-label">{tr(r.label)}</span>
+          <span className="bl-track" aria-hidden="true"><span className="bl-fill" style={{ width: `${(100 * r.value) / max}%`, background: colors[r.key || r.label] || 'var(--accent)' }} /></span>
           <span className="bl-value mono">{r.value}</span>
         </li>
       ))}
@@ -25,7 +26,7 @@ export function TrendChart({ data }) {
   const tick = Math.max(1, Math.ceil(data.length / 6))
   return (
     <figure className="trend">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Tickets créés et clos par jour">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={tr("Tickets créés et clos par jour")}>
         {[0, 0.5, 1].map((f) => (
           <g key={f}><line x1={pad.l} x2={W - pad.r} y1={y(max * f)} y2={y(max * f)} stroke="#E3E6EB" /><text x={pad.l - 4} y={y(max * f) + 4} textAnchor="end" fontSize="10" fill="#5B6472">{Math.round(max * f)}</text></g>
         ))}
@@ -40,9 +41,9 @@ export function TrendChart({ data }) {
           )
         })}
       </svg>
-      <figcaption className="muted small"><span className="key" style={{ background: '#1F5FD1' }} /> créés <span className="key" style={{ background: '#1B6B3A' }} /> clos</figcaption>
-      <details><summary className="small">Voir les valeurs en tableau</summary>
-        <table className="grid"><thead><tr><th scope="col">Jour</th><th scope="col" className="num">Créés</th><th scope="col" className="num">Clos</th></tr></thead>
+      <figcaption className="muted small"><span className="key" style={{ background: '#1F5FD1' }} /> {tr("créés")} <span className="key" style={{ background: '#1B6B3A' }} /> {tr("clos")}</figcaption>
+      <details><summary className="small">{tr("Voir les valeurs en tableau")}</summary>
+        <table className="grid"><thead><tr><th scope="col">{tr("Jour")}</th><th scope="col" className="num">{tr("Créés")}</th><th scope="col" className="num">{tr("Clos")}</th></tr></thead>
           <tbody>{data.filter((d) => d.created || d.closed).map((d) => <tr key={d.date}><td className="mono">{d.date}</td><td className="num">{d.created}</td><td className="num">{d.closed}</td></tr>)}</tbody></table>
       </details>
     </figure>

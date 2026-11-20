@@ -1,3 +1,4 @@
+import { t as tr } from '../../i18n.js'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../api.js'
 
@@ -37,42 +38,42 @@ export default function Mitre() {
     try { await api(`/mitre/mappings/${m.id}`, { method: 'DELETE' }); load() } catch (err) { setError(err.message) }
   }
   return (
-    <section className="card section" aria-label="Table MITRE">
+    <section className="card section" aria-label={tr("Table MITRE")}>
       <header className="section-head"><h2>Table de correspondance MITRE ATT&amp;CK</h2></header>
-      <p className="muted small">Utilisée quand Wazuh ne fournit pas la technique : d'abord l'identifiant de règle, puis le groupe de règles.</p>
+      <p className="muted small">{tr("Utilisée quand Wazuh ne fournit pas la technique : d'abord l'identifiant de règle, puis le groupe de règles.")}</p>
       {error && <p className="error" role="alert">{error}</p>}
       <p className="live" role="status">{msg}</p>
       {sugg.length > 0 && (
-        <div className="subform" role="region" aria-label="Propositions">
-          <h3 style={{ marginTop: 0 }}>Propositions</h3>
-          <p className="muted small">Ces techniques ont été ajoutées à la main sur plusieurs tickets de la même règle. Les ajouter à la table évite de les saisir à chaque fois.</p>
+        <div className="subform" role="region" aria-label={tr("Propositions")}>
+          <h3 style={{ marginTop: 0 }}>{tr("Propositions")}</h3>
+          <p className="muted small">{tr("Ces techniques ont été ajoutées à la main sur plusieurs tickets de la même règle. Les ajouter à la table évite de les saisir à chaque fois.")}</p>
           <ul className="found">{sugg.map((s) => (
-            <li key={s.rule_id + s.technique}>règle <span className="mono">{s.rule_id}</span> ({s.rule_description}) → <span className="mono">{s.technique}</span> {s.name} · {s.count} correction(s)
-              {' '}<button type="button" className="small-btn" onClick={() => accept(s)}>Ajouter à la table</button></li>))}</ul>
+            <li key={s.rule_id + s.technique}>{tr("règle")} <span className="mono">{s.rule_id}</span> ({s.rule_description}) → <span className="mono">{s.technique}</span> {s.name} · {s.count} correction(s)
+              {' '}<button type="button" className="small-btn" onClick={() => accept(s)}>{tr("Ajouter à la table")}</button></li>))}</ul>
         </div>
       )}
       <div className="subform">
         <label>Importer le référentiel ATT&amp;CK (fichier STIX 2.1, par exemple enterprise-attack.json téléchargé hors de Keryx)
           <input type="file" accept=".json,application/json" onChange={importStix} /></label>
-        <p className="muted small">Fournit le nom et les tactiques des techniques corrigées à la main. Aucune connexion sortante : le fichier est déposé ici.</p>
+        <p className="muted small">{tr("Fournit le nom et les tactiques des techniques corrigées à la main. Aucune connexion sortante : le fichier est déposé ici.")}</p>
       </div>
       <form className="row gap wrap" onSubmit={add}>
-        <label>Type<select name="scope"><option value="group">Groupe de règles</option><option value="rule">Identifiant de règle</option></select></label>
-        <label>Valeur<input name="target" required placeholder="authentication_failures" /></label>
-        <label>Technique<input name="technique" required placeholder="T1110" /></label>
-        <label>Nom<input name="name" placeholder="Brute Force" /></label>
-        <label>Tactique<input name="tactic" placeholder="Credential Access" /></label>
-        <button className="primary">Ajouter</button>
+        <label>{tr("Type")}<select name="scope"><option value="group">{tr("Groupe de règles")}</option><option value="rule">{tr("Identifiant de règle")}</option></select></label>
+        <label>{tr("Valeur")}<input name="target" required placeholder={tr("authentication_failures")} /></label>
+        <label>{tr("Technique")}<input name="technique" required placeholder="T1110" /></label>
+        <label>{tr("Nom")}<input name="name" placeholder={tr("Brute Force")} /></label>
+        <label>{tr("Tactique")}<input name="tactic" placeholder={tr("Credential Access")} /></label>
+        <button className="primary">{tr("Ajouter")}</button>
       </form>
       <div className="table-wrap"><table className="grid">
-        <thead><tr><th scope="col">Règle / groupe</th><th scope="col">Technique</th><th scope="col">Nom</th><th scope="col">Tactique</th><th scope="col">Ajoutée par</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
+        <thead><tr><th scope="col">{tr("Règle / groupe")}</th><th scope="col">{tr("Technique")}</th><th scope="col">{tr("Nom")}</th><th scope="col">{tr("Tactique")}</th><th scope="col">{tr("Ajoutée par")}</th><th scope="col"><span className="sr-only">{tr("Actions")}</span></th></tr></thead>
         <tbody>
-          {items === null && <tr><td colSpan="6" className="muted">Chargement…</td></tr>}
-          {items?.length === 0 && <tr><td colSpan="6" className="muted">Aucune correspondance.</td></tr>}
+          {items === null && <tr><td colSpan="6" className="muted">{tr("Chargement…")}</td></tr>}
+          {items?.length === 0 && <tr><td colSpan="6" className="muted">{tr("Aucune correspondance.")}</td></tr>}
           {items?.map((m) => (
             <tr key={m.id}><td className="mono small">{m.rule_id ? `règle ${m.rule_id}` : `groupe ${m.rule_group}`}</td>
               <td className="mono">{m.technique}</td><td>{m.name}</td><td>{m.tactic}</td><td className="small">{m.created_by}</td>
-              <td><button type="button" className="small-btn danger" onClick={() => remove(m)}>Supprimer</button></td></tr>
+              <td><button type="button" className="small-btn danger" onClick={() => remove(m)}>{tr("Supprimer")}</button></td></tr>
           ))}
         </tbody>
       </table></div>

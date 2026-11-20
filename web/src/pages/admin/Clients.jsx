@@ -1,3 +1,4 @@
+import { t as tr } from '../../i18n.js'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../api.js'
 import { DOMMAGES, IMPORTANCES } from '../../labels.js'
@@ -34,25 +35,25 @@ function ClientEditor({ client, onSaved, onError }) {
       <label>Contacts de notification (séparés par des virgules)<input value={emails} onChange={(e) => setEmails(e.target.value)} /></label>
       <label>Rétention des alertes brutes, en mois (6 minimum, vide = valeur par défaut)<input type="number" min="6" max="120" value={retention} onChange={(e) => setRetention(e.target.value)} /></label>
       <label>Taille maximale d'une pièce, en Mo (1 à 20, vide = 20 : plafond fixé par le plan)<input type="number" min="1" max="20" value={maxMb} onChange={(e) => setMaxMb(e.target.value)} /></label>
-      <h3>Grille de gravité {grid ? '(propre au client)' : '(grille par défaut)'}</h3>
+      <h3>Grille de gravité {grid ? tr('(propre au client)') : tr('(grille par défaut)')}</h3>
       <div className="table-wrap"><table className="grid">
-        <thead><tr><th scope="col">Dommages \ Importance</th>{Object.entries(IMPORTANCES).map(([k, v]) => <th key={k} scope="col">{v}</th>)}</tr></thead>
+        <thead><tr><th scope="col">{tr("Dommages \\ Importance")}</th>{Object.entries(IMPORTANCES).map(([k, v]) => <th key={k} scope="col">{v}</th>)}</tr></thead>
         <tbody>{Object.entries(DOMMAGES).map(([d, dl]) => (
           <tr key={d}><th scope="row">{dl}</th>{Object.keys(IMPORTANCES).map((i) => (
             <td key={i}><select aria-label={`${dl}, ${IMPORTANCES[i]}`} value={g[d][i]}
               onChange={(e) => setGrid({ ...g, [d]: { ...g[d], [i]: e.target.value } })}>
-              {SEVS.map((s) => <option key={s}>{s}</option>)}</select></td>))}</tr>))}
+              {SEVS.map((s) => <option key={s} value={s}>{tr(s)}</option>)}</select></td>))}</tr>))}
         </tbody></table></div>
-      {grid && <button type="button" className="link" onClick={() => setGrid(null)}>Revenir à la grille par défaut</button>}
+      {grid && <button type="button" className="link" onClick={() => setGrid(null)}>{tr("Revenir à la grille par défaut")}</button>}
       <h3>Délais cibles (heures)</h3>
       <div className="table-wrap"><table className="grid">
-        <thead><tr><th scope="col">Gravité</th><th scope="col">Qualification</th><th scope="col">Résolution</th></tr></thead>
+        <thead><tr><th scope="col">{tr("Gravité")}</th><th scope="col">{tr("Qualification")}</th><th scope="col">{tr("Résolution")}</th></tr></thead>
         <tbody>{SEVS.map((s) => (
           <tr key={s}><th scope="row">{s}</th>{['qualification', 'resolution'].map((k) => (
             <td key={k}><input type="number" min="0" step="0.5" aria-label={`${s}, ${k}`} value={sla[s]?.[k] ?? ''}
               onChange={(e) => setSla({ ...sla, [s]: { ...sla[s], [k]: e.target.value } })} /></td>))}</tr>))}
         </tbody></table></div>
-      <div className="row gap end"><button className="primary">Enregistrer</button></div>
+      <div className="row gap end"><button className="primary">{tr("Enregistrer")}</button></div>
     </form>
   )
 }
@@ -68,25 +69,25 @@ export default function Clients() {
     e.preventDefault()
     const fd = new FormData(e.target)
     setError('')
-    try { await api('/admin/clients', { method: 'POST', json: { key: fd.get('key'), name: fd.get('name') } }); e.target.reset(); setMsg('Client créé.'); load() } catch (err) { setError(err.message) }
+    try { await api('/admin/clients', { method: 'POST', json: { key: fd.get('key'), name: fd.get('name') } }); e.target.reset(); setMsg(tr('Client créé.')); load() } catch (err) { setError(err.message) }
   }
   return (
-    <section className="card section" aria-label="Clients">
-      <header className="section-head"><h2>Clients</h2></header>
+    <section className="card section" aria-label={tr("Clients")}>
+      <header className="section-head"><h2>{tr("Clients")}</h2></header>
       {error && <p className="error" role="alert">{error}</p>}
       <p className="live" role="status">{msg}</p>
       <form className="row gap wrap" onSubmit={create}>
         <label>Clé (ex. ACME)<input name="key" required pattern="[A-Za-z0-9]{1,16}" /></label>
-        <label className="grow">Nom<input name="name" required /></label>
-        <button className="primary">Ajouter</button>
+        <label className="grow">{tr("Nom")}<input name="name" required /></label>
+        <button className="primary">{tr("Ajouter")}</button>
       </form>
       {items?.map((c) => (
         <div key={c.key} className="client-block">
           <div className="row between wrap">
             <div><span className="mono strong">{c.key}</span> — {c.name} <span className="muted small">({c.tickets} ticket{c.tickets > 1 ? 's' : ''})</span></div>
-            <button type="button" className="small-btn" aria-expanded={open === c.key} onClick={() => setOpen(open === c.key ? null : c.key)}>{open === c.key ? 'Fermer' : 'Paramétrer'}</button>
+            <button type="button" className="small-btn" aria-expanded={open === c.key} onClick={() => setOpen(open === c.key ? null : c.key)}>{open === c.key ? tr('Fermer') : tr('Paramétrer')}</button>
           </div>
-          {open === c.key && <ClientEditor client={c} onSaved={() => { setMsg('Client enregistré.'); load() }} onError={setError} />}
+          {open === c.key && <ClientEditor client={c} onSaved={() => { setMsg(tr('Client enregistré.')); load() }} onError={setError} />}
         </div>
       ))}
     </section>

@@ -1,3 +1,4 @@
+import { t as tr } from '../i18n.js'
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api, downloadBlob } from '../api.js'
@@ -58,18 +59,18 @@ export default function Ticket() {
   }
 
   if (error) return <p className="error" role="alert">{error}</p>
-  if (!t) return <p className="loading">Chargement…</p>
+  if (!t) return <p className="loading">{tr("Chargement…")}</p>
   const open = ['nouveau', 'en_evaluation', 'en_reponse'].includes(t.status)
 
   // visible : l'image n'est montrée au client que si le contenu qui l'embarque l'est aussi.
   const uploadImage = async (file, visible = false) => {
-    const description = window.prompt("Description de l'image (registre de collecte)", "Capture d'écran")
+    const description = window.prompt("Description de l'image (registre de collecte)", tr("Capture d'écran"))
     if (!description) return null
     const form = new FormData()
     form.append('file', file)
     form.append('description', description)
     form.append('collected_at', new Date().toISOString())
-    form.append('method', isClient ? 'Capture fournie par le client' : "Capture d'écran par l'analyste")
+    form.append('method', isClient ? tr('Capture fournie par le client') : tr("Capture d'écran par l'analyste"))
     form.append('sensitivity', t.tlp)
     form.append('visible_client', visible || isClient ? 'true' : 'false')
     try {
@@ -91,8 +92,8 @@ export default function Ticket() {
 
   return (
     <>
-      <nav className="breadcrumb" aria-label="Fil d'Ariane">
-        <Link to="/tickets">{isClient ? 'Mes incidents' : 'Tickets'}</Link> / {t.client} / <span className="mono">{t.ref}</span>
+      <nav className="breadcrumb" aria-label={tr("Fil d'Ariane")}>
+        <Link to="/tickets">{isClient ? tr('Mes incidents') : tr('Tickets')}</Link> / {t.client} / <span className="mono">{t.ref}</span>
       </nav>
       <header className="ticket-head">
         <div className="grow">
@@ -107,7 +108,7 @@ export default function Ticket() {
         </div>
         {isTeam && (
           <div className="row wrap gap">
-            <Link to={`/tickets/${enc}/rapport`} className="btn-link">Rapport imprimable</Link>
+            <Link to={`/tickets/${enc}/rapport`} className="btn-link">{tr("Rapport imprimable")}</Link>
             <button type="button" onClick={exportIodef}>Exporter (IODEF JSON)</button>
             {(TRANSITIONS[t.status] || []).map((s) => (
               <button type="button" key={s} className="primary"
@@ -121,7 +122,7 @@ export default function Ticket() {
       <p className="live" role="status" aria-live="polite">{notice}</p>
       {t.rex_en_attente && <p className="banner warn">Incident {t.gravite || t.criticite_initiale} clôturé : le retour d'expérience est obligatoire (section Synthèse).</p>}
 
-      {t.crisis && <p className="banner danger" role="status">MODE CRISE actif sur ce ticket : toute décision et toute action sont consignées dans le registre de crise.</p>}
+      {t.crisis && <p className="banner danger" role="status">{tr("MODE CRISE actif sur ce ticket : toute décision et toute action sont consignées dans le registre de crise.")}</p>}
       <div className="ticket-layout">
         <div className="ticket-main">
           {isTeam && <Crisis t={t} enc={enc} isManager={me.role === 'manager'} open={open} onChange={load} />}
@@ -133,7 +134,7 @@ export default function Ticket() {
           <Comments t={t} enc={enc} isClient={isClient} run={run} onImage={uploadImage} templates={templates('commentaire')} />
         </div>
         {isTeam && (
-          <aside className="ticket-aside" aria-label="Pilotage du ticket">
+          <aside className="ticket-aside" aria-label={tr("Pilotage du ticket")}>
             <Qualification t={t} enc={enc} run={run} open={open} />
             <Mitre t={t} enc={enc} run={run} open={open} />
             <Assignment t={t} enc={enc} run={run} open={open} />
@@ -151,14 +152,14 @@ function BodyHistory({ enc, current }) {
   const [error, setError] = useState('')
   useEffect(() => { api(`/tickets/${enc}/body-history`).then(setH).catch((e) => setError(e.message)) }, [enc, current])
   if (error) return <p className="error" role="alert">{error}</p>
-  if (!h) return <p className="muted small">Chargement…</p>
-  if (h.versions.length === 0) return <p className="muted small">Aucune modification depuis la création du ticket.</p>
+  if (!h) return <p className="muted small">{tr("Chargement…")}</p>
+  if (h.versions.length === 0) return <p className="muted small">{tr("Aucune modification depuis la création du ticket.")}</p>
   return (
-    <ol className="versions" aria-label="Versions de la description">
+    <ol className="versions" aria-label={tr("Versions de la description")}>
       {[...h.versions].reverse().map((v, i) => (
         <li key={v.ts + i}>
           <details>
-            <summary>Avant la modification du <span className="mono">{formatUtc(v.ts)}</span> par <strong>{v.actor}</strong>{v.truncated ? ' (aperçu tronqué)' : ''}</summary>
+            <summary>{tr("Avant la modification du")} <span className="mono">{formatUtc(v.ts)}</span> {tr("par")} <strong>{v.actor}</strong>{v.truncated ? ' (aperçu tronqué)' : ''}</summary>
             <Html html={v.html} />
             {v.truncated && <p className="muted small">Version complète de {v.length} caractères ; empreinte SHA-256 <span className="mono">{v.sha256}</span>.</p>}
           </details>
@@ -174,18 +175,18 @@ function Description({ t, enc, canEdit, run, onImage }) {
   const [html, setHtml] = useState(t.body_html)
   const isTeam = t.raw_alerts !== undefined
   return (
-    <Section title="Description" extra={<div className="row gap">
-      {isTeam && <button type="button" aria-expanded={showHistory} onClick={() => setShowHistory(!showHistory)}>{showHistory ? "Masquer l'historique" : 'Historique'}</button>}
-      {canEdit && !editing && <button type="button" onClick={() => { setHtml(t.body_html); setEditing(true) }}>Modifier</button>}</div>}>
+    <Section title={tr("Description")} extra={<div className="row gap">
+      {isTeam && <button type="button" aria-expanded={showHistory} onClick={() => setShowHistory(!showHistory)}>{showHistory ? tr("Masquer l'historique") : tr('Historique')}</button>}
+      {canEdit && !editing && <button type="button" onClick={() => { setHtml(t.body_html); setEditing(true) }}>{tr("Modifier")}</button>}</div>}>
       {showHistory && <BodyHistory enc={enc} current={t.body_html} />}
       {editing ? (
         <>
-          <RichEditor value={html} onChange={setHtml} label="Description du ticket" onImage={onImage} minHeight={200} />
+          <RichEditor value={html} onChange={setHtml} label={tr("Description du ticket")} onImage={onImage} minHeight={200} />
           <div className="row gap end">
-            <button type="button" onClick={() => setEditing(false)}>Annuler</button>
+            <button type="button" onClick={() => setEditing(false)}>{tr("Annuler")}</button>
             <button type="button" className="primary" onClick={async () => {
-              if (await run(() => api(`/tickets/${enc}/body`, { method: 'PUT', json: { body_html: html } }), 'Description enregistrée (version précédente conservée).')) setEditing(false)
-            }}>Enregistrer</button>
+              if (await run(() => api(`/tickets/${enc}/body`, { method: 'PUT', json: { body_html: html } }), tr('Description enregistrée (version précédente conservée).'))) setEditing(false)
+            }}>{tr("Enregistrer")}</button>
           </div>
         </>
       ) : <Html html={t.body_html} />}
@@ -195,13 +196,13 @@ function Description({ t, enc, canEdit, run, onImage }) {
 
 function AlertBlock({ t }) {
   return (
-    <Section title="Alerte Wazuh" extra={<span className="muted small">{t.raw_alerts} alerte(s) brute(s) conservée(s) avec empreinte SHA-256</span>}>
+    <Section title={tr("Alerte Wazuh")} extra={<span className="muted small">{t.raw_alerts} alerte(s) brute(s) conservée(s) avec empreinte SHA-256</span>}>
       <dl className="kv">
-        <dt>Règle</dt><dd className="mono">{t.rule.id} · niveau {t.rule.level}</dd>
-        <dt>Description</dt><dd>{t.rule.description}</dd>
-        <dt>Groupes</dt><dd className="mono">{t.rule.groups.join(', ') || '—'}</dd>
-        <dt>Agent</dt><dd className="mono">{[t.agent.id, t.agent.name, t.agent.ip].filter(Boolean).join(' · ') || '—'}</dd>
-        <dt>Classification</dt><dd className="mono small">{t.classification.join(', ') || '—'}</dd>
+        <dt>{tr("Règle")}</dt><dd className="mono">{t.rule.id} · niveau {t.rule.level}</dd>
+        <dt>{tr("Description")}</dt><dd>{t.rule.description}</dd>
+        <dt>{tr("Groupes")}</dt><dd className="mono">{t.rule.groups.join(', ') || '—'}</dd>
+        <dt>{tr("Agent")}</dt><dd className="mono">{[t.agent.id, t.agent.name, t.agent.ip].filter(Boolean).join(' · ') || '—'}</dd>
+        <dt>{tr("Classification")}</dt><dd className="mono small">{t.classification.join(', ') || '—'}</dd>
       </dl>
     </Section>
   )
@@ -231,7 +232,7 @@ function Attachments({ t, enc, me, run, setNotice }) {
   }
 
   const lifecycle = (a, value) => {
-    const reason = window.prompt(value === 'detruit' ? 'Motif de la destruction (irréversible)' : 'Motif de la restitution')
+    const reason = window.prompt(value === 'detruit' ? tr('Motif de la destruction (irréversible)') : tr('Motif de la restitution'))
     if (!reason || reason.length < 3) return
     run(() => api(`/attachments/${a.id}/lifecycle`, { method: 'POST', json: { lifecycle: value, reason } }), `Pièce ${LIFECYCLE[value].toLowerCase()}e.`)
   }
@@ -241,56 +242,56 @@ function Attachments({ t, enc, me, run, setNotice }) {
     const fd = new FormData(e.target)
     fd.set('collected_at', new Date(fd.get('collected_at')).toISOString())
     if (!isClient) fd.set('visible_client', fd.get('visible_client') ? 'true' : 'false')
-    if (await run(() => api(`/tickets/${enc}/attachments`, { method: 'POST', form: fd }), 'Pièce déposée.')) setForm(null)
+    if (await run(() => api(`/tickets/${enc}/attachments`, { method: 'POST', form: fd }), tr('Pièce déposée.'))) setForm(null)
   }
 
   const submitExt = async (e) => {
     e.preventDefault()
     const fd = Object.fromEntries(new FormData(e.target))
     const json = { ...fd, collected_at: new Date(fd.collected_at).toISOString(), size: Number(fd.size || 0), sha256: fd.sha256.toLowerCase() }
-    if (await run(() => api(`/tickets/${enc}/preuves-externes`, { method: 'POST', json }), 'Preuve externe déclarée.')) setExt(null)
+    if (await run(() => api(`/tickets/${enc}/preuves-externes`, { method: 'POST', json }), tr('Preuve externe déclarée.'))) setExt(null)
   }
 
   return (
-    <Section title={isClient ? 'Éléments déposés' : 'Registre des preuves'} extra={
+    <Section title={isClient ? tr('Éléments déposés') : tr('Registre des preuves')} extra={
       <div className="row gap">
-        {isTeam && <button type="button" onClick={() => { setExt(true); setForm(null) }}>Déclarer une preuve externe</button>}
-        <button type="button" className="dark" onClick={() => { setForm(true); setExt(null) }}>Déposer un fichier ({t.attachment_max_mb ?? 20} Mo max)</button>
+        {isTeam && <button type="button" onClick={() => { setExt(true); setForm(null) }}>{tr("Déclarer une preuve externe")}</button>}
+        <button type="button" className="dark" onClick={() => { setForm(true); setExt(null) }}>{tr('Déposer un fichier ({n} Mo max)', { n: t.attachment_max_mb ?? 20 })}</button>
       </div>}>
       {form && (
         <form className="subform" onSubmit={submit}>
           <label>Fichier (archive ZIP, PNG, JPEG ou WebP)<input type="file" name="file" accept=".zip,image/png,image/jpeg,image/webp" required /></label>
           <label>Description (obligatoire)<input name="description" minLength={3} required /></label>
           <div className="grid2">
-            <label>Date et heure de collecte<input type="datetime-local" name="collected_at" defaultValue={nowLocal()} required /></label>
-            <label>Sensibilité<select name="sensitivity" defaultValue={t.tlp}>{TLPS.map((x) => <option key={x}>{x}</option>)}</select></label>
+            <label>{tr("Date et heure de collecte")}<input type="datetime-local" name="collected_at" defaultValue={nowLocal()} required /></label>
+            <label>{tr("Sensibilité")}<select name="sensitivity" defaultValue={t.tlp}>{TLPS.map((x) => <option key={x}>{x}</option>)}</select></label>
           </div>
-          <label>Méthode de collecte (obligatoire)<input name="method" minLength={3} placeholder="ex. export du journal du pare-feu" required /></label>
-          {!isClient && <label className="check"><input type="checkbox" name="visible_client" value="true" /> Visible par le client</label>}
-          <p className="muted small">L'archive n'est jamais décompressée par Keryx. Analyse antivirus automatique quand ClamAV est configuré.</p>
-          <div className="row gap end"><button type="button" onClick={() => setForm(null)}>Annuler</button><button className="primary">Déposer</button></div>
+          <label>Méthode de collecte (obligatoire)<input name="method" minLength={3} placeholder={tr("ex. export du journal du pare-feu")} required /></label>
+          {!isClient && <label className="check"><input type="checkbox" name="visible_client" value="true" /> {tr("Visible par le client")}</label>}
+          <p className="muted small">{tr("L'archive n'est jamais décompressée par Keryx. Analyse antivirus automatique quand ClamAV est configuré.")}</p>
+          <div className="row gap end"><button type="button" onClick={() => setForm(null)}>{tr("Annuler")}</button><button className="primary">{tr("Déposer")}</button></div>
         </form>
       )}
       {ext && (
         <form className="subform" onSubmit={submitExt}>
           <p className="muted small">Pour une preuve de plus de {t.attachment_max_mb ?? 20} Mo (image disque, dump mémoire, pcap) conservée hors de Keryx, sur un support hors ligne.</p>
-          <label>Nom<input name="filename" required /></label>
-          <label>Description<input name="description" minLength={3} required /></label>
+          <label>{tr("Nom")}<input name="filename" required /></label>
+          <label>{tr("Description")}<input name="description" minLength={3} required /></label>
           <div className="grid2">
-            <label>Date et heure de collecte<input type="datetime-local" name="collected_at" defaultValue={nowLocal()} required /></label>
+            <label>{tr("Date et heure de collecte")}<input type="datetime-local" name="collected_at" defaultValue={nowLocal()} required /></label>
             <label>Taille (octets)<input type="number" name="size" min="0" /></label>
           </div>
-          <label>Méthode de collecte<input name="method" minLength={3} required /></label>
-          <label>Empreinte SHA-256<input name="sha256" pattern="[0-9a-fA-F]{64}" className="mono" required /></label>
-          <label>Lieu de conservation<input name="location" minLength={3} placeholder="ex. coffre hors ligne n°2" required /></label>
-          <label>Sensibilité<select name="sensitivity" defaultValue={t.tlp}>{TLPS.map((x) => <option key={x}>{x}</option>)}</select></label>
-          <div className="row gap end"><button type="button" onClick={() => setExt(null)}>Annuler</button><button className="primary">Déclarer</button></div>
+          <label>{tr("Méthode de collecte")}<input name="method" minLength={3} required /></label>
+          <label>{tr("Empreinte SHA-256")}<input name="sha256" pattern="[0-9a-fA-F]{64}" className="mono" required /></label>
+          <label>{tr("Lieu de conservation")}<input name="location" minLength={3} placeholder={tr("ex. coffre hors ligne n°2")} required /></label>
+          <label>{tr("Sensibilité")}<select name="sensitivity" defaultValue={t.tlp}>{TLPS.map((x) => <option key={x}>{x}</option>)}</select></label>
+          <div className="row gap end"><button type="button" onClick={() => setExt(null)}>{tr("Annuler")}</button><button className="primary">{tr("Déclarer")}</button></div>
         </form>
       )}
-      {t.attachments.length === 0 ? <p className="muted">Aucune pièce.</p> : (
+      {t.attachments.length === 0 ? <p className="muted">{tr("Aucune pièce.")}</p> : (
         <div className="table-wrap">
           <table className="grid">
-            <thead><tr><th scope="col">Élément</th><th scope="col">Collecte · méthode</th><th scope="col">SHA-256</th><th scope="col">Antivirus</th><th scope="col">Sort</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
+            <thead><tr><th scope="col">{tr("Élément")}</th><th scope="col">{tr("Collecte · méthode")}</th><th scope="col">{tr("SHA-256")}</th><th scope="col">{tr("Antivirus")}</th><th scope="col">{tr("Sort")}</th><th scope="col"><span className="sr-only">{tr("Actions")}</span></th></tr></thead>
             <tbody>
               {t.attachments.map((a) => (
                 <tr key={a.id}>
@@ -302,9 +303,9 @@ function Attachments({ t, enc, me, run, setNotice }) {
                   <td>{a.kind === 'preuve_externe' ? 'Hors Keryx' : LIFECYCLE[a.lifecycle]}</td>
                   <td className="row gap">
                     {a.kind !== 'preuve_externe' && a.lifecycle === 'conserve' && !(isClient && a.scan_status === 'quarantaine') &&
-                      <button type="button" className="small-btn" onClick={() => download(a)}>Télécharger</button>}
-                    {isTeam && a.lifecycle === 'conserve' && <button type="button" className="small-btn" onClick={() => lifecycle(a, 'restitue')}>Restituer</button>}
-                    {me.role === 'manager' && a.lifecycle === 'conserve' && <button type="button" className="small-btn danger" onClick={() => lifecycle(a, 'detruit')}>Détruire</button>}
+                      <button type="button" className="small-btn" onClick={() => download(a)}>{tr("Télécharger")}</button>}
+                    {isTeam && a.lifecycle === 'conserve' && <button type="button" className="small-btn" onClick={() => lifecycle(a, 'restitue')}>{tr("Restituer")}</button>}
+                    {me.role === 'manager' && a.lifecycle === 'conserve' && <button type="button" className="small-btn danger" onClick={() => lifecycle(a, 'detruit')}>{tr("Détruire")}</button>}
                   </td>
                 </tr>
               ))}
@@ -312,7 +313,7 @@ function Attachments({ t, enc, me, run, setNotice }) {
           </table>
         </div>
       )}
-      <p className="muted small">Chaque dépôt, téléchargement, restitution ou destruction est inscrit dans la chaîne de possession.</p>
+      <p className="muted small">{tr("Chaque dépôt, téléchargement, restitution ou destruction est inscrit dans la chaîne de possession.")}</p>
     </Section>
   )
 }
@@ -327,31 +328,31 @@ function Synthese({ t, enc, run, onImage, templates }) {
   const save = () => run(() => api(`/tickets/${enc}/synthese`, {
     method: 'PUT',
     json: { ...v, compromission_initiale: v.compromission_initiale ? new Date(v.compromission_initiale + 'Z').toISOString() : null },
-  }), 'Synthèse enregistrée.')
+  }), tr('Synthèse enregistrée.'))
   if (!editable) {
     return (
-      <Section title="Synthèse de l'incident et retour d'expérience">
-        <h3>Chronologie</h3><Html html={s.chronologie} />
-        <h3>Mode opératoire</h3><Html html={s.mode_operatoire} />
-        <h3>Périmètre</h3><Html html={s.perimetre} />
-        <h3>Retour d'expérience</h3><Html html={s.rex_html} />
+      <Section title={tr("Synthèse de l'incident et retour d'expérience")}>
+        <h3>{tr("Chronologie")}</h3><Html html={s.chronologie} />
+        <h3>{tr("Mode opératoire")}</h3><Html html={s.mode_operatoire} />
+        <h3>{tr("Périmètre")}</h3><Html html={s.perimetre} />
+        <h3>{tr("Retour d'expérience")}</h3><Html html={s.rex_html} />
       </Section>
     )
   }
   return (
-    <Section title="Synthèse de l'incident et retour d'expérience" extra={<span className="muted small">PRIS VI.5.3.e · ISO 27035</span>}>
+    <Section title={tr("Synthèse de l'incident et retour d'expérience")} extra={<span className="muted small">{tr("PRIS VI.5.3.e · ISO 27035")}</span>}>
       <label>Date de compromission initiale (UTC)
         <input type="datetime-local" value={v.compromission_initiale} onChange={(e) => setV({ ...v, compromission_initiale: e.target.value })} />
       </label>
-      <h3>Chronologie</h3>
-      <RichEditor value={v.chronologie} onChange={(x) => setV({ ...v, chronologie: x })} label="Chronologie" templates={templates} minHeight={80} />
-      <h3>Mode opératoire</h3>
-      <RichEditor value={v.mode_operatoire} onChange={(x) => setV({ ...v, mode_operatoire: x })} label="Mode opératoire" templates={templates} minHeight={80} />
-      <h3>Périmètre</h3>
-      <RichEditor value={v.perimetre} onChange={(x) => setV({ ...v, perimetre: x })} label="Périmètre" templates={templates} minHeight={80} />
-      <h3>Retour d'expérience {t.rex_required && <span className="pill warn">obligatoire</span>}</h3>
-      <RichEditor value={v.rex_html} onChange={(x) => setV({ ...v, rex_html: x })} label="Retour d'expérience" templates={templates} onImage={onImage} minHeight={80} />
-      <div className="row end"><button type="button" className="primary" onClick={save}>Enregistrer la synthèse</button></div>
+      <h3>{tr("Chronologie")}</h3>
+      <RichEditor value={v.chronologie} onChange={(x) => setV({ ...v, chronologie: x })} label={tr("Chronologie")} templates={templates} minHeight={80} />
+      <h3>{tr("Mode opératoire")}</h3>
+      <RichEditor value={v.mode_operatoire} onChange={(x) => setV({ ...v, mode_operatoire: x })} label={tr("Mode opératoire")} templates={templates} minHeight={80} />
+      <h3>{tr("Périmètre")}</h3>
+      <RichEditor value={v.perimetre} onChange={(x) => setV({ ...v, perimetre: x })} label={tr("Périmètre")} templates={templates} minHeight={80} />
+      <h3>Retour d'expérience {t.rex_required && <span className="pill warn">{tr("obligatoire")}</span>}</h3>
+      <RichEditor value={v.rex_html} onChange={(x) => setV({ ...v, rex_html: x })} label={tr("Retour d'expérience")} templates={templates} onImage={onImage} minHeight={80} />
+      <div className="row end"><button type="button" className="primary" onClick={save}>{tr("Enregistrer la synthèse")}</button></div>
     </Section>
   )
 }
@@ -365,7 +366,7 @@ function fmtDetail(v) {
 
 function Events({ t }) {
   return (
-    <Section title="Registre des actions">
+    <Section title={tr("Registre des actions")}>
       <ol className="timeline">
         {t.events.map((e, i) => (
           <li key={i}>
@@ -385,32 +386,32 @@ function Comments({ t, enc, isClient, run, onImage, templates }) {
   const [visible, setVisible] = useState(isClient)
   const post = async () => {
     if (!html.trim()) return
-    if (await run(() => api(`/tickets/${enc}/comments`, { method: 'POST', json: { body_html: html, visible_client: visible } }), 'Commentaire publié.')) setHtml('')
+    if (await run(() => api(`/tickets/${enc}/comments`, { method: 'POST', json: { body_html: html, visible_client: visible } }), tr('Commentaire publié.'))) setHtml('')
   }
   const saveTemplate = async () => {
     const name = window.prompt('Nom du modèle (propre à ce client)')
     if (!name) return
-    run(() => api('/templates', { method: 'POST', json: { kind: 'commentaire', name, body_html: html, client: t.client_key } }), 'Modèle enregistré.')
+    run(() => api('/templates', { method: 'POST', json: { kind: 'commentaire', name, body_html: html, client: t.client_key } }), tr('Modèle enregistré.'))
   }
   return (
-    <Section title={isClient ? 'Échanges avec le SOC' : 'Commentaires'}>
-      {t.comments.length === 0 && <p className="muted">Aucun commentaire.</p>}
+    <Section title={isClient ? tr('Échanges avec le SOC') : tr('Commentaires')}>
+      {t.comments.length === 0 && <p className="muted">{tr("Aucun commentaire.")}</p>}
       {t.comments.map((c, i) => (
         <div key={i} className={`comment ${c.visible_client ? 'public' : 'internal'}`}>
           <div className="comment-head">{c.visible_client ? (isClient ? '' : 'VISIBLE CLIENT · ') : 'INTERNE · '}{c.author} · {formatUtc(c.created_at)}</div>
           <Html html={c.body_html} />
         </div>
       ))}
-      <h3>{isClient ? 'Votre réponse' : 'Nouveau commentaire'}</h3>
-      <RichEditor value={html} onChange={setHtml} label="Nouveau commentaire" templates={templates} onImage={(f) => onImage(f, isClient || visible)} />
+      <h3>{isClient ? tr('Votre réponse') : tr('Nouveau commentaire')}</h3>
+      <RichEditor value={html} onChange={setHtml} label={tr("Nouveau commentaire")} templates={templates} onImage={(f) => onImage(f, isClient || visible)} />
       <div className="row gap between">
-        {!isClient ? <label className="check"><input type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)} /> Visible par le client</label> : <span />}
+        {!isClient ? <label className="check"><input type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)} /> {tr("Visible par le client")}</label> : <span />}
         <div className="row gap">
-          {!isClient && <button type="button" onClick={saveTemplate} disabled={!html.trim()}>Enregistrer comme modèle</button>}
-          <button type="button" className="dark" onClick={post}>Publier</button>
+          {!isClient && <button type="button" onClick={saveTemplate} disabled={!html.trim()}>{tr("Enregistrer comme modèle")}</button>}
+          <button type="button" className="dark" onClick={post}>{tr("Publier")}</button>
         </div>
       </div>
-      {!isClient && <p className="muted small">Mentionnez un collègue avec @identifiant : il recevra une notification.</p>}
+      {!isClient && <p className="muted small">{tr("Mentionnez un collègue avec @identifiant : il recevra une notification.")}</p>}
     </Section>
   )
 }
@@ -422,18 +423,18 @@ function Qualification({ t, enc, run, open }) {
     const json = { importance: v.importance, impact: v.impact, risque: v.risque, tlp: v.tlp }
     if (v.verdict && !verdictLocked) json.verdict = v.verdict
     if (v.dommages) json.dommages = v.dommages
-    run(() => api(`/tickets/${enc}/qualification`, { method: 'POST', json }), 'Qualification enregistrée.')
+    run(() => api(`/tickets/${enc}/qualification`, { method: 'POST', json }), tr('Qualification enregistrée.'))
   }
   return (
-    <section className="card section" aria-label="Qualification">
-      <h2>Qualification</h2>
+    <section className="card section" aria-label={tr("Qualification")}>
+      <h2>{tr("Qualification")}</h2>
       <label>Verdict
         <select value={v.verdict} disabled={!open || verdictLocked} onChange={(e) => setV({ ...v, verdict: e.target.value })}>
-          <option value="">À qualifier</option>
+          <option value="">{tr("À qualifier")}</option>
           {Object.entries(VERDICTS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
         </select>
       </label>
-      {verdictLocked && open && <p className="muted small">Verdict figé hors de la phase d'évaluation.</p>}
+      {verdictLocked && open && <p className="muted small">{tr("Verdict figé hors de la phase d'évaluation.")}</p>}
       <div className="grid2">
         <label>Dommages
           <select value={v.dommages} disabled={!open} onChange={(e) => setV({ ...v, dommages: e.target.value })}>
@@ -448,13 +449,13 @@ function Qualification({ t, enc, run, open }) {
         </label>
       </div>
       {t.severity_hint && open && (
-        <p className="muted small" data-testid="severity-hint">Selon l'importance « {IMPORTANCES[v.importance]} » de l'équipement : dommages limités → <strong>{t.severity_hint.limites}</strong>, significatifs → <strong>{t.severity_hint.significatifs}</strong>, graves → <strong>{t.severity_hint.graves}</strong> (grille du client). La gravité est fixée par votre qualification.</p>
+        <p className="muted small" data-testid="severity-hint">Selon l'importance « {IMPORTANCES[v.importance]} » de l'équipement : dommages limités → <strong>{t.severity_hint.limites}</strong>{tr(", significatifs →")} <strong>{t.severity_hint.significatifs}</strong>{tr(", graves →")} <strong>{t.severity_hint.graves}</strong> (grille du client). La gravité est fixée par votre qualification.</p>
       )}
-      <div className="row between gravity"><span className="muted">Gravité qualifiée</span><Severity value={t.gravite} /></div>
-      <label>Impact constaté<textarea rows="2" value={v.impact} disabled={!open} onChange={(e) => setV({ ...v, impact: e.target.value })} /></label>
-      <label>Risque induit<textarea rows="2" value={v.risque} disabled={!open} onChange={(e) => setV({ ...v, risque: e.target.value })} /></label>
-      <label>Marquage<select value={v.tlp} disabled={!open} onChange={(e) => setV({ ...v, tlp: e.target.value })}>{TLPS.map((x) => <option key={x}>{x}</option>)}</select></label>
-      {open && <button type="button" className="primary wide" onClick={save}>Enregistrer</button>}
+      <div className="row between gravity"><span className="muted">{tr("Gravité qualifiée")}</span><Severity value={t.gravite} /></div>
+      <label>{tr("Impact constaté")}<textarea rows="2" value={v.impact} disabled={!open} onChange={(e) => setV({ ...v, impact: e.target.value })} /></label>
+      <label>{tr("Risque induit")}<textarea rows="2" value={v.risque} disabled={!open} onChange={(e) => setV({ ...v, risque: e.target.value })} /></label>
+      <label>{tr("Marquage")}<select value={v.tlp} disabled={!open} onChange={(e) => setV({ ...v, tlp: e.target.value })}>{TLPS.map((x) => <option key={x}>{x}</option>)}</select></label>
+      {open && <button type="button" className="primary wide" onClick={save}>{tr("Enregistrer")}</button>}
     </section>
   )
 }
@@ -469,9 +470,9 @@ function Mitre({ t, enc, run, open }) {
     return () => clearTimeout(h)
   }, [q])
   return (
-    <section className="card section" aria-label="MITRE ATT&CK">
+    <section className="card section" aria-label={tr("MITRE ATT&CK")}>
       <h2>MITRE ATT&amp;CK</h2>
-      {t.mitre_detail.length === 0 && <p className="muted">À compléter.</p>}
+      {t.mitre_detail.length === 0 && <p className="muted">{tr("À compléter.")}</p>}
       {t.mitre_detail.map((m) => (
         <div key={m.id} className="mitre">
           <a className="mono chip" href={`https://attack.mitre.org/techniques/${m.id.replace('.', '/')}/`} target="_blank" rel="noopener noreferrer">{m.id}</a>
@@ -479,10 +480,10 @@ function Mitre({ t, enc, run, open }) {
           {m.tactics?.length > 0 && <span className="muted small">{m.tactics.join(', ')}</span>}
         </div>
       ))}
-      <p className="muted small">Source : <strong>{MITRE_SOURCE[t.mitre_source]}</strong></p>
+      <p className="muted small">{tr("Source :")} <strong>{MITRE_SOURCE[t.mitre_source]}</strong></p>
       {open && (
         <>
-          <label>Rechercher une technique (nom ou identifiant)<input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="ex. brute force" /></label>
+          <label>Rechercher une technique (nom ou identifiant)<input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("ex. brute force")} /></label>
           {found.length > 0 && (
             <ul className="found">{found.map((f) => (
               <li key={f.id}><button type="button" className="link" onClick={() => { setText((x) => [...new Set([...x.split(/[\s,;]+/).filter(Boolean), f.id])].join(', ')); setQ('') }}>
@@ -491,7 +492,7 @@ function Mitre({ t, enc, run, open }) {
           <label>Techniques (ex. T1110, T1543.003)<input className="mono" value={text} onChange={(e) => setText(e.target.value)} /></label>
           <button type="button" onClick={() => run(() => api(`/tickets/${enc}/mitre`, {
             method: 'POST', json: { techniques: text.split(/[\s,;]+/).filter(Boolean).map((x) => x.toUpperCase()) },
-          }), 'MITRE corrigé (tracé).')}>Corriger (tracé)</button>
+          }), tr('MITRE corrigé (tracé).'))}>Corriger (tracé)</button>
         </>
       )}
     </section>
@@ -502,12 +503,12 @@ function Assignment({ t, enc, run, open }) {
   const [people, setPeople] = useState([])
   useEffect(() => { api(`/tickets/${enc}/assignables`).then((r) => setPeople(r.items)).catch(() => {}) }, [enc])
   return (
-    <section className="card section" aria-label="Affectation">
-      <h2>Affectation</h2>
+    <section className="card section" aria-label={tr("Affectation")}>
+      <h2>{tr("Affectation")}</h2>
       <label>Assigné à
         <select disabled={!open} value={people.find((p) => p.display_name === t.assignee)?.username || ''}
-          onChange={(e) => run(() => api(`/tickets/${enc}/assign`, { method: 'POST', json: { username: e.target.value || null } }), 'Affectation enregistrée.')}>
-          <option value="">Personne</option>
+          onChange={(e) => run(() => api(`/tickets/${enc}/assign`, { method: 'POST', json: { username: e.target.value || null } }), tr('Affectation enregistrée.'))}>
+          <option value="">{tr("Personne")}</option>
           {people.map((p) => <option key={p.username} value={p.username}>{p.display_name}</option>)}
         </select>
       </label>
@@ -515,7 +516,7 @@ function Assignment({ t, enc, run, open }) {
   )
 }
 
-const LINK_LABEL = { parent: 'Parent', enfant: 'Enfant', lie: 'Lié', doublon: 'Doublon de', 'doublon_de_celui-ci': 'Doublon de ce ticket' }
+const LINK_LABEL = { parent: 'Parent', enfant: 'Enfant', lie: tr('Lié'), doublon: tr('Doublon de'), 'doublon_de_celui-ci': tr('Doublon de ce ticket') }
 
 function Links({ t, enc, run, open }) {
   const [items, setItems] = useState([])
@@ -533,12 +534,12 @@ function Links({ t, enc, run, open }) {
     const into = window.prompt('Référence du ticket à conserver (ex. ACME-1). Ce ticket sera clos comme doublon.')
     if (!into) return
     const reason = window.prompt('Motif de la fusion') || ''
-    run(() => api(`/tickets/${enc}/merge`, { method: 'POST', json: { into: into.trim().toUpperCase(), reason } }), 'Ticket fusionné.')
+    run(() => api(`/tickets/${enc}/merge`, { method: 'POST', json: { into: into.trim().toUpperCase(), reason } }), tr('Ticket fusionné.'))
   }
   return (
-    <section className="card section" aria-label="Tickets liés">
-      <h2>Tickets liés</h2>
-      {items.length === 0 && <p className="muted small">Aucun lien.</p>}
+    <section className="card section" aria-label={tr("Tickets liés")}>
+      <h2>{tr("Tickets liés")}</h2>
+      {items.length === 0 && <p className="muted small">{tr("Aucun lien.")}</p>}
       <ul className="linklist">
         {items.map((l) => (
           <li key={l.id}><span className="muted small">{LINK_LABEL[l.kind] || l.kind}</span>{' '}
@@ -548,26 +549,26 @@ function Links({ t, enc, run, open }) {
       </ul>
       {err && <p className="error" role="alert">{err}</p>}
       <form onSubmit={add} className="row gap wrap">
-        <label className="grow">Référence<input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="ACME-2" required /></label>
-        <label>Type<select value={kind} onChange={(e) => setKind(e.target.value)}><option value="lie">Lié</option><option value="parent">Parent</option><option value="doublon">Doublon</option></select></label>
-        <button>Lier</button>
+        <label className="grow">{tr("Référence")}<input value={ref} onChange={(e) => setRef(e.target.value)} placeholder={tr("ACME-2")} required /></label>
+        <label>{tr("Type")}<select value={kind} onChange={(e) => setKind(e.target.value)}><option value="lie">{tr("Lié")}</option><option value="parent">{tr("Parent")}</option><option value="doublon">{tr("Doublon")}</option></select></label>
+        <button>{tr("Lier")}</button>
       </form>
-      {open && <button type="button" className="small-btn danger" onClick={merge}>Fusionner dans un autre ticket…</button>}
+      {open && <button type="button" className="small-btn danger" onClick={merge}>{tr("Fusionner dans un autre ticket…")}</button>}
     </section>
   )
 }
 
 function Details({ t }) {
   return (
-    <section className="card section" aria-label="Détails">
-      <h2>Détails</h2>
+    <section className="card section" aria-label={tr("Détails")}>
+      <h2>{tr("Détails")}</h2>
       <dl className="kv">
-        <dt>Client</dt><dd>{t.client}</dd>
-        {t.due_qualification && <><dt>Qualifier avant</dt><dd className="mono small">{formatUtc(t.due_qualification)}</dd></>}
-        {t.due_resolution && <><dt>Résoudre avant</dt><dd className="mono small">{formatUtc(t.due_resolution)}</dd></>}
-        {t.overdue && <><dt>Échéance</dt><dd><span className="pill danger">Dépassée</span></dd></>}
-        <dt>Dernière occurrence</dt><dd className="mono small">{formatUtc(t.last_seen_at)}</dd>
-        <dt>REX</dt><dd>{t.rex_required ? 'Obligatoire' : 'Non requis'}</dd>
+        <dt>{tr("Client")}</dt><dd>{t.client}</dd>
+        {t.due_qualification && <><dt>{tr("Qualifier avant")}</dt><dd className="mono small">{formatUtc(t.due_qualification)}</dd></>}
+        {t.due_resolution && <><dt>{tr("Résoudre avant")}</dt><dd className="mono small">{formatUtc(t.due_resolution)}</dd></>}
+        {t.overdue && <><dt>{tr("Échéance")}</dt><dd><span className="pill danger">{tr("Dépassée")}</span></dd></>}
+        <dt>{tr("Dernière occurrence")}</dt><dd className="mono small">{formatUtc(t.last_seen_at)}</dd>
+        <dt>{tr("REX")}</dt><dd>{t.rex_required ? 'Obligatoire' : 'Non requis'}</dd>
       </dl>
     </section>
   )

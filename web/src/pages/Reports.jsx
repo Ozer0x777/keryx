@@ -1,3 +1,4 @@
+import { t as tr } from '../i18n.js'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api, downloadBlob } from '../api.js'
@@ -25,31 +26,31 @@ export default function Reports() {
   }
   return (
     <>
-      <header className="page-head noprint"><div><h1>Rapports et registre</h1><p className="muted">Rapport périodique d'un client, exportable. Pour un PDF, utilisez « Imprimer » puis « Enregistrer au format PDF ».</p></div></header>
-      <form className="filters noprint" onSubmit={generate} aria-label="Paramètres du rapport">
-        <label className="filter">Client<select value={f.client} onChange={set('client')} required>{me.clients.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}</select></label>
-        <label className="filter">Du<input type="date" value={f.from} onChange={set('from')} /></label>
-        <label className="filter">Au<input type="date" value={f.to} onChange={set('to')} /></label>
+      <header className="page-head noprint"><div><h1>{tr("Rapports et registre")}</h1><p className="muted">{tr("Rapport périodique d'un client, exportable. Pour un PDF, utilisez « Imprimer » puis « Enregistrer au format PDF ».")}</p></div></header>
+      <form className="filters noprint" onSubmit={generate} aria-label={tr("Paramètres du rapport")}>
+        <label className="filter">{tr("Client")}<select value={f.client} onChange={set('client')} required>{me.clients.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}</select></label>
+        <label className="filter">{tr("Du")}<input type="date" value={f.from} onChange={set('from')} /></label>
+        <label className="filter">{tr("Au")}<input type="date" value={f.to} onChange={set('to')} /></label>
         <div className="row gap">
-          <button className="primary">Générer</button>
+          <button className="primary">{tr("Générer")}</button>
           <button type="button" onClick={csv}>Exporter le registre (CSV)</button>
-          <button type="button" onClick={() => window.print()} disabled={!r}>Imprimer / PDF</button>
+          <button type="button" onClick={() => window.print()} disabled={!r}>{tr("Imprimer / PDF")}</button>
         </div>
       </form>
       {error && <p className="error" role="alert">{error}</p>}
       {r && (
-        <article className="report card section" aria-label="Rapport périodique">
-          <h1>Rapport d'incidents — {r.client.name}</h1>
+        <article className="report card section" aria-label={tr("Rapport périodique")}>
+          <h1>{tr("Rapport d'incidents")} — {r.client.name}</h1>
           <p className="muted">Période du {r.period.from} au {r.period.to} · généré le {formatUtc(r.generated_at)} · TLP:AMBER</p>
-          <h2>Synthèse</h2>
-          <dl className="kv"><dt>Incidents créés</dt><dd>{r.totals.created}</dd><dt>Incidents clos</dt><dd>{r.totals.closed}</dd>
-            <dt>Ouverts à ce jour</dt><dd>{r.totals.open}</dd><dt>Échéances tenues</dt><dd>{r.sla.rate_percent == null ? '—' : `${r.sla.rate_percent} % (${r.sla.resolution_within_target} sur ${r.sla.closed})`}</dd>
-            <dt>Délai moyen de résolution</dt><dd>{r.delays.resolution_hours_avg == null ? '—' : `${r.delays.resolution_hours_avg} h`}</dd></dl>
-          <h2>Incidents de la période</h2>
+          <h2>{tr("Synthèse")}</h2>
+          <dl className="kv"><dt>{tr("Incidents créés")}</dt><dd>{r.totals.created}</dd><dt>{tr("Incidents clos")}</dt><dd>{r.totals.closed}</dd>
+            <dt>{tr("Ouverts à ce jour")}</dt><dd>{r.totals.open}</dd><dt>{tr("Échéances tenues")}</dt><dd>{r.sla.rate_percent == null ? '—' : `${r.sla.rate_percent} % (${r.sla.resolution_within_target} sur ${r.sla.closed})`}</dd>
+            <dt>{tr("Délai moyen de résolution")}</dt><dd>{r.delays.resolution_hours_avg == null ? '—' : `${r.delays.resolution_hours_avg} h`}</dd></dl>
+          <h2>{tr("Incidents de la période")}</h2>
           <div className="table-wrap"><table className="grid">
-            <thead><tr><th scope="col">Réf.</th><th scope="col">Titre</th><th scope="col">Détecté</th><th scope="col">Criticité</th><th scope="col">Gravité</th><th scope="col">Statut</th><th scope="col">MITRE</th></tr></thead>
+            <thead><tr><th scope="col">{tr("Réf.")}</th><th scope="col">{tr("Titre")}</th><th scope="col">{tr("Détecté")}</th><th scope="col">{tr("Criticité")}</th><th scope="col">{tr("Gravité")}</th><th scope="col">{tr("Statut")}</th><th scope="col">{tr("MITRE")}</th></tr></thead>
             <tbody>
-              {r.incidents.length === 0 && <tr><td colSpan="7" className="muted">Aucun incident sur la période.</td></tr>}
+              {r.incidents.length === 0 && <tr><td colSpan="7" className="muted">{tr("Aucun incident sur la période.")}</td></tr>}
               {r.incidents.map((i) => <tr key={i.ref}><td className="mono">{i.ref}</td><td>{i.title}</td><td className="mono small">{formatUtc(i.detected_at)}</td><td><Severity value={i.criticite_initiale} /></td><td><Severity value={i.gravite} /></td><td><Status value={i.status} /></td><td className="mono small">{i.mitre.join(', ') || '—'}</td></tr>)}
             </tbody></table></div>
         </article>

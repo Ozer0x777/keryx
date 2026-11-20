@@ -1,10 +1,11 @@
+import { t as tr } from '../i18n.js'
 import { STATUS } from '../labels.js'
 
 const SEVERITY_CLASS = { Critique: 'sev-critique', 'Élevée': 'sev-elevee', Moyenne: 'sev-moyenne', Faible: 'sev-faible' }
 
 export function Severity({ value, prefix = '' }) {
   if (!value) return <span className="muted">—</span>
-  return <span className={`badge ${SEVERITY_CLASS[value] || 'sev-faible'}`}>{prefix}{value}</span>
+  return <span className={`badge ${SEVERITY_CLASS[value] || 'sev-faible'}`}>{prefix}{tr(value)}</span>
 }
 
 export function Tlp({ value }) {
