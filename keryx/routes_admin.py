@@ -8,6 +8,7 @@ Un Admin ne lit jamais le contenu des tickets : aucune route d'ici n'y donne acc
 from __future__ import annotations
 
 import os
+import secrets
 import shutil
 import socket
 from datetime import timedelta
@@ -17,7 +18,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session as DbSession
 
-from . import audit, security
+from . import audit, notify, security
 from .ids import as_utc, rfc3339, utcnow
 from .mitre import valid_technique
 from .models import (ROLES, ApiKey, MitreMapping, Notification, Session, Tenant, Ticket, User)
@@ -133,6 +134,22 @@ def register(app, ctx) -> None:
         ce secret (séparation administrateur / opérateur, PDIS IV.3.9.d à h)."""
         u.totp_secret, u.recovery_codes, u.last_totp_step, u.enrolled = "", [], None, False
 
+    def issue_enroll_code(u: User) -> dict:
+        """Génère le code d'activation. Envoyé directement au titulaire par courriel quand le SMTP et son adresse
+        existent (l'Admin ne le voit alors jamais) ; sinon rendu une fois à l'Admin, qui le transmet hors bande."""
+        code = secrets.token_urlsafe(12)
+        u.enroll_code_hash = security.sha256(code)
+        u.enroll_code_expires = utcnow() + timedelta(hours=72)
+        if settings.smtp_host and u.email:
+            try:
+                notify._send(settings, u.email, "[Keryx] Activation de votre compte",
+                             f"Votre code d'activation (valable 72 h) : {code}\n"
+                             f"Connexion : {settings.public_url}\n")
+                return {"activation": "courriel"}
+            except Exception:  # noqa: BLE001 - repli : remise manuelle par l'Admin
+                pass
+        return {"activation": "administrateur", "enrollment_code": code}
+
     def drop_sessions(db: DbSession, u: User) -> None:
         db.execute(delete(Session).where(Session.user_id == u.id))
 
@@ -160,10 +177,11 @@ def register(app, ctx) -> None:
                  enrolled=False, tenants=tenants)
         db.add(u)
         db.flush()
+        grant = issue_enroll_code(u)
         audit.record(db, user.username, "user.create", "user", u.id, None,
-                     {"role": body.role, "clients": [t.key for t in tenants]})
+                     {"role": body.role, "clients": [t.key for t in tenants], "activation": grant["activation"]})
         commit(db)
-        return user_view(u)  # mot de passe temporaire : le titulaire le change à sa première connexion
+        return {**user_view(u), **grant}  # mot de passe temporaire : le titulaire le change à sa première connexion
 
     @app.patch("/api/v1/admin/users/{username}")
     def users_patch(username: str, body: UserPatchIn, user: User = Depends(current_user),
@@ -204,9 +222,10 @@ def register(app, ctx) -> None:
         require_enrollment(u)
         u.failed_attempts, u.locked_until = 0, None
         drop_sessions(db, u)
-        audit.record(db, user.username, "user.reset_2fa", "user", u.id, None, {})
+        grant = issue_enroll_code(u)
+        audit.record(db, user.username, "user.reset_2fa", "user", u.id, None, {"activation": grant["activation"]})
         commit(db)
-        return user_view(u)
+        return {**user_view(u), **grant}
 
     @app.post("/api/v1/admin/users/{username}/reset-password")
     def users_reset_password(username: str, body: PasswordResetIn, user: User = Depends(current_user),
@@ -216,9 +235,10 @@ def register(app, ctx) -> None:
         u.password_hash = security.hash_password(body.password)
         u.failed_attempts, u.locked_until = 0, None
         drop_sessions(db, u)
-        audit.record(db, user.username, "user.reset_password", "user", u.id, None, {})
+        grant = issue_enroll_code(u) if not u.enrolled else {}
+        audit.record(db, user.username, "user.reset_password", "user", u.id, None, {"activation": grant["activation"]} if grant else {})
         commit(db)
-        return user_view(u)
+        return {**user_view(u), **grant}
 
     # ---------------------------------------------------------------- clients
     def client_view(t: Tenant, tickets: int = 0) -> dict:
@@ -279,7 +299,7 @@ def register(app, ctx) -> None:
 
     # ---------------------------------------------------------------- clés d'API
     def key_view(k: ApiKey, tenant: Tenant) -> dict:
-        last = as_utc(k.last_used_at) if k.last_used_at else None
+        last = as_utc(k.last_used_at or k.created_at)  # clé neuve : le délai court depuis sa création
         silent = (not k.revoked) and (last is None or last < utcnow() - timedelta(hours=SILENT_KEY_HOURS))
         return {"id": k.id, "client": tenant.key, "name": k.name, "prefix": k.prefix, "revoked": k.revoked,
                 "created_at": rfc3339(k.created_at), "last_used_at": rfc3339(k.last_used_at), "silent": silent}

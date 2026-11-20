@@ -83,6 +83,10 @@ class User(Base):
     # False : compte créé par un Admin, le titulaire n'a pas encore enrôlé son application TOTP ni choisi son
     # mot de passe. Le secret TOTP est alors généré chez l'utilisateur et jamais montré à l'Admin.
     enrolled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    # Code d'activation à usage unique (haché), remis au titulaire hors de l'Admin : sans lui, personne ne peut
+    # enrôler le TOTP avec le seul mot de passe temporaire.
+    enroll_code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    enroll_code_expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     # Préférences de notification dans l'interface : {"mention": true, "assignation": false, ...}

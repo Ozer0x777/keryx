@@ -12,13 +12,16 @@ export default async ({ browser, stack, BASE, check, login }) => {
   await p.fill('input[name=username]', 'nouvel.analyste'); await p.fill('input[name=display_name]', 'Nouvel Analyste')
   await p.check('input[name=clients][value=NOVA]'); await p.fill('input[name=password]', 'un-mot-de-passe-solide')
   await p.getByRole('button', { name: 'Créer' }).click()
-  await p.waitForSelector('text=activera lui-même sa double authentification')
+  await p.waitForSelector("text=Code d'activation (affiché une seule fois")
+  const live = await p.locator('.live').innerText()
+  stack.activation = /: (\S+)\s*$/.exec(live.trim())[1]   // sans SMTP, l'Admin transmet ce code hors bande
+  check(/^[A-Za-z0-9_-]{16,}$/.test(stack.activation), "code d'activation à usage unique remis à l'Admin")
   check(await p.locator('.onetime').count() === 0, 'aucun secret TOTP montré à l\'Admin')
   check(await p.locator('tr', { hasText: 'nouvel.analyste' }).locator('text=À activer').count() === 1, 'compte marqué « À activer »')
   // clé d'API
   await p.getByRole('link', { name: "Clés d'API" }).click()
   await p.waitForSelector('text=wazuh-e2e')
-  check(await p.locator('.pill.warn', { hasText: 'Muette' }).count() > 0, 'source muette signalée')
+  check(await p.locator('.pill.ok', { hasText: 'Active' }).count() > 0, 'clé neuve : active, pas signalée muette avant 24 h')
   // système
   await p.getByRole('link', { name: 'État du système' }).click()
   await p.waitForSelector('text=Base de données')

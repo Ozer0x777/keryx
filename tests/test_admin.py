@@ -62,7 +62,7 @@ def test_reinitialisation_2fa_tracee(app, db, world):
 def test_cles_api_creation_rotation_revocation(app, db, world, alert):
     a = login(app, db, "admin")
     k = a.post("/api/v1/admin/api-keys", json={"client": "ACME", "name": "wazuh-2"}).json()
-    assert k["key"].startswith("kx_") and k["silent"] is True  # jamais utilisée
+    assert k["key"].startswith("kx_") and k["silent"] is False  # neuve, jamais utilisée : le délai court depuis sa création
     assert ingest(app, k["key"], alert(ALERT_SSH_BRUTEFORCE)).status_code == 201
     rows = a.get("/api/v1/admin/api-keys").json()["items"]
     used = next(x for x in rows if x["id"] == k["id"])
@@ -115,6 +115,14 @@ def test_profil_mot_de_passe_codes_et_sessions(app, db, world):
 
 
 def test_etat_du_systeme(app, db, world):
-    s = login(app, db, "admin").get("/api/v1/admin/system").json()
+    from datetime import timedelta
+    from keryx.ids import utcnow
+    from keryx.models import ApiKey
+    adm = login(app, db, "admin")
+    s = adm.get("/api/v1/admin/system").json()
     assert s["database"] == "ok" and s["smtp"] == "non configuré" and s["clamav"] == "non configuré"
-    assert s["disk_free_mb"] > 0 and s["silent_sources"] == 2  # deux clés, aucune utilisée
+    assert s["disk_free_mb"] > 0 and s["silent_sources"] == 0  # clés neuves : pas encore de silence anormal
+    for k in db.scalars(select(ApiKey)):
+        k.created_at = utcnow() - timedelta(days=3)
+    db.commit()
+    assert adm.get("/api/v1/admin/system").json()["silent_sources"] == 2  # deux clés anciennes, aucune utilisée

@@ -135,10 +135,11 @@ def register(app, ctx) -> None:
         dst.updated_at = utcnow()
         src.verdict, src.status, src.updated_at = "faux_positif", "faux_positif", utcnow()
         src.closed_at = src.qualified_at = src.updated_at
+        src.crisis = False
         db.add(TicketLink(tenant_id=src.tenant_id, ticket_id=src.id, other_id=dst.id, kind="doublon",
                           created_by=user.username))
-        event(db, src, user, "fusion", {"vers": dst.ref, "motif": body.reason, "alertes_deplacees": moved},
-              visible_client=True)
+        event(db, src, user, "fusion", {"vers": dst.ref}, visible_client=True)
+        event(db, src, user, "fusion_motif", {"motif": body.reason, "alertes_deplacees": moved})
         event(db, dst, user, "fusion_recue", {"depuis": src.ref, "alertes": moved})
         commit(db)
         return {"ref": src.ref, "merged_into": dst.ref, "occurrences": dst.occurrences}
@@ -240,6 +241,8 @@ def register(app, ctx) -> None:
 
     @app.get("/api/v1/notifications/count")
     def inbox_count(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        refresh_deadlines(db, user)
+        db.commit()
         return {"unread": db.scalar(select(func.count()).select_from(InboxItem)
                                     .where(InboxItem.user_id == user.id, InboxItem.read_at.is_(None))) or 0}
 

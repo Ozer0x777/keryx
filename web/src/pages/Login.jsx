@@ -11,6 +11,7 @@ export default function Login({ onDone }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [enroll, setEnroll] = useState(null)
+  const [activation, setActivation] = useState('')
   const [newPwd, setNewPwd] = useState('')
   const [newPwd2, setNewPwd2] = useState('')
   const [codes, setCodes] = useState(null)
@@ -21,13 +22,21 @@ export default function Login({ onDone }) {
     try {
       const r = await api('/auth/login', { method: 'POST', json: { username, password } })
       setPassword('')
-      if (r.next === 'enroll') {
-        setEnroll(await api('/auth/enroll/start', { method: 'POST' }))
-        setStep(3)
-      } else setStep(2)
+      if (r.next === 'enroll') setStep(4)
+      else setStep(2)
     } catch (err) {
       setError(err.message)
     } finally { setBusy(false) }
+  }
+
+  const submitActivation = async (e) => {
+    e.preventDefault()
+    setBusy(true); setError('')
+    try {
+      setEnroll(await api('/auth/enroll/start', { method: 'POST', json: { activation_code: activation } }))
+      setActivation('')
+      setStep(3)
+    } catch (err) { setError(err.message) } finally { setBusy(false) }
   }
 
   const submitCode = async (e) => {
@@ -95,6 +104,16 @@ export default function Login({ onDone }) {
                 <button className="primary wide" disabled={busy}>Activer mon compte</button>
               </form>
             )
+          ) : step === 4 ? (
+            <form onSubmit={submitActivation}>
+              <span className="eyebrow">Première connexion</span>
+              <h1>Code d'activation</h1>
+              <p className="muted">Saisissez le code d'activation qui vous a été remis (par courriel ou par votre administrateur).</p>
+              <label htmlFor="act">Code d'activation</label>
+              <input id="act" autoComplete="off" value={activation} onChange={(e) => setActivation(e.target.value)} required />
+              {error && <p className="error" role="alert">{error}</p>}
+              <button className="primary wide" disabled={busy}>Continuer</button>
+            </form>
           ) : step === 1 ? (
             <form onSubmit={submitPassword}>
               <span className="eyebrow">Étape 1 sur 2</span>

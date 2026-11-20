@@ -12,7 +12,7 @@ from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
 
 from fastapi import Depends, HTTPException, Query, Response
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session as DbSession
 
 from . import audit, sla
@@ -62,19 +62,30 @@ def register(app, ctx) -> None:
             raise HTTPException(422, f"Période limitée à {MAX_DAYS} jours.")
         return _day_start(start_d), _day_start(end_d) + timedelta(days=1)
 
-    def load(db: DbSession, tenants: dict[str, Tenant]) -> list[Ticket]:
-        rows = db.scalars(select(Ticket).where(Ticket.tenant_id.in_(list(tenants))).limit(MAX_TICKETS + 1)).all()
+    def load(db: DbSession, tenants: dict[str, Tenant], start: datetime | None = None, end: datetime | None = None,
+             field: str = "both") -> list[Ticket]:
+        """Tickets du périmètre. Avec une période : ceux créés ou clos dans la fenêtre (field='both'), détectés
+        dans la fenêtre (field='detected'), plus, pour 'both', tous les tickets ouverts (charge, échéances)."""
+        q = select(Ticket).where(Ticket.tenant_id.in_(list(tenants)))
+        if start is not None and end is not None:
+            if field == "detected":
+                q = q.where(Ticket.detected_at >= start, Ticket.detected_at < end)
+            else:
+                q = q.where(or_(Ticket.status.in_(OPEN), Ticket.created_at.between(start, end - timedelta(microseconds=1)),
+                                Ticket.closed_at.between(start, end - timedelta(microseconds=1))))
+        rows = db.scalars(q.limit(MAX_TICKETS + 1)).all()
         if len(rows) > MAX_TICKETS:
             raise HTTPException(422, "Trop de tickets pour une même requête : restreindre le client ou la période.")
         return rows
 
     def compute(db: DbSession, tenants: dict[str, Tenant], start: datetime, end: datetime) -> dict:
-        tickets = load(db, tenants)
+        tickets = load(db, tenants, start, end)
         now = utcnow()
         created = [t for t in tickets if start <= as_utc(t.created_at) < end]
         closed = [t for t in tickets if t.closed_at and start <= as_utc(t.closed_at) < end]
         qualified = [t for t in created if t.qualified_at]
-        by_status = Counter(t.status for t in tickets)
+        by_status = dict(db.execute(select(Ticket.status, func.count()).where(Ticket.tenant_id.in_(list(tenants)))
+                                    .group_by(Ticket.status)).all())
         open_t = [t for t in tickets if t.status in OPEN]
         sev = Counter((t.gravite or t.criticite_initiale) for t in open_t)
         users = {u.id: u for u in db.scalars(select(User).where(User.id.in_({t.assignee_id for t in open_t if t.assignee_id})))}
@@ -100,7 +111,7 @@ def register(app, ctx) -> None:
             "period": {"from": start.date().isoformat(), "to": (end - timedelta(days=1)).date().isoformat()},
             "totals": {"created": len(created), "closed": len(closed), "open": len(open_t),
                        "overdue": sum(int(sla.state(t, tenants.get(t.tenant_id), now)["overdue"]) for t in open_t)},
-            "by_status": dict(by_status),
+            "by_status": by_status,
             "open_by_severity": {s: sev.get(s, 0) for s in ("Critique", "Élevée", "Moyenne", "Faible")},
             "workload": sorted(load_by.values(), key=lambda r: (-r["open"], r["name"])),
             "delays": {"qualification_hours_avg": _mean([_hours(t.created_at, t.qualified_at) for t in qualified]),
@@ -133,7 +144,7 @@ def register(app, ctx) -> None:
         s, e = period(start, to)
         out = compute(db, tenants, s, e)
         tenant = next(iter(tenants.values()))
-        rows = [t for t in load(db, tenants) if s <= as_utc(t.created_at) < e or (t.closed_at and s <= as_utc(t.closed_at) < e)]
+        rows = [t for t in load(db, tenants, s, e) if s <= as_utc(t.created_at) < e or (t.closed_at and s <= as_utc(t.closed_at) < e)]
         rows.sort(key=lambda t: as_utc(t.created_at))
         out["client"] = {"key": tenant.key, "name": tenant.name}
         out["generated_at"] = rfc3339(utcnow())
@@ -156,7 +167,7 @@ def register(app, ctx) -> None:
             raise HTTPException(422, "Format attendu : json ou csv.")
         s, e = period(start, to) if (start or to) else (_day_start(date(2000, 1, 1)), _day_start(utcnow().date()) + timedelta(days=1))
         tenant = next(iter(tenants.values()))
-        rows = [t for t in load(db, tenants) if s <= as_utc(t.detected_at) < e]
+        rows = [t for t in load(db, tenants, s, e, "detected") if s <= as_utc(t.detected_at) < e]
         rows.sort(key=lambda t: as_utc(t.detected_at))
         users = {u.id: u for u in db.scalars(select(User).where(User.id.in_({t.assignee_id for t in rows if t.assignee_id})))}
         header = ["reference", "detecte_le", "titre", "criticite_initiale", "gravite", "statut", "verdict", "assigne",

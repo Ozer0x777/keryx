@@ -152,3 +152,20 @@ def test_filtres_enregistres_et_affectation_en_masse(app, db, world, alert):
     assert r["done"] == 2 and [x["ok"] for x in r["results"]] == [True, True, False]  # DELTA-1 : pas son client
     assert len(a.get("/api/v1/tickets", params={"assignee": "me"}).json()["items"]) == 2
     assert m.post("/api/v1/tickets/bulk-assign", json={"refs": ["ACME-1"], "username": None}).json()["done"] == 1
+
+
+def test_revue3_correctifs(app, db, world, alert):
+    two_tickets(app, world, alert)
+    m = login(app, db, "manager")
+    # Filtre par assigné inconnu : aucun résultat (et non « tous les non-assignés »)
+    assert m.get("/api/v1/tickets", params={"assignee": "personne-inconnue"}).json()["items"] == []
+    # Fusion : le motif interne ne fuit pas vers le client
+    m.post("/api/v1/tickets/ACME-2/merge", json={"into": "ACME-1", "reason": "SECRET-INTERNE"})
+    cl = login(app, db, "client_acme").get("/api/v1/tickets/ACME-2")
+    assert cl.status_code == 200 and "SECRET-INTERNE" not in cl.text
+    assert "SECRET-INTERNE" in m.get("/api/v1/tickets/ACME-2").text
+    # Audit : client inconnu -> rien
+    assert login(app, db, "admin").get("/api/v1/audit/entries", params={"client": "NOPE"}).json()["items"] == []
+    # Le badge relève aussi les échéances
+    a = login(app, db, "analyst_acme")
+    assert a.get("/api/v1/notifications/count").status_code == 200

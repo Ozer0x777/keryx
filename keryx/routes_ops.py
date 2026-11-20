@@ -11,7 +11,7 @@ from datetime import date, datetime, time, timedelta, timezone
 
 from fastapi import Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import false, func, select
 from sqlalchemy.orm import Session as DbSession
 
 from . import audit, mitre_stix, retention
@@ -86,6 +86,7 @@ def register(app, ctx) -> None:
     def crisis_add(ref: str, body: CrisisEntryIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         staff(user)
         t = load_ticket(db, user, ref)
+        ctx.require_open(t)
         if not t.crisis:
             raise HTTPException(409, "Le mode crise n'est pas actif sur ce ticket.")
         if body.kind not in CRISIS_KINDS:
@@ -104,6 +105,7 @@ def register(app, ctx) -> None:
                      db: DbSession = Depends(get_db)):
         staff(user)
         t = load_ticket(db, user, ref)
+        ctx.require_open(t)
         e = db.get(CrisisEntry, entry_id[:36])
         if e is None or e.ticket_id != t.id:
             raise HTTPException(404, "Entrée introuvable.")
@@ -133,7 +135,7 @@ def register(app, ctx) -> None:
             q = q.where(AuditEntry.tenant_id.in_([t.id for t in user.tenants]))
         if client:
             tid = next((i for i, t in tenants.items() if t.key == client.upper()), None)
-            q = q.where(AuditEntry.tenant_id == tid)
+            q = q.where(AuditEntry.tenant_id == tid) if tid else q.where(false())
         if actor:
             q = q.where(AuditEntry.actor == actor)
         if action:

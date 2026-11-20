@@ -1,7 +1,7 @@
 import { PASSWORD, totp } from '../harness.mjs'
 
 // Le titulaire d'un compte créé par l'Admin active lui-même sa 2FA : l'Admin n'en voit jamais le secret.
-export default async ({ browser, BASE, check }) => {
+export default async ({ browser, stack, BASE, check }) => {
   const ctx = await browser.newContext({ viewport: { width: 1200, height: 900 } })
   const p = await ctx.newPage()
   p.errors = []; p.on('pageerror', (e) => p.errors.push(e.message))
@@ -9,6 +9,11 @@ export default async ({ browser, BASE, check }) => {
   await p.locator('input').first().fill('nouvel.analyste')
   await p.locator('input[type=password]').fill('un-mot-de-passe-solide')
   await p.getByRole('button', { name: 'Continuer' }).click()
+  await p.waitForSelector("text=Code d'activation")
+  await p.fill('#act', 'code-faux-0000000000'); await p.getByRole('button', { name: 'Continuer' }).click()
+  await p.waitForSelector('[role=alert]')
+  check(await p.locator('text=Activer votre compte').count() === 0, "un mauvais code d'activation est refusé")
+  await p.fill('#act', stack.activation); await p.getByRole('button', { name: 'Continuer' }).click()
   await p.waitForSelector('text=Activer votre compte')
   const secret = (await p.getByTestId('totp-secret').innerText()).trim()
   check(/^[A-Z2-7]{16,}$/.test(secret), 'la clé TOTP est affichée à son titulaire')

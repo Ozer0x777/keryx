@@ -22,7 +22,7 @@ def run(db: DbSession, settings: Settings, now: datetime, actor: str, dry_run: b
         months = max(6, tenant.retention_months or settings.retention_months)
         cutoff = now - timedelta(days=30 * months)
         ids = select(Ticket.id).where(Ticket.tenant_id == tenant.id, Ticket.status.in_(TERMINAL_STATUSES),
-                                      Ticket.closed_at.is_not(None))
+                                      Ticket.closed_at.is_not(None), Ticket.closed_at < cutoff)
         cond = (RawAlert.tenant_id == tenant.id, RawAlert.ticket_id.in_(ids), RawAlert.received_at < cutoff)
         count = db.scalar(select(func.count()).select_from(RawAlert).where(*cond)) or 0
         if count and not dry_run:

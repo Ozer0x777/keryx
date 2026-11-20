@@ -10,7 +10,7 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session as DbSession
 
 from . import audit
@@ -86,7 +86,7 @@ def send_pending(session_factory, settings: Settings, notification_ids: list[str
                 try:
                     _send(settings, n.recipient, subject, body)
                     n.status = "envoye"
-                except (OSError, smtplib.SMTPException) as exc:
+                except Exception as exc:  # noqa: BLE001 - toute erreur d'envoi doit finir en « echec », jamais en suspens
                     n.status = "echec"
                     audit.record(db, "keryx", "notification.failed", "notification", n.id, n.tenant_id,
                                  {"error": type(exc).__name__})
@@ -110,10 +110,13 @@ def retry_failed(session_factory, settings: Settings, now=None) -> int:
         rows = db.scalars(select(Notification).where(Notification.status == "echec",
                                                      Notification.attempts < settings.notify_max_attempts)).all()
         due = [n.id for n in rows if as_utc(n.ts) + timedelta(minutes=2 ** (n.attempts or 1)) <= now]
-        for n in rows:
-            if n.id in due:
-                n.status = "en_attente"
+        claimed = []
+        for i in due:  # prise atomique : un seul worker relance chaque courriel
+            if db.execute(update(Notification).where(Notification.id == i, Notification.status == "echec")
+                          .values(status="en_attente")).rowcount:
+                claimed.append(i)
         db.commit()
+        due = claimed
     finally:
         db.close()
     send_pending(session_factory, settings, due)

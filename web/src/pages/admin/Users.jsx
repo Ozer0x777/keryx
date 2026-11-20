@@ -24,6 +24,10 @@ export default function Users() {
     try { const r = await fn(); setMsg(ok); await load(); return r } catch (e) { setError(e.message); return null }
   }
 
+  const grantMsg = (r, base) => r.activation === 'courriel'
+    ? `${base} Le code d'activation a été envoyé par courriel au titulaire.`
+    : `${base} Code d'activation (affiché une seule fois, à transmettre hors bande) : ${r.enrollment_code}`
+
   const create = async (e) => {
     e.preventDefault()
     const fd = new FormData(e.target)
@@ -34,18 +38,20 @@ export default function Users() {
       role, clients: role === 'admin' ? [] : picked, password: fd.get('password') } }), 'Compte créé.')
     if (r) {
       setForm(null)
-      setMsg(`Compte ${r.username} créé. Transmettez-lui son mot de passe temporaire par un canal sûr : il activera lui-même sa double authentification à sa première connexion.`)
+      setMsg(grantMsg(r, `Compte ${r.username} créé. Transmettez-lui son mot de passe temporaire par un canal sûr : il activera lui-même sa double authentification à sa première connexion.`))
     }
   }
 
   const reset2fa = async (u) => {
     if (!window.confirm(`Réinitialiser la 2FA de ${u.username} ? Ses sessions seront fermées et il devra réenrôler son application.`)) return
-    await run(() => api(`/admin/users/${encodeURIComponent(u.username)}/reset-2fa`, { method: 'POST' }), `2FA de ${u.username} réinitialisée : l'utilisateur la réenrôlera à sa prochaine connexion (définissez-lui un mot de passe temporaire si besoin).`)
+    const r = await run(() => api(`/admin/users/${encodeURIComponent(u.username)}/reset-2fa`, { method: 'POST' }), '')
+    if (r) setMsg(grantMsg(r, `2FA de ${u.username} réinitialisée : l'utilisateur la réenrôlera à sa prochaine connexion (définissez-lui un mot de passe temporaire si besoin).`))
   }
   const resetPwd = async (u) => {
     const password = window.prompt(`Nouveau mot de passe pour ${u.username} (12 caractères minimum)`)
     if (!password) return
-    run(() => api(`/admin/users/${encodeURIComponent(u.username)}/reset-password`, { method: 'POST', json: { password } }), 'Mot de passe réinitialisé.')
+    const r = await run(() => api(`/admin/users/${encodeURIComponent(u.username)}/reset-password`, { method: 'POST', json: { password } }), 'Mot de passe réinitialisé.')
+    if (r && r.activation) setMsg(grantMsg(r, 'Mot de passe réinitialisé.'))
   }
   const toggle = (u) => {
     if (u.active && !window.confirm(`Désactiver ${u.username} ?`)) return

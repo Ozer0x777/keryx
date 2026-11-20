@@ -7,6 +7,7 @@ Erreurs au format Problem Details [RFC 9457]. Sessions par cookie HttpOnly/Secur
 from __future__ import annotations
 
 import hashlib
+import hmac
 import ipaddress
 import json
 import logging
@@ -26,7 +27,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import delete, false, func, or_, select, update
 from sqlalchemy.orm import Session as DbSession
 from starlette.background import BackgroundTask
 
@@ -132,6 +133,10 @@ class LoginIn(BaseModel):
     username: str = Field(min_length=1, max_length=120)
     password: str = Field(max_length=256)
     _u = field_validator("username")(_no_control_chars)
+
+
+class EnrollStartIn(BaseModel):
+    activation_code: str = Field(min_length=8, max_length=64)
 
 
 class EnrollIn(BaseModel):
@@ -412,9 +417,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return s, user, ip
 
     @app.post("/api/v1/auth/enroll/start")
-    def enroll_start(request: Request, db: DbSession = Depends(get_db)):
-        """Première connexion : le secret TOTP est généré ici et montré à son seul titulaire."""
-        s, user, _ip = enrolling_user(request, db)
+    def enroll_start(body: EnrollStartIn, request: Request, db: DbSession = Depends(get_db)):
+        """Première connexion : le secret TOTP est généré ici et montré à son seul titulaire, qui prouve son
+        identité par le code d'activation reçu hors de l'Admin (le mot de passe temporaire ne suffit pas)."""
+        s, user, ip = enrolling_user(request, db)
+        ok = (user.enroll_code_hash and user.enroll_code_expires and as_utc(user.enroll_code_expires) > utcnow()
+              and hmac.compare_digest(user.enroll_code_hash, security.sha256(body.activation_code.strip())))
+        if not ok:
+            audit.record(db, user.username, "auth.enroll_code_invalid", "user", user.id, None, {"ip": ip})
+            commit(db)
+            raise HTTPException(401, "Code d'activation invalide ou expiré.")
         secret = security.new_totp_secret()
         user.totp_secret = box.encrypt(secret, f"totp:{user.id}")
         audit.record(db, user.username, "auth.enroll_start", "user", user.id)
@@ -436,6 +448,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         user.password_hash = security.hash_password(body.new_password)
         plain, hashed = security.new_recovery_codes()
         user.recovery_codes, user.last_totp_step, user.enrolled = hashed, step, True
+        user.enroll_code_hash = user.enroll_code_expires = None  # usage unique
         audit.record(db, user.username, "auth.enroll_done", "user", user.id)
         out = promote(db, s, user, response, ip, "enrollment")
         return {**out, "recovery_codes": plain}  # affichés une seule fois
@@ -614,7 +627,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         elif assignee == "none":
             query = query.where(Ticket.assignee_id.is_(None))
         elif assignee:
-            query = query.where(Ticket.assignee_id == db.scalar(select(User.id).where(User.username == assignee[:120])))
+            aid = db.scalar(select(User.id).where(User.username == assignee[:120]))
+            query = query.where(Ticket.assignee_id == aid) if aid else query.where(false())
         if q and q.strip():
             like = "%" + q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
             fields = [Ticket.ref, Ticket.title, Ticket.rule_description, Ticket.rule_id, Ticket.agent_name, Ticket.agent_ip]
