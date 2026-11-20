@@ -100,7 +100,7 @@ def settings(tmp_path):
     url = f"sqlite:///{tmp_path}/test.db"
     if os.environ.get("KERYX_TEST_PG_URL"):
         url, drop = _pg_database()
-    yield Settings(database_url=url, cookie_secure=False, auto_create_schema=True,
+    yield Settings(database_url=url, cookie_secure=False, auto_create_schema=True, public_url="https://keryx.local",
                    secret_key=SECRET_KEY, attachments_dir=str(tmp_path / "pj"), smtp_host=None,
                    clamav_host=None, web_dist=str(tmp_path / "no_web"))
     if drop:
