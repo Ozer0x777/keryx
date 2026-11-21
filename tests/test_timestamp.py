@@ -179,3 +179,42 @@ def test_chaine_complete_via_l_application_avec_authentification(settings, autho
     app2 = create_app(settings)
     bad = login(app2, db, "analyst_acme").post(f"/api/v1/attachments/{att['id']}/timestamp")
     assert bad.status_code == 502 and "authentification" in bad.json()["detail"]
+
+
+CERTUM = __import__("pathlib").Path(__file__).parent / "data" / "certum"
+
+
+@pytest.mark.skipif(not tsa.have_openssl(), reason="openssl requis")
+def test_reponse_reelle_d_un_prestataire_de_l_ue_a_encodage_non_canonique():
+    """Réponse RÉELLE de Certum (autorité de l'UE), enregistrée le 21/11/2026 : le décodeur strict la refuse (ensemble de
+    certificats non trié), OpenSSL la valide. Keryx doit l'accepter par la vérification de secours, et refuser une altération."""
+    from rfc3161_client import decode_timestamp_response
+    token = (CERTUM / "resp.tsr").read_bytes()
+    msg = (CERTUM / "msg.txt").read_bytes()
+    ca = str(CERTUM / "ctnca.pem")
+    with pytest.raises(ValueError):                              # précondition : le décodeur strict refuse bien cette réponse
+        decode_timestamp_response(token)
+    when = ts.verify(token, msg, ca)                             # vérifié à la date attestée (le certificat peut expirer plus tard)
+    assert when.year == 2026 and when.month == 11 and when.day == 21
+    assert ts.verify(token, msg, ca, policy_oid="1.2.616.1.113527.2.5.1.11") == when
+    with pytest.raises(ts.TimestampError):
+        ts.verify(token, msg + b"x", ca)                          # message altéré
+    with pytest.raises(ts.TimestampError):
+        ts.verify(token, msg, ca, policy_oid="1.2.3.9.9")         # mauvaise politique
+    altered = bytearray(token)
+    altered[len(altered) // 2] ^= 1
+    with pytest.raises(ts.TimestampError):
+        ts.verify(bytes(altered), msg, ca)                        # jeton altéré
+    with pytest.raises(ts.TimestampError):
+        ts.verify(token, msg, str(CERTUM.parent.parent / "tsa.py"))   # fichier d'autorité invalide
+
+
+def test_autorite_reelle_de_l_ue_certum_si_reseau():
+    """Essai en ligne contre Certum (KERYX_TEST_TSA_REAL_CERTUM=1) : demande, vérification de secours, revérification."""
+    import os
+    if not os.environ.get("KERYX_TEST_TSA_REAL_CERTUM"):
+        pytest.skip("KERYX_TEST_TSA_REAL_CERTUM non défini")
+    msg = ts.message_for("attachment", "essai-test-certum", "12" * 32)
+    ca = str(CERTUM / "ctnca.pem")
+    r = ts.stamp("http://time.certum.pl", msg, ca, policy_oid="1.2.616.1.113527.2.5.1.11")
+    assert ts.verify(r["token"], msg, ca) == r["gen_time"]

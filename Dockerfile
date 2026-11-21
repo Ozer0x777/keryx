@@ -13,7 +13,7 @@ RUN useradd --create-home --uid 10001 keryx \
  && mkdir -p /data/attachments \
  && chown -R 10001:10001 /data && chmod 700 /data
 # Client PostgreSQL : nécessaire à « keryx backup » / « keryx restore » quand la base est PostgreSQL.
-RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client \
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client openssl \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY requirements.lock .

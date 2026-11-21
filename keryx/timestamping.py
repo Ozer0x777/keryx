@@ -8,6 +8,11 @@ certificats d'autorité configurés, empreinte et nonce de la demande) avant d'�
 from __future__ import annotations
 
 import datetime as dt
+import os
+import re
+import shutil
+import subprocess
+import tempfile
 
 import httpx
 from cryptography import x509
@@ -52,6 +57,54 @@ def _verifier(request, roots, intermediates, policy_oid: str | None = None):
     return b.build()
 
 
+# ---------------------------------------------------------------- vérification de secours par OpenSSL
+# Certaines autorités (dont Certum, autorité de l'UE essayée) produisent des réponses dont l'ensemble de certificats n'est
+# pas dans l'ordre DER canonique : le décodeur strict de rfc3161-client les refuse, OpenSSL les valide. Dans ce cas, la
+# vérification passe par `openssl ts -verify` (l'outil doit être installé), à la date attestée (-attime).
+_TIME = re.compile(r"Time stamp:\s+(\w{3})\s+(\d+)\s+(\d\d:\d\d:\d\d)\s+(\d{4})")
+
+
+def _openssl(*args: str) -> subprocess.CompletedProcess:
+    exe = shutil.which("openssl")
+    if not exe:
+        raise TimestampError("Réponse non décodable par le décodeur strict et OpenSSL introuvable (installer le paquet openssl).")
+    return subprocess.run([exe, *args], capture_output=True, text=True, timeout=30)
+
+
+def _openssl_verify(token: bytes, message: bytes | None, request: bytes | None, ca_file: str, policy_oid: str | None) -> dict:
+    with tempfile.TemporaryDirectory() as d:
+        tok = os.path.join(d, "r.tsr")
+        open(tok, "wb").write(token)
+        text = _openssl("ts", "-reply", "-in", tok, "-text")
+        m = _TIME.search(text.stdout)
+        if text.returncode != 0 or not m:
+            raise TimestampError("Réponse de l'autorité d'horodatage illisible.")
+        when = dt.datetime.strptime(" ".join(m.groups()), "%b %d %H:%M:%S %Y").replace(tzinfo=dt.timezone.utc)
+        serial = (re.search(r"Serial number:\s+(\S+)", text.stdout) or [None, "?"])[1]
+        policy_found = (re.search(r"Policy OID:\s+(\S+)", text.stdout) or [None, ""])[1]
+        args = ["ts", "-verify", "-in", tok, "-CAfile", ca_file, "-attime", str(int(when.timestamp()))]
+        if request is not None:
+            q = os.path.join(d, "q.tsq")
+            open(q, "wb").write(request)
+            args += ["-queryfile", q]
+        else:
+            msg = os.path.join(d, "m.bin")
+            open(msg, "wb").write(message or b"")
+            args += ["-data", msg]
+        if policy_oid:
+            # « openssl ts -verify » ne contrôle pas la politique : on la compare nous-mêmes (OID numérique obligatoire,
+            # sinon on refuse plutôt que de supposer).
+            found = (re.search(r"Policy OID:\s+(\S+)", text.stdout) or [None, ""])[1]
+            if not re.fullmatch(r"\d+(\.\d+)+", found):
+                raise TimestampError("Politique d'horodatage non vérifiable (identifiant non numérique dans la réponse).")
+            if found != policy_oid:
+                raise TimestampError(f"Politique d'horodatage inattendue : {found} (attendu : {policy_oid}).")
+        v = _openssl(*args)
+        if "Verification: OK" not in v.stdout + v.stderr:
+            raise TimestampError("Réponse de l'autorité d'horodatage non valide : " + (v.stderr.strip().splitlines() or ["vérification refusée"])[-1][:160])
+    return {"gen_time": when, "serial": serial, "policy": policy_found}
+
+
 def make_client(settings) -> httpx.Client:
     """Client HTTP vers l'autorité, avec l'authentification configurée (Basic, Bearer ou certificat client)."""
     kwargs: dict = {"timeout": HTTP_TIMEOUT, "follow_redirects": False}
@@ -80,8 +133,10 @@ def stamp(tsa_url: str, message: bytes, ca_file: str | None, http: httpx.Client 
         raise TimestampError(f"L'autorité d'horodatage a répondu {r.status_code}.")
     try:
         response = decode_timestamp_response(r.content)
-    except ValueError as exc:
-        raise TimestampError("Réponse de l'autorité d'horodatage illisible.") from exc
+    except ValueError:
+        # Décodage strict refusé (encodage DER non canonique) : vérification de secours par OpenSSL, au besoin
+        v = _openssl_verify(r.content, None, request.as_bytes(), ca_file, policy_oid)
+        return {"token": r.content, "gen_time": v["gen_time"], "serial": v["serial"], "policy": v["policy"]}
     if response.status not in (PKIStatus.GRANTED, PKIStatus.GRANTED_WITH_MODS):
         raise TimestampError("L'autorité d'horodatage a refusé la demande.")
     try:
@@ -90,7 +145,7 @@ def stamp(tsa_url: str, message: bytes, ca_file: str | None, http: httpx.Client 
         raise TimestampError(f"Réponse de l'autorité d'horodatage non valide : {exc}") from exc
     info = response.tst_info
     gen = info.gen_time if info.gen_time.tzinfo else info.gen_time.replace(tzinfo=dt.timezone.utc)
-    return {"token": response.as_bytes(), "gen_time": gen, "serial": str(info.serial_number)}
+    return {"token": response.as_bytes(), "gen_time": gen, "serial": str(info.serial_number), "policy": str(info.policy)}
 
 
 def verify(token: bytes, message: bytes, ca_file: str | None, policy_oid: str | None = None) -> dt.datetime:
@@ -98,6 +153,9 @@ def verify(token: bytes, message: bytes, ca_file: str | None, policy_oid: str | 
     roots, inter = load_authorities(ca_file)
     try:
         response = decode_timestamp_response(token)
+    except ValueError:
+        return _openssl_verify(token, message, None, ca_file, policy_oid)["gen_time"]
+    try:
         _verifier(None, roots, inter, policy_oid).verify_message(response, message)
     except (VerificationError, ValueError) as exc:
         raise TimestampError(f"Jeton d'horodatage non valide : {exc}") from exc

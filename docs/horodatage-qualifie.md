@@ -1,6 +1,6 @@
 # Horodatage : choisir et brancher un prestataire qualifié eIDAS de l'UE
 
-*Choix retenu pour la production. Aucun prestataire n'est cité ici : la liste de confiance européenne fait foi, et aucun n'a été essayé (seuls une autorité locale et FreeTSA, non qualifié, l'ont été).*
+*Choix retenu pour la production. La liste de confiance européenne fait foi pour la qualification ; aucun prestataire n'est recommandé ici. Essais réels faits : une autorité locale, FreeTSA (non qualifié) et Certum (autorité de l'UE, point d'accès public, sans authentification) : compatibilité technique démontrée, **qualification non vérifiée**.*
 
 ## 1. Choisir
 1. Consulter la **liste de confiance européenne** (navigateur « EU Trusted Lists » de la Commission européenne, rubrique eIDAS) et filtrer les services de type « Qualified time-stamp » (QTST) d'un État de l'UE. Un service doit y figurer avec le statut « accordé / en vigueur ».
@@ -14,7 +14,7 @@ Variables d'environnement de Keryx :
 - `KERYX_TSA_POLICY_OID` : OID de la politique qualifiée. Fortement recommandé : Keryx refuse alors toute réponse portant une autre politique.
 
 ## 3. Essayer avant de s'engager
-`keryx tsa-check` demande un horodatage de test, vérifie la signature et la chaîne, contrôle la politique, et affiche l'heure attestée, le numéro de série et l'OID de politique réellement utilisé (à reporter dans `KERYX_TSA_POLICY_OID`). Échec typique : authentification refusée, chaîne incomplète, réponse non conforme au DER strict (voir ADR-0018).
+`keryx tsa-check` demande un horodatage de test, vérifie la signature et la chaîne, contrôle la politique, et affiche l'heure attestée, le numéro de série et l'OID de politique réellement utilisé (à reporter dans `KERYX_TSA_POLICY_OID`). Échec typique : authentification refusée, chaîne incomplète. Une réponse non conforme au DER strict est acceptée par la vérification de secours d'OpenSSL (voir ADR-0018 ; `openssl` doit être installé).
 
 ## 4. Exploiter
 Un jeton se télécharge (`.tsr`) et se vérifie hors de Keryx : `openssl ts -verify -in jeton.tsr -data <message> -CAfile chaine.pem`. Conserver les jetons aussi longtemps que la pièce ; prévoir le renouvellement d'horodatage (ré-horodater) avant l'expiration de l'algorithme ou des certificats du prestataire.

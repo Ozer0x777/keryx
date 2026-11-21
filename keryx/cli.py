@@ -246,10 +246,8 @@ def _main(argv: list[str] | None = None) -> int:
         except ts.TimestampError as exc:
             print(f"ÉCHEC : {exc}", file=sys.stderr)
             return 1
-        from rfc3161_client import decode_timestamp_response
-        info = decode_timestamp_response(r["token"]).tst_info
         print(f"OK : horodatage obtenu et vérifié (chaîne jusqu'aux certificats de KERYX_TSA_CA_FILE).\n"
-              f"  Heure attestée : {when.isoformat()}\n  Série          : {r['serial']}\n  Politique (OID): {info.policy}\n"
+              f"  Heure attestée : {when.isoformat()}\n  Série          : {r['serial']}\n  Politique (OID): {r['policy']}\n"
               f"  Autorité       : {settings.tsa_url}\n  Taille du jeton: {len(r['token'])} octets")
         if not settings.tsa_policy_oid:
             print("  Conseil : fixer KERYX_TSA_POLICY_OID à l'OID ci-dessus (celui que le prestataire annonce pour son service qualifié).")
