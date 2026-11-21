@@ -1,14 +1,111 @@
 import { t as tr } from '../../i18n.js'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import { api } from '../../api.js'
-import { useConfirm } from '../../components/Confirm.jsx'
+import { useAuth } from '../../App.jsx'
+import { Modal, useConfirm } from '../../components/Confirm.jsx'
 import OneTime from '../../components/OneTime.jsx'
+import { utcClock } from '../../dates.js'
 import { formatUtc, ROLES } from '../../labels.js'
 
+// Édition d'un compte : nom affiché, rôle et clients rattachés (PATCH /admin/users/{identifiant}, tracé dans l'audit).
+// Le courriel est affiché mais jamais modifiable : c'est la clé de liaison de l'identité SSO ; il n'est pas envoyé.
+// Les règles de rôle du serveur sont reprises ici pour être signalées sous le champ avant l'envoi : un Admin n'a aucun
+// client (séparation administrateur / opérateur), un Client exactement un, un analyste ou un manager au moins un.
+function EditUser({ user, clients, self, onSaved, onClose }) {
+  const uid = useId()
+  const [name, setName] = useState(user.display_name)
+  const [role, setRole] = useState(user.role)
+  const [picked, setPicked] = useState(user.clients)
+  const [errors, setErrors] = useState({})
+  const [failure, setFailure] = useState('')
+  const [busy, setBusy] = useState(false)
+  const single = role === 'client'
+
+  const pickRole = (next) => {
+    setRole(next); setErrors({})
+    if (next === 'admin') setPicked([])
+    else if (next === 'client') setPicked((p) => p.slice(0, 1))
+  }
+  const togglePick = (key) => setPicked((p) => (single ? [key] : p.includes(key) ? p.filter((k) => k !== key) : [...p, key]))
+
+  const submit = async (e) => {
+    e.preventDefault()
+    if (busy) return
+    const found = {}
+    if (!name.trim()) found.name = tr('Ce champ est obligatoire.')
+    if (role === 'client' && picked.length !== 1) found.clients = tr('Un compte Client est rattaché à exactement un client.')
+    if ((role === 'analyst' || role === 'manager') && picked.length === 0) found.clients = tr('Rattacher au moins un client à ce compte.')
+    setErrors(found); setFailure('')
+    if (found.name) { e.currentTarget.querySelector('[name=display_name]').focus(); return }
+    if (found.clients) { e.currentTarget.querySelector('[name=clients]')?.focus(); return }
+    // Seuls les champs modifiés sont envoyés ; le courriel ne l'est jamais.
+    const json = {}
+    if (name.trim() !== user.display_name) json.display_name = name.trim()
+    if (role !== user.role) json.role = role
+    const sameClients = picked.length === user.clients.length && picked.every((k) => user.clients.includes(k))
+    if (!sameClients || role !== user.role) json.clients = role === 'admin' ? [] : clients.map((c) => c.key).filter((k) => picked.includes(k))
+    if (Object.keys(json).length === 0) { onClose(); return }
+    setBusy(true)
+    try {
+      await api(`/admin/users/${encodeURIComponent(user.username)}`, { method: 'PATCH', json })
+      onSaved(user)
+    } catch (err) { setBusy(false); setFailure(err.message) }
+  }
+
+  return (
+    <Modal labelledBy={`${uid}-t`} locked={busy} onDismiss={onClose}>
+      <form onSubmit={submit} noValidate>
+        <h2 id={`${uid}-t`}>{tr('Modifier le compte {u}', { u: user.username })}</h2>
+        <div className="field">
+          <label htmlFor={`${uid}-n`}>{tr("Nom affiché")}</label>
+          <input id={`${uid}-n`} name="display_name" value={name} maxLength={200} autoComplete="off" onChange={(e) => setName(e.target.value)}
+            aria-required="true" aria-invalid={errors.name ? 'true' : undefined} aria-describedby={errors.name ? `${uid}-ne` : undefined} />
+          {errors.name && <p className="field-error" id={`${uid}-ne`}>{errors.name}</p>}
+        </div>
+        <div className="field">
+          <label htmlFor={`${uid}-e`}>{tr("Courriel")}</label>
+          <input id={`${uid}-e`} type="email" value={user.email || ''} placeholder={tr('Aucun courriel')} readOnly aria-describedby={`${uid}-eh`} />
+          <p className="field-hint" id={`${uid}-eh`}>{tr("Non modifiable : le courriel sert de clé de liaison à l'identité SSO du compte.")}</p>
+        </div>
+        <div className="field">
+          <label htmlFor={`${uid}-r`}>{tr("Rôle")}</label>
+          <select id={`${uid}-r`} value={role} disabled={self} onChange={(e) => pickRole(e.target.value)} aria-describedby={`${uid}-rh`}>
+            {Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          <p className="field-hint" id={`${uid}-rh`}>{self
+            ? tr('Vous ne pouvez pas modifier votre propre rôle.')
+            : role === 'admin'
+              ? tr("Un Admin gère les comptes et la plateforme ; il n'a pas accès au contenu des tickets et n'est rattaché à aucun client.")
+              : tr('Un changement de rôle ou de clients ferme les sessions ouvertes de ce compte.')}</p>
+        </div>
+        {role !== 'admin' && (
+          <fieldset className="fieldset" aria-describedby={errors.clients ? `${uid}-ce` : undefined}>
+            <legend>{single ? tr('Client rattaché (un seul pour un compte Client)') : tr('Clients rattachés')}</legend>
+            {clients.length === 0 && <p className="muted small">{tr("Aucun client n'existe encore.")}</p>}
+            {clients.map((c) => (
+              <label key={c.key} className="check">
+                <input type={single ? 'radio' : 'checkbox'} name="clients" value={c.key} checked={picked.includes(c.key)} onChange={() => togglePick(c.key)} /> {c.key} — {c.name}
+              </label>
+            ))}
+            {errors.clients && <p className="field-error" id={`${uid}-ce`}>{errors.clients}</p>}
+          </fieldset>
+        )}
+        {failure && <p className="error" role="alert">{failure}</p>}
+        <div className="dialog-actions">
+          <button type="button" data-cancel onClick={onClose} disabled={busy}>{tr('Annuler')}</button>
+          <button type="submit" className="primary" disabled={busy} aria-busy={busy || undefined}>{tr('Enregistrer')}</button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
 export default function Users() {
+  const { me } = useAuth()
   const [items, setItems] = useState(null)
   const [clients, setClients] = useState([])
   const [form, setForm] = useState(null)
+  const [editing, setEditing] = useState(null)
   const [secret, setSecret] = useState(null)
   const [msg, setMsg] = useState('')
   const [error, setError] = useState('')
@@ -106,12 +203,14 @@ export default function Users() {
       <p className="live" role="status">{msg}</p>
       {secret && <OneTime {...secret} onClose={() => setSecret(null)} />}
       {dialog}
+      {editing && <EditUser user={editing} clients={clients} self={editing.username === me.username} onClose={() => setEditing(null)}
+        onSaved={(u) => { setEditing(null); done(tr('Compte {u} enregistré à {h}.', { u: u.username, h: utcClock() })) }} />}
       {form && (
         <form className="subform" onSubmit={create}>
           <div className="grid2">
             <label>{tr("Identifiant")}<input name="username" required pattern="[A-Za-z0-9._-]{3,64}" autoComplete="off" /></label>
             <label>{tr("Nom affiché")}<input name="display_name" required /></label>
-            <label>{tr("Courriel (facultatif)")}<input name="email" type="email" /></label>
+            <label>{tr("Courriel (facultatif, non modifiable ensuite)")}<input name="email" type="email" /></label>
             <label>{tr("Rôle")}<select name="role" defaultValue="analyst">{Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
           </div>
           <fieldset className="fieldset"><legend>{tr("Clients (aucun pour un Admin, un seul pour un Client)")}</legend>
@@ -128,11 +227,12 @@ export default function Users() {
             {items === null && <tr><td colSpan="7" className="muted">{tr("Chargement…")}</td></tr>}
             {items?.map((u) => (
               <tr key={u.username}>
-                <td className="mono">{u.username}</td><td>{u.display_name}</td><td>{ROLES[u.role]}</td>
+                <td className="mono">{u.username}</td><td>{u.display_name}{u.email && <div className="muted small">{u.email}</div>}</td><td>{ROLES[u.role]}</td>
                 <td className="mono small">{u.clients.join(', ') || '—'}</td>
                 <td className="mono small">{formatUtc(u.last_login_at)}</td>
                 <td>{!u.active ? <span className="pill">{tr("Désactivé")}</span> : !u.enrolled ? <span className="pill warn">{tr("À activer")}</span> : u.locked ? <span className="pill danger">{tr("Verrouillé")}</span> : <span className="pill ok">{tr("Actif")}</span>}{u.sso && <span className="pill" title={tr("Identité fédérée liée (SSO)")} style={{ marginLeft: 6 }}>{tr("SSO")}</span>}</td>
                 <td><div className="row gap wrap">
+                  <button type="button" className="small-btn" aria-label={tr('Modifier le compte {u}', { u: u.username })} onClick={() => setEditing(u)}>{tr("Modifier")}</button>
                   <button type="button" className="small-btn" onClick={() => reset2fa(u)}>{tr("Réinit. 2FA")}</button>
                   <button type="button" className="small-btn" onClick={() => resetPwd(u)}>{tr("Mot de passe")}</button>
                   {u.sso && <button type="button" className="small-btn" onClick={() => unlinkSso(u)}>{tr("Délier SSO")}</button>}

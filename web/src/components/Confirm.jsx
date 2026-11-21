@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useId, useLayoutEffect, useRef, useState } from 'react'
 import { t as tr } from '../i18n.js'
 
 // Dialogue de confirmation et de saisie : remplace window.prompt / window.confirm.
@@ -21,6 +21,34 @@ export function useConfirm() {
   return [ask, node]
 }
 
+// Socle commun des dialogues (confirmation, formulaire d'édition) : ouverture modale, Échap, focus initial, retour du
+// focus au déclencheur à la fermeture. Le dialogue se ferme en cessant d'être rendu par son parent.
+// `locked` : une action est en cours, Échap n'annule pas.
+export function Modal({ onDismiss, locked = false, labelledBy, describedBy, children }) {
+  const ref = useRef(null)
+  // Effet de mise en page : sa fin s'exécute avant que le nœud quitte le document, quand close() peut encore rendre le focus.
+  useLayoutEffect(() => {
+    const d = ref.current
+    const opener = document.activeElement
+    if (!d.open) d.showModal()
+    // Premier champ modifiable s'il y en a un ; sinon « Annuler » : une action grave ne part pas sur un Entrée involontaire.
+    const first = d.querySelector('input:not([readonly]):not([disabled]), textarea, select:not([disabled])') || d.querySelector('[data-cancel]')
+    first?.focus()
+    if (first?.select && first.value && !['checkbox', 'radio'].includes(first.type)) first.select()
+    return () => {
+      if (d.open) d.close()
+      // Le navigateur rend le focus au déclencheur ; on l'assure s'il a été redessiné entre-temps.
+      if (opener?.isConnected && document.activeElement !== opener) opener.focus?.()
+    }
+  }, [])
+  return (
+    <dialog ref={ref} className="dialog" aria-labelledby={labelledBy} aria-describedby={describedBy}
+      onCancel={(e) => { e.preventDefault(); if (!locked) onDismiss() }}>
+      {children}
+    </dialog>
+  )
+}
+
 function check(field, value, values) {
   const v = field.type === 'password' ? value : value.trim()   // un mot de passe se compare tel que saisi
   const required = field.required !== false
@@ -30,32 +58,14 @@ function check(field, value, values) {
 }
 
 function ConfirmDialog({ title, body, fields = [], confirm, cancel, danger = false, action, onDone }) {
-  const ref = useRef(null)
-  const opener = useRef(null)
+  const form = useRef(null)
   const uid = useId()
   const [values, setValues] = useState(() => Object.fromEntries(fields.map((f) => [f.name, f.initial ?? ''])))
   const [errors, setErrors] = useState({})
   const [failure, setFailure] = useState('')
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => {
-    const d = ref.current
-    opener.current = document.activeElement
-    if (!d.open) d.showModal()
-    // Premier champ s'il y en a un ; sinon « Annuler » : une action grave ne part pas sur une frappe d'Entrée involontaire.
-    const first = d.querySelector('input, textarea, select') || d.querySelector('[data-cancel]')
-    first?.focus()
-    if (first?.select && first.value) first.select()
-    return () => { if (d.open) d.close() }
-  }, [])
-
-  const finish = (out) => {
-    ref.current?.close()
-    onDone(out)
-    // Le navigateur rend le focus au déclencheur à la fermeture ; on l'assure s'il a été redessiné entre-temps.
-    const o = opener.current
-    if (o?.isConnected && document.activeElement !== o) o.focus?.()
-  }
+  const finish = onDone
 
   const submit = async (e) => {
     e.preventDefault()
@@ -64,7 +74,7 @@ function ConfirmDialog({ title, body, fields = [], confirm, cancel, danger = fal
     setErrors(found)
     setFailure('')
     const bad = fields.find((f) => found[f.name])
-    if (bad) { ref.current.querySelector(`[name="${bad.name}"]`)?.focus(); return }
+    if (bad) { form.current.querySelector(`[name="${bad.name}"]`)?.focus(); return }
     const clean = Object.fromEntries(fields.map((f) => [f.name, f.type === 'password' ? values[f.name] : values[f.name].trim()]))
     if (!action) { finish({ values: clean, result: undefined }); return }
     setBusy(true)
@@ -85,9 +95,8 @@ function ConfirmDialog({ title, body, fields = [], confirm, cancel, danger = fal
   }
 
   return (
-    <dialog ref={ref} className="dialog" aria-labelledby={`${uid}-t`} aria-describedby={body ? `${uid}-b` : undefined}
-      onCancel={(e) => { e.preventDefault(); if (!busy) finish(null) }}>
-      <form onSubmit={submit} noValidate>
+    <Modal labelledBy={`${uid}-t`} describedBy={body ? `${uid}-b` : undefined} locked={busy} onDismiss={() => finish(null)}>
+      <form ref={form} onSubmit={submit} noValidate>
         <h2 id={`${uid}-t`}>{title}</h2>
         {body && <div className="dialog-body" id={`${uid}-b`}>{body}</div>}
         {fields.map((f) => {
@@ -114,6 +123,6 @@ function ConfirmDialog({ title, body, fields = [], confirm, cancel, danger = fal
           <button type="submit" className={danger ? 'danger-solid' : 'primary'} disabled={busy} aria-busy={busy || undefined}>{confirm}</button>
         </div>
       </form>
-    </dialog>
+    </Modal>
   )
 }

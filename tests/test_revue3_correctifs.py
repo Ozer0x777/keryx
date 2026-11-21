@@ -189,13 +189,29 @@ def test_limiteur_en_base_ne_se_bloque_pas_lui_meme(settings, app, db, world, al
 
 
 # ---------------------------------------------------------------- M7 : traçabilité
-def test_modification_du_courriel_et_du_nom_tracee(app, db, world):
+def test_modification_du_nom_tracee_et_courriel_non_modifiable(app, db, world):
+    """Le nom affiché se modifie et le changement est tracé [ancien, nouveau]. Le courriel, clé de liaison SSO, n'est
+    jamais modifiable par l'API : ni changé, ni effacé, ni ajouté à un compte qui n'en a pas ; une demande refusée
+    n'applique rien et ne laisse aucune trace de modification. Le même courriel renvoyé tel quel est toléré."""
+    world["users"]["analyst_acme"].email = "a@acme.example"      # courriel fixé à la création du compte
+    db.commit()
     adm = login(app, db, "admin")
-    assert adm.patch("/api/v1/admin/users/analyst_acme", json={"email": "a@acme.example", "display_name": "A. Nouveau"}).status_code == 200
-    assert adm.patch("/api/v1/admin/users/analyst_acme", json={"email": "b@acme.example"}).status_code == 200
-    details = [e.details for e in actions(db, "user.update")]
-    assert details == [{"email": [None, "a@acme.example"], "display_name": ["analyst_acme", "A. Nouveau"]},
-                       {"email": ["a@acme.example", "b@acme.example"]}]
+    url = "/api/v1/admin/users/analyst_acme"
+    r = adm.patch(url, json={"email": "b@acme.example", "display_name": "A. Nouveau"})
+    assert r.status_code == 422 and "courriel" in r.json()["detail"] and "SSO" in r.json()["detail"]
+    assert adm.patch(url, json={"email": None}).status_code == 422               # l'effacer est aussi une modification
+    assert adm.patch(url, json={"email": ""}).status_code == 422
+    assert adm.patch("/api/v1/admin/users/client_acme", json={"email": "c@acme.example"}).status_code == 422   # ni en ajouter un
+    assert actions(db, "user.update") == []                                       # rien d'appliqué, rien de tracé
+    seen = {u["username"]: u for u in adm.get("/api/v1/admin/users").json()["items"]}
+    assert seen["analyst_acme"]["email"] == "a@acme.example" and seen["analyst_acme"]["display_name"] == "analyst_acme"
+    assert seen["client_acme"]["email"] is None
+    # Courriel identique : toléré (formulaire complet renvoyé) ; le nom change et c'est tracé.
+    r = adm.patch(url, json={"email": "a@acme.example", "display_name": "A. Nouveau"})
+    assert r.status_code == 200 and r.json()["email"] == "a@acme.example" and r.json()["display_name"] == "A. Nouveau"
+    assert adm.patch("/api/v1/admin/users/client_acme", json={"email": None, "display_name": "C. Acme"}).status_code == 200
+    assert [e.details for e in actions(db, "user.update")] == [{"display_name": ["analyst_acme", "A. Nouveau"]},
+                                                              {"display_name": ["client_acme", "C. Acme"]}]
 
 
 def test_lectures_sensibles_tracees(app, db, world, alert):

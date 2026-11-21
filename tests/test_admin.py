@@ -49,6 +49,33 @@ def test_modification_ferme_les_sessions_et_protege_son_propre_compte(app, db, w
     assert a.patch("/api/v1/admin/users/analyst_acme", json={"active": False}).json()["active"] is False
 
 
+def test_edition_de_compte_role_et_clients_traces(app, db, world):
+    """Écran d'édition d'un compte : nom affiché, rôle et clients rattachés passent par PATCH /admin/users/{id}.
+    Chaque changement est tracé dans l'audit ; les règles de rôle restent appliquées (un Admin n'a aucun client, un
+    Client exactement un) et un changement de droits ferme les sessions du compte."""
+    from keryx.models import AuditEntry
+    a = login(app, db, "admin")
+    login(app, db, "analyst_acme")
+    url = "/api/v1/admin/users/analyst_acme"
+    r = a.patch(url, json={"display_name": "Alice Martin", "role": "manager", "clients": ["ACME", "DELTA"]})
+    assert r.status_code == 200, r.text
+    assert (r.json()["display_name"], r.json()["role"], r.json()["clients"]) == ("Alice Martin", "manager", ["ACME", "DELTA"])
+    db.rollback()
+    entry = db.scalars(select(AuditEntry).where(AuditEntry.action == "user.update").order_by(AuditEntry.seq.desc())).first()
+    assert entry.actor == "admin" and entry.object_id == world["users"]["analyst_acme"].id
+    assert entry.details == {"display_name": ["analyst_acme", "Alice Martin"], "role": ["analyst", "manager"],
+                             "clients": ["ACME", "DELTA"]}
+    assert db.scalars(select(Session).where(Session.user_id == world["users"]["analyst_acme"].id)).first() is None
+    # Les règles de rôle valent aussi à l'édition : rien n'est appliqué d'une demande refusée.
+    assert a.patch(url, json={"role": "admin"}).status_code == 422                        # un Admin n'a aucun client
+    assert a.patch(url, json={"role": "client"}).status_code == 422                       # un Client en a exactement un
+    assert a.patch(url, json={"clients": []}).status_code == 422                          # un opérateur en a au moins un
+    assert a.patch(url, json={"role": "admin", "clients": []}).status_code == 200         # passage Admin : clients retirés
+    assert a.patch("/api/v1/admin/users/admin", json={"role": "analyst", "clients": ["ACME"]}).status_code == 409   # pas son propre rôle
+    # Le compte devenu Admin n'a plus accès au contenu des tickets.
+    assert login(app, db, "analyst_acme").get("/api/v1/tickets").status_code == 403
+
+
 def test_reinitialisation_2fa_tracee(app, db, world):
     a = login(app, db, "admin")
     r = a.post("/api/v1/admin/users/client_acme/reset-2fa")

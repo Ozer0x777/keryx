@@ -193,19 +193,23 @@ def register(app, ctx) -> None:
         require_role(user, "admin")
         u = get_user(db, username)
         sent = body.model_fields_set
+        # Le courriel d'un compte n'est jamais modifiable : c'est la clé de liaison de son identité SSO (la liaison se
+        # fait sur le courriel vérifié). Le changer, l'ajouter ou l'effacer permettrait de rattacher le compte à une
+        # autre identité. Un courriel identique renvoyé tel quel (formulaire complet) est toléré ; rien n'est appliqué
+        # d'une demande refusée.
+        if "email" in sent and (body.email or None) != (u.email or None):
+            raise HTTPException(422, "Le courriel d'un compte n'est pas modifiable : il sert de clé de liaison SSO. "
+                                     "Si l'adresse doit changer, créez un nouveau compte et désactivez celui-ci.")
         role = body.role if "role" in sent and body.role else u.role
         tenants = tenants_by_keys(db, body.clients) if "clients" in sent and body.clients is not None else list(u.tenants)
         check_role_clients(role, tenants)
         if u.id == user.id and (role != u.role or body.active is False):
             raise HTTPException(409, "Vous ne pouvez pas modifier votre propre rôle ni vous désactiver.")
         changes = {}
-        # Nom et courriel : tracés [ancien, nouveau] (le courriel sert à lier l'identité SSO et à remettre le code d'activation).
+        # Nom affiché : tracé [ancien, nouveau].
         if "display_name" in sent and body.display_name and body.display_name != u.display_name:
             changes["display_name"] = [u.display_name, body.display_name]
             u.display_name = body.display_name
-        if "email" in sent and body.email != u.email:
-            changes["email"] = [u.email, body.email]
-            u.email = body.email
         if role != u.role:
             changes["role"] = [u.role, role]
             u.role = role
