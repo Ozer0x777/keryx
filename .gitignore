@@ -1,4 +1,6 @@
 data/
+# Les jeux d'essai des tests sont versionnés (la règle « data/ » ci-dessus les écartait aussi).
+!tests/data/
 node_modules/
 .env.local
 run.sh
