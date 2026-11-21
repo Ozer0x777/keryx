@@ -31,7 +31,7 @@ export default function Crisis({ t, enc, isManager, open, onChange }) {
     return open ? (
       <section className="card section" aria-label={tr("Mode crise")}>
         <header className="section-head"><h2>{tr("Mode crise")}</h2><button type="button" className="danger" onClick={() => toggle(true)}>{tr("Ouvrir le mode crise")}</button></header>
-        <p className="muted small">Active le registre des décisions, le plan d'action et la synthèse de crise (PRIS VI.5.5.1).</p>
+        <p className="muted small">{tr("Active le registre des décisions, le plan d'action et la synthèse de crise (PRIS VI.5.5.1).")}</p>
         {error && <p className="error" role="alert">{error}</p>}
       </section>
     ) : null

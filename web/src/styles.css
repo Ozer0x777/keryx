@@ -296,3 +296,27 @@ select.narrow-select { max-width: 260px; }
 .grid td.mono.small { font-size: 11.5px; }
 .sso { margin-top: 14px; text-align: center; }
 .sso .btn-link { display: block; text-align: center; width: 100%; padding: 10px 14px; }
+
+/* Petits écrans : le contenu peut rétrécir sous la largeur de ses tableaux (qui défilent dans leur cadre) */
+.shell > .content, .content { min-width: 0; }
+.card, .section { min-width: 0; max-width: 100%; }
+/* Les éléments .sr-only (position absolue) dans un tableau défilant doivent être rognés avec lui, sinon ils élargissent la page */
+.table-wrap { position: relative; }
+
+/* Petits écrans : navigation compacte en bandeau au lieu d'un bloc de la hauteur de l'écran */
+@media (max-width: 800px) {
+  .sidebar { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 10px 12px; }
+  .sidebar .brand { margin: 0 8px 0 0; }
+  .sidebar .nav-section { display: none; }
+  .sidebar .nav-link { min-height: 34px; padding: 5px 10px; font-size: 13px; }
+  .sidebar .nav-link.active { box-shadow: none; }
+  .sidebar-user { margin-top: 0; border-top: 0; padding-top: 0; flex: 1 1 100%; justify-content: space-between; }
+  .nav-logout { width: auto; min-height: 32px; padding: 4px 12px; }
+  .bell-panel { position: fixed; left: 12px; right: 12px; bottom: auto; top: 64px; width: auto; }
+}
+@media (max-width: 800px) {
+  .filters { align-items: stretch; }
+  .filters form.filter { flex: 1 1 100%; }
+  .filters .filter { flex: 1 1 45%; }
+  .filters input[type=search] { min-width: 0; }
+}

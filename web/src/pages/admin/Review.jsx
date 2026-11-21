@@ -15,10 +15,10 @@ export default function Review() {
       <section className="card section" aria-label={tr("Revue des comptes")}>
         <header className="section-head">
           <h2>{tr("Revue des comptes et des droits")}</h2>
-          {review && <button type="button" onClick={exportReview}>Exporter (JSON)</button>}
+          {review && <button type="button" onClick={exportReview}>{tr("Exporter (JSON)")}</button>}
         </header>
         <div className="section-body">
-          <p className="muted small">À réaliser au moins chaque mois (PDIS IV.3.4.b). Généré le {review ? formatUtc(review.generated_at) : '…'}.</p>
+          <p className="muted small">{tr('À réaliser au moins chaque mois (PDIS IV.3.4.b). Généré le {when}.', { when: review ? formatUtc(review.generated_at) : '…' })}</p>
           <div className="table-wrap">
             <table className="grid">
               <thead><tr><th scope="col">{tr("Identifiant")}</th><th scope="col">{tr("Nom")}</th><th scope="col">{tr("Rôle")}</th><th scope="col">{tr("Clients")}</th><th scope="col">{tr("Dernière connexion")}</th><th scope="col">{tr("Codes de secours")}</th><th scope="col">{tr("État")}</th></tr></thead>

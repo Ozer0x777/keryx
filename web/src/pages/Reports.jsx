@@ -33,7 +33,7 @@ export default function Reports() {
         <label className="filter">{tr("Au")}<input type="date" value={f.to} onChange={set('to')} /></label>
         <div className="row gap">
           <button className="primary">{tr("Générer")}</button>
-          <button type="button" onClick={csv}>Exporter le registre (CSV)</button>
+          <button type="button" onClick={csv}>{tr("Exporter le registre (CSV)")}</button>
           <button type="button" onClick={() => window.print()} disabled={!r}>{tr("Imprimer / PDF")}</button>
         </div>
       </form>
@@ -41,7 +41,7 @@ export default function Reports() {
       {r && (
         <article className="report card section" aria-label={tr("Rapport périodique")}>
           <h1>{tr("Rapport d'incidents")} — {r.client.name}</h1>
-          <p className="muted">Période du {r.period.from} au {r.period.to} · généré le {formatUtc(r.generated_at)} · TLP:AMBER</p>
+          <p className="muted">{tr('Période du {from} au {to} · généré le {when} · TLP:AMBER', { from: r.period.from, to: r.period.to, when: formatUtc(r.generated_at) })}</p>
           <h2>{tr("Synthèse")}</h2>
           <dl className="kv"><dt>{tr("Incidents créés")}</dt><dd>{r.totals.created}</dd><dt>{tr("Incidents clos")}</dt><dd>{r.totals.closed}</dd>
             <dt>{tr("Ouverts à ce jour")}</dt><dd>{r.totals.open}</dd><dt>{tr("Échéances tenues")}</dt><dd>{r.sla.rate_percent == null ? '—' : `${r.sla.rate_percent} % (${r.sla.resolution_within_target} sur ${r.sla.closed})`}</dd>

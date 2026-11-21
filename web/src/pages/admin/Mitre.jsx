@@ -53,7 +53,7 @@ export default function Mitre() {
         </div>
       )}
       <div className="subform">
-        <label>Importer le référentiel ATT&amp;CK (fichier STIX 2.1, par exemple enterprise-attack.json téléchargé hors de Keryx)
+        <label>{tr('Importer le référentiel ATT&CK (fichier STIX 2.1, par exemple enterprise-attack.json téléchargé hors de Keryx)')}
           <input type="file" accept=".json,application/json" onChange={importStix} /></label>
         <p className="muted small">{tr("Fournit le nom et les tactiques des techniques corrigées à la main. Aucune connexion sortante : le fichier est déposé ici.")}</p>
       </div>

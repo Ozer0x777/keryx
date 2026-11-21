@@ -76,7 +76,7 @@ export default function Kanban() {
                   <span className="mono ref">{t.ref}</span><span>{t.client}</span>
                   <span className="push">{t.assignee || tr('non assigné')}</span>
                 </div>
-                <label className="sr-only" htmlFor={`mv-${t.ref}`}>Changer le statut de {t.ref}</label>
+                <label className="sr-only" htmlFor={`mv-${t.ref}`}>{tr('Changer le statut de {ref}', { ref: t.ref })}</label>
                 <select id={`mv-${t.ref}`} className="move" value="" onChange={(e) => move(t, e.target.value)}>
                   <option value="">{tr("Déplacer…")}</option>
                   {(TRANSITIONS[t.status] || []).map((s) => <option key={s} value={s}>{STATUS[s].label}</option>)}

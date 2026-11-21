@@ -44,7 +44,7 @@ export default function IsiPanel({ t, enc, run, open }) {
       <label>{tr('Catégorie')}
         <select value={v.category || ''} disabled={!open} onChange={(e) => set('category', e.target.value || undefined)}>
           <option value="">—</option>
-          {Object.entries(dict.categories).map(([k, l]) => <option key={k} value={k}>{k} — {l}</option>)}
+          {Object.entries(dict.categories).map(([k, l]) => <option key={k} value={k}>{k} — {tr(l)}</option>)}
         </select>
       </label>
       {select('who_why', dict.axes.who_why)}

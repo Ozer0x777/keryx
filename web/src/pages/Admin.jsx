@@ -24,14 +24,14 @@ export default function Admin() {
     sys.notifications_failed_24h > 0 ? `${sys.notifications_failed_24h} notification(s) par courriel en échec ces 24 dernières heures.` : null,
     sys.silent_sources > 0 ? `${sys.silent_sources} source(s) Wazuh muette(s) depuis plus de 24 h.` : null,
     sys.storage?.includes('injoignable') ? tr('Le stockage objet des pièces est injoignable.') : null,
-    sys.disk_free_mb != null && sys.disk_free_mb < 500 ? `Espace disque faible pour les pièces : ${sys.disk_free_mb} Mo libres.` : null,
+    sys.disk_free_mb != null && sys.disk_free_mb < 500 ? tr('Espace disque faible pour les pièces : {n} Mo libres.', { n: sys.disk_free_mb }) : null,
   ].filter(Boolean) : []
   return (
     <>
       <header className="page-head">
         <div>
           <h1>{tr("Administration")}</h1>
-          <p className="muted">Le rôle Admin n'a pas accès au contenu des tickets (séparation administrateur / opérateur, PDIS IV.3.9).</p>
+          <p className="muted">{tr("Le rôle Admin n'a pas accès au contenu des tickets (séparation administrateur / opérateur, PDIS IV.3.9).")}</p>
         </div>
       </header>
       {alerts.length > 0 && <div className="banner warn" role="alert"><strong>{tr("À traiter :")}</strong><ul>{alerts.map((a) => <li key={a}>{a}</li>)}</ul></div>}

@@ -101,7 +101,7 @@ export default function Ticket() {
           <h1>{t.title}</h1>
           <div className="row wrap gap">
             <Status value={t.status} />
-            <Severity value={t.criticite_initiale} prefix="Criticité initiale : " />
+            <Severity value={t.criticite_initiale} prefix={tr("Criticité initiale : ")} />
             {t.gravite && <Severity value={t.gravite} prefix="Gravité : " />}
             <Tlp value={t.tlp} />
             <span className="muted small">Détecté {formatUtc(t.detected_at)} · règle Wazuh {t.rule.id} (niveau {t.rule.level}) · {t.occurrences} occurrence(s)</span>
@@ -110,7 +110,7 @@ export default function Ticket() {
         {isTeam && (
           <div className="row wrap gap">
             <Link to={`/tickets/${enc}/rapport`} className="btn-link">{tr("Rapport imprimable")}</Link>
-            <button type="button" onClick={exportIodef}>Exporter (IODEF JSON)</button>
+            <button type="button" onClick={exportIodef}>{tr("Exporter (IODEF JSON)")}</button>
             {(TRANSITIONS[t.status] || []).map((s) => (
               <button type="button" key={s} className="primary"
                 onClick={() => run(() => api(`/tickets/${enc}/status`, { method: 'POST', json: { status: s } }), `Statut : ${STATUS[s].label}.`)}>
@@ -198,7 +198,7 @@ function Description({ t, enc, canEdit, run, onImage }) {
 
 function AlertBlock({ t }) {
   return (
-    <Section title={tr("Alerte Wazuh")} extra={<span className="muted small">{t.raw_alerts} alerte(s) brute(s) conservée(s) avec empreinte SHA-256</span>}>
+    <Section title={tr("Alerte Wazuh")} extra={<span className="muted small">{tr('{n} alerte(s) brute(s) conservée(s) avec empreinte SHA-256', { n: t.raw_alerts })}</span>}>
       <dl className="kv">
         <dt>{tr("Règle")}</dt><dd className="mono">{t.rule.id} · niveau {t.rule.level}</dd>
         <dt>{tr("Description")}</dt><dd>{t.rule.description}</dd>
@@ -262,13 +262,13 @@ function Attachments({ t, enc, me, run, setNotice }) {
       </div>}>
       {form && (
         <form className="subform" onSubmit={submit}>
-          <label>Fichier (archive ZIP, PNG, JPEG ou WebP)<input type="file" name="file" accept=".zip,image/png,image/jpeg,image/webp" required /></label>
-          <label>Description (obligatoire)<input name="description" minLength={3} required /></label>
+          <label>{tr("Fichier (archive ZIP, PNG, JPEG ou WebP)")}<input type="file" name="file" accept=".zip,image/png,image/jpeg,image/webp" required /></label>
+          <label>{tr("Description (obligatoire)")}<input name="description" minLength={3} required /></label>
           <div className="grid2">
             <label>{tr("Date et heure de collecte")}<input type="datetime-local" name="collected_at" defaultValue={nowLocal()} required /></label>
             <label>{tr("Sensibilité")}<select name="sensitivity" defaultValue={t.tlp}>{TLPS.map((x) => <option key={x}>{x}</option>)}</select></label>
           </div>
-          <label>Méthode de collecte (obligatoire)<input name="method" minLength={3} placeholder={tr("ex. export du journal du pare-feu")} required /></label>
+          <label>{tr("Méthode de collecte (obligatoire)")}<input name="method" minLength={3} placeholder={tr("ex. export du journal du pare-feu")} required /></label>
           {!isClient && <label className="check"><input type="checkbox" name="visible_client" value="true" /> {tr("Visible par le client")}</label>}
           <p className="muted small">{tr("L'archive n'est jamais décompressée par Keryx. Analyse antivirus automatique quand ClamAV est configuré.")}</p>
           <div className="row gap end"><button type="button" onClick={() => setForm(null)}>{tr("Annuler")}</button><button className="primary">{tr("Déposer")}</button></div>
@@ -281,7 +281,7 @@ function Attachments({ t, enc, me, run, setNotice }) {
           <label>{tr("Description")}<input name="description" minLength={3} required /></label>
           <div className="grid2">
             <label>{tr("Date et heure de collecte")}<input type="datetime-local" name="collected_at" defaultValue={nowLocal()} required /></label>
-            <label>Taille (octets)<input type="number" name="size" min="0" /></label>
+            <label>{tr("Taille (octets)")}<input type="number" name="size" min="0" /></label>
           </div>
           <label>{tr("Méthode de collecte")}<input name="method" minLength={3} required /></label>
           <label>{tr("Empreinte SHA-256")}<input name="sha256" pattern="[0-9a-fA-F]{64}" className="mono" required /></label>
@@ -352,7 +352,7 @@ function Synthese({ t, enc, run, onImage, templates }) {
       <RichEditor value={v.mode_operatoire} onChange={(x) => setV({ ...v, mode_operatoire: x })} label={tr("Mode opératoire")} templates={templates} minHeight={80} />
       <h3>{tr("Périmètre")}</h3>
       <RichEditor value={v.perimetre} onChange={(x) => setV({ ...v, perimetre: x })} label={tr("Périmètre")} templates={templates} minHeight={80} />
-      <h3>Retour d'expérience {t.rex_required && <span className="pill warn">{tr("obligatoire")}</span>}</h3>
+      <h3>{tr("Retour d'expérience")} {t.rex_required && <span className="pill warn">{tr("obligatoire")}</span>}</h3>
       <RichEditor value={v.rex_html} onChange={(x) => setV({ ...v, rex_html: x })} label={tr("Retour d'expérience")} templates={templates} onImage={onImage} minHeight={80} />
       <div className="row end"><button type="button" className="primary" onClick={save}>{tr("Enregistrer la synthèse")}</button></div>
     </Section>
@@ -451,7 +451,7 @@ function Qualification({ t, enc, run, open }) {
         </label>
       </div>
       {t.severity_hint && open && (
-        <p className="muted small" data-testid="severity-hint">Selon l'importance « {IMPORTANCES[v.importance]} » de l'équipement : dommages limités → <strong>{t.severity_hint.limites}</strong>{tr(", significatifs →")} <strong>{t.severity_hint.significatifs}</strong>{tr(", graves →")} <strong>{t.severity_hint.graves}</strong> (grille du client). La gravité est fixée par votre qualification.</p>
+        <p className="muted small" data-testid="severity-hint">{tr("Selon l'importance « {imp} » de l'équipement : dommages limités → {a}, significatifs → {b}, graves → {c} (grille du client). La gravité est fixée par votre qualification.", { imp: IMPORTANCES[v.importance], a: tr(t.severity_hint.limites), b: tr(t.severity_hint.significatifs), c: tr(t.severity_hint.graves) })}</p>
       )}
       <div className="row between gravity"><span className="muted">{tr("Gravité qualifiée")}</span><Severity value={t.gravite} /></div>
       <label>{tr("Impact constaté")}<textarea rows="2" value={v.impact} disabled={!open} onChange={(e) => setV({ ...v, impact: e.target.value })} /></label>
@@ -485,16 +485,16 @@ function Mitre({ t, enc, run, open }) {
       <p className="muted small">{tr("Source :")} <strong>{MITRE_SOURCE[t.mitre_source]}</strong></p>
       {open && (
         <>
-          <label>Rechercher une technique (nom ou identifiant)<input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("ex. brute force")} /></label>
+          <label>{tr("Rechercher une technique (nom ou identifiant)")}<input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("ex. brute force")} /></label>
           {found.length > 0 && (
             <ul className="found">{found.map((f) => (
               <li key={f.id}><button type="button" className="link" onClick={() => { setText((x) => [...new Set([...x.split(/[\s,;]+/).filter(Boolean), f.id])].join(', ')); setQ('') }}>
                 <span className="mono">{f.id}</span> {f.name}</button></li>))}</ul>
           )}
-          <label>Techniques (ex. T1110, T1543.003)<input className="mono" value={text} onChange={(e) => setText(e.target.value)} /></label>
+          <label>{tr("Techniques (ex. T1110, T1543.003)")}<input className="mono" value={text} onChange={(e) => setText(e.target.value)} /></label>
           <button type="button" onClick={() => run(() => api(`/tickets/${enc}/mitre`, {
             method: 'POST', json: { techniques: text.split(/[\s,;]+/).filter(Boolean).map((x) => x.toUpperCase()) },
-          }), tr('MITRE corrigé (tracé).'))}>Corriger (tracé)</button>
+          }), tr('MITRE corrigé (tracé).'))}>{tr("Corriger (tracé)")}</button>
         </>
       )}
     </section>
@@ -507,7 +507,7 @@ function Assignment({ t, enc, run, open }) {
   return (
     <section className="card section" aria-label={tr("Affectation")}>
       <h2>{tr("Affectation")}</h2>
-      <label>Assigné à
+      <label>{tr('Assigné à')}
         <select disabled={!open} value={people.find((p) => p.display_name === t.assignee)?.username || ''}
           onChange={(e) => run(() => api(`/tickets/${enc}/assign`, { method: 'POST', json: { username: e.target.value || null } }), tr('Affectation enregistrée.'))}>
           <option value="">{tr("Personne")}</option>

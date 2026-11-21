@@ -41,7 +41,7 @@ export default function Dashboard() {
             <div className="card stat"><span className="muted">{tr("Clos")}</span><strong>{d.totals.closed}</strong><span className="muted small">{tr("sur la période")}</span></div>
             <div className="card stat"><span className="muted">{tr("Ouverts")}</span><strong>{d.totals.open}</strong><span className="muted small">{tr("à ce jour")}</span></div>
             <div className="card stat"><span className="muted">{tr("En retard")}</span><strong>{d.totals.overdue}</strong><span className="muted small">{tr("échéance dépassée")}</span></div>
-            <div className="card stat"><span className="muted">{tr("Échéances tenues")}</span><strong>{d.sla.rate_percent == null ? '—' : `${d.sla.rate_percent} %`}</strong><span className="muted small">{d.sla.resolution_within_target} sur {d.sla.closed} clos</span></div>
+            <div className="card stat"><span className="muted">{tr("Échéances tenues")}</span><strong>{d.sla.rate_percent == null ? '—' : `${d.sla.rate_percent} %`}</strong><span className="muted small">{tr('{a} sur {b} clos', { a: d.sla.resolution_within_target, b: d.sla.closed })}</span></div>
           </section>
           <div className="grid2 dash">
             <section className="card section" aria-label={tr("Évolution")}><h2>{tr("Créés et clos par jour")}</h2><TrendChart data={d.trend} /></section>
@@ -49,7 +49,7 @@ export default function Dashboard() {
               <h2>{tr("Délais moyens")}</h2>
               <dl className="kv"><dt>{tr("Qualification")}</dt><dd>{fmtH(d.delays.qualification_hours_avg)} <span className="muted small">({d.delays.qualified_count} ticket(s))</span></dd>
                 <dt>{tr("Résolution")}</dt><dd>{fmtH(d.delays.resolution_hours_avg)} <span className="muted small">({d.delays.closed_count} ticket(s))</span></dd></dl>
-              <p className="muted small">Mesurés depuis la création du ticket. Les cibles se règlent par client (Administration &gt; Clients).</p>
+              <p className="muted small">{tr('Mesurés depuis la création du ticket. Les cibles se règlent par client (Administration > Clients).')}</p>
             </section>
             <section className="card section" aria-label={tr("Tickets ouverts par gravité")}><h2>{tr("Ouverts par gravité")}</h2>
               <BarList label={tr("Tickets ouverts par gravité")} colors={SEV_COLORS} rows={Object.entries(d.open_by_severity).map(([label, value]) => ({ label, value, key: label }))} /></section>

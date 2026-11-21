@@ -81,7 +81,7 @@ administration, confort de travail, pilotage, conformité, sauvegarde, script d'
 
 Essais contre de vrais composants (facultatifs) : `KERYX_TEST_S3_REAL='endpoint|bucket|clé|secret|région'` (serveur S3), `KERYX_TEST_TSA_REAL='url|ca.pem'` (autorité d'horodatage), `E2E_KEYCLOAK=http://hôte:8180` (SSO). Dossier pour les tiers : `docs/homologation/`.
 
-Parcours dans un navigateur (Chrome sans tête, base temporaire, 6 scénarios dont un contrôle d'accessibilité axe-core) :
+Parcours dans un navigateur (Chrome sans tête, base temporaire : parcours de chaque rôle, mise en page à 1400, 1024, 768 et 390 px, couverture de la traduction anglaise, SSO réel, horodatage, ETSI ISI, contrôle d'accessibilité axe-core) :
 ```bash
 cd e2e && npm ci && node run.mjs        # CHROME_PATH et KERYX_PYTHON si besoin
 ```
@@ -126,6 +126,7 @@ Matrice complète : `docs/matrice-tracabilite.md` · exploitation : `docs/exploi
 - PostgreSQL 16 : la suite complète passe (201 tests, dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore). Non testé : haute disponibilité, réplication, très gros volumes.
 - Jamais testé contre un vrai manager Wazuh (le script d'intégration est testé avec un serveur simulé).
 - Interface testée dans Chrome sans tête (parcours de chaque rôle) et contrôlée avec axe-core (WCAG 2.1 A/AA) ; pas d'audit RGAA complet ni de test d'intrusion.
+- Restent en français par construction, même en mode anglais : le corps de ticket généré par le serveur à partir de l'alerte Wazuh (libellés « Règle », « Décodeur »…), les lignes techniques du registre des actions (codes d'action et clés de détail) et les noms de langues.
 - Pas encore : validation IODEF contre le schéma officiel complet, PDF généré côté serveur (impression du navigateur à la place).
 
 Un outil ne qualifie pas un prestataire : Keryx fournit les registres, la traçabilité et le

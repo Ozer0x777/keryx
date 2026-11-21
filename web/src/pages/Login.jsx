@@ -114,9 +114,9 @@ export default function Login({ onDone }) {
               <form onSubmit={submitEnroll}>
                 <span className="eyebrow">{t('Première connexion')}</span>
                 <h1>{t('Activer votre compte')}</h1>
-                <p className="muted">1. Ajoutez ce compte dans votre application d'authentification (FreeOTP, Aegis, Google Authenticator…) avec la clé ci-dessous.</p>
+                <p className="muted">{tr("1. Ajoutez ce compte dans votre application d'authentification (FreeOTP, Aegis, Google Authenticator…) avec la clé ci-dessous.")}</p>
                 <p className="mono small" style={{ wordBreak: 'break-all' }} data-testid="totp-secret">{enroll?.totp_secret}</p>
-                <details><summary className="small">Adresse de configuration (otpauth)</summary><p className="mono small" style={{ wordBreak: 'break-all' }}>{enroll?.totp_uri}</p></details>
+                <details><summary className="small">{tr("Adresse de configuration (otpauth)")}</summary><p className="mono small" style={{ wordBreak: 'break-all' }}>{enroll?.totp_uri}</p></details>
                 <p className="muted">{tr("2. Saisissez le code à 6 chiffres affiché, puis choisissez votre mot de passe personnel.")}</p>
                 <label htmlFor="ecode">{tr("Code TOTP")}</label>
                 <input id="ecode" className="otp" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.trim())} required />
@@ -132,7 +132,7 @@ export default function Login({ onDone }) {
             <form onSubmit={submitActivation}>
               <span className="eyebrow">{tr("Première connexion")}</span>
               <h1>{t("Code d'activation")}</h1>
-              <p className="muted">Saisissez le code d'activation qui vous a été remis (par courriel ou par votre administrateur).</p>
+              <p className="muted">{tr("Saisissez le code d'activation qui vous a été remis (par courriel ou par votre administrateur).")}</p>
               <label htmlFor="act">{t("Code d'activation")}</label>
               <input id="act" autoComplete="off" value={activation} onChange={(e) => setActivation(e.target.value)} required />
               {error && <p className="error" role="alert">{error}</p>}

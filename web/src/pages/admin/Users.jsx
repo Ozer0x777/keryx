@@ -73,13 +73,13 @@ export default function Users() {
           <div className="grid2">
             <label>{tr("Identifiant")}<input name="username" required pattern="[A-Za-z0-9._-]{3,64}" autoComplete="off" /></label>
             <label>{tr("Nom affiché")}<input name="display_name" required /></label>
-            <label>Courriel (facultatif)<input name="email" type="email" /></label>
+            <label>{tr("Courriel (facultatif)")}<input name="email" type="email" /></label>
             <label>{tr("Rôle")}<select name="role" defaultValue="analyst">{Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
           </div>
-          <fieldset className="fieldset"><legend>Clients (aucun pour un Admin, un seul pour un Client)</legend>
+          <fieldset className="fieldset"><legend>{tr("Clients (aucun pour un Admin, un seul pour un Client)")}</legend>
             {clients.map((c) => <label key={c.key} className="check"><input type="checkbox" name="clients" value={c.key} /> {c.key} — {c.name}</label>)}
           </fieldset>
-          <label>Mot de passe initial (12 caractères minimum)<input name="password" type="password" minLength={12} required autoComplete="new-password" /></label>
+          <label>{tr("Mot de passe initial (12 caractères minimum)")}<input name="password" type="password" minLength={12} required autoComplete="new-password" /></label>
           <div className="row gap end"><button type="button" onClick={() => setForm(null)}>{tr("Annuler")}</button><button className="primary">{tr("Créer")}</button></div>
         </form>
       )}

@@ -77,7 +77,7 @@ export default function Profile() {
         <header className="section-head"><h2>{tr("Changer de mot de passe")}</h2></header>
         <form onSubmit={changePassword} className="narrow">
           <label>{tr("Mot de passe actuel")}<input name="current" type="password" required autoComplete="current-password" /></label>
-          <label>Nouveau mot de passe (12 caractères minimum)<input name="new" type="password" minLength={12} required autoComplete="new-password" /></label>
+          <label>{tr("Nouveau mot de passe (12 caractères minimum)")}<input name="new" type="password" minLength={12} required autoComplete="new-password" /></label>
           <label>{tr("Confirmer le nouveau mot de passe")}<input name="confirm" type="password" minLength={12} required autoComplete="new-password" /></label>
           <button className="primary">{tr("Modifier")}</button>
         </form>
@@ -96,7 +96,7 @@ export default function Profile() {
       </section>
       <section className="card section" aria-label={tr("Codes de secours")}>
         <header className="section-head"><h2>{tr("Codes de secours")}</h2></header>
-        <p className="muted small">Génère 10 nouveaux codes à usage unique ; les précédents cessent de fonctionner.</p>
+        <p className="muted small">{tr('Génère 10 nouveaux codes à usage unique ; les précédents cessent de fonctionner.')}</p>
         <form onSubmit={regen} className="row gap wrap">
           <label>{tr("Mot de passe")}<input name="password" type="password" required autoComplete="current-password" /></label>
           <button>{tr("Régénérer")}</button>
@@ -106,7 +106,7 @@ export default function Profile() {
         <section className="card section" aria-label={tr("Notifications")}>
           <header className="section-head"><h2>{tr("Notifications dans l'interface")}</h2></header>
           {prefs.kinds.map((k) => (
-            <label key={k} className="check"><input type="checkbox" checked={prefs.prefs[k]} onChange={(e) => setPref(k, e.target.checked)} /> {{ assignation: 'Ticket qui m\'est affecté', mention: 'Mention dans un commentaire', echeance: 'Échéance dépassée', reponse_client: tr('Réponse d\'un client') }[k]}</label>
+            <label key={k} className="check"><input type="checkbox" checked={prefs.prefs[k]} onChange={(e) => setPref(k, e.target.checked)} /> {{ assignation: tr("Ticket qui m'est affecté"), mention: tr('Mention dans un commentaire'), echeance: tr('Échéance dépassée'), reponse_client: tr("Réponse d'un client") }[k]}</label>
           ))}
         </section>
       )}

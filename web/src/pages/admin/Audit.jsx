@@ -27,16 +27,16 @@ export default function Audit() {
           {chain && (chain.chain_ok
             ? <p className="banner ok">Chaîne intègre : {chain.entries} entrées vérifiées (scellement HMAC).</p>
             : <p className="banner danger">Chaîne ROMPUE à l'entrée {chain.first_broken_seq}. Prévenir le RSSI.</p>)}
-          <p className="muted small">Pour détecter une suppression des dernières entrées, comparer avec un point de contrôle archivé hors de Keryx (<span className="mono">{tr("keryx checkpoint")}</span>) ou avec le flux syslog envoyé à Wazuh.</p>
+          <p className="muted small">{tr("Pour détecter une suppression des dernières entrées, comparer avec un point de contrôle archivé hors de Keryx (")}<span className="mono">{tr("keryx checkpoint")}</span>{tr(") ou avec le flux syslog envoyé à Wazuh.")}</p>
         </div>
       </section>
       <section className="card section" aria-label={tr("Point de contrôle")}>
         <header className="section-head"><h2>{tr("Point de contrôle")}</h2><button type="button" onClick={checkpoint}>{tr("Générer")}</button></header>
-        <p className="muted small">À archiver hors de Keryx (coffre, ticket de changement) : il permet de détecter la suppression des dernières entrées.</p>
+        <p className="muted small">{tr("À archiver hors de Keryx (coffre, ticket de changement) : il permet de détecter la suppression des dernières entrées.")}</p>
         {cp && <p className="mono small" style={{ wordBreak: 'break-all' }}>{cp.value}</p>}
         {stamps.enabled && (
           <>
-            <h3>Horodatage de confiance (RFC 3161)</h3>
+            <h3>{tr("Horodatage de confiance (RFC 3161)")}</h3>
             <p className="muted small">{tr("Fait attester par une autorité d'horodatage l'état du journal à cet instant : seule l'empreinte du point de contrôle quitte Keryx.")}</p>
             <button type="button" onClick={stampCheckpoint}>{tr("Horodater le point de contrôle actuel")}</button>
             <p className="live" role="status">{stampMsg}</p>

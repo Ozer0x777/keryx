@@ -32,7 +32,7 @@ function ClientEditor({ client, onSaved, onError }) {
   }
   return (
     <form className="subform" onSubmit={save}>
-      <label>Contacts de notification (séparés par des virgules)<input value={emails} onChange={(e) => setEmails(e.target.value)} /></label>
+      <label>{tr("Contacts de notification (séparés par des virgules)")}<input value={emails} onChange={(e) => setEmails(e.target.value)} /></label>
       <label>Rétention des alertes brutes, en mois (6 minimum, vide = valeur par défaut)<input type="number" min="6" max="120" value={retention} onChange={(e) => setRetention(e.target.value)} /></label>
       <label>Taille maximale d'une pièce, en Mo (1 à 20, vide = 20 : plafond fixé par le plan)<input type="number" min="1" max="20" value={maxMb} onChange={(e) => setMaxMb(e.target.value)} /></label>
       <h3>Grille de gravité {grid ? tr('(propre au client)') : tr('(grille par défaut)')}</h3>
@@ -45,7 +45,7 @@ function ClientEditor({ client, onSaved, onError }) {
               {SEVS.map((s) => <option key={s} value={s}>{tr(s)}</option>)}</select></td>))}</tr>))}
         </tbody></table></div>
       {grid && <button type="button" className="link" onClick={() => setGrid(null)}>{tr("Revenir à la grille par défaut")}</button>}
-      <h3>Délais cibles (heures)</h3>
+      <h3>{tr("Délais cibles (heures)")}</h3>
       <div className="table-wrap"><table className="grid">
         <thead><tr><th scope="col">{tr("Gravité")}</th><th scope="col">{tr("Qualification")}</th><th scope="col">{tr("Résolution")}</th></tr></thead>
         <tbody>{SEVS.map((s) => (
@@ -77,7 +77,7 @@ export default function Clients() {
       {error && <p className="error" role="alert">{error}</p>}
       <p className="live" role="status">{msg}</p>
       <form className="row gap wrap" onSubmit={create}>
-        <label>Clé (ex. ACME)<input name="key" required pattern="[A-Za-z0-9]{1,16}" /></label>
+        <label>{tr("Clé (ex. ACME)")}<input name="key" required pattern="[A-Za-z0-9]{1,16}" /></label>
         <label className="grow">{tr("Nom")}<input name="name" required /></label>
         <button className="primary">{tr("Ajouter")}</button>
       </form>
