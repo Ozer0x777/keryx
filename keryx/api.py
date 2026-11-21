@@ -757,6 +757,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "attachments": [attachment_view(a) for a in atts if (a.visible_client or not is_client)],
         })
         if not is_client:
+            # Identifiant de l'assigné (le nom affiché n'est pas unique) : sert au sélecteur d'affectation de l'équipe.
+            assignee = authors.get(t.assignee_id) if t.assignee_id else None
+            out["assignee_username"] = assignee.username if assignee else None
+            out["assignee_active"] = bool(assignee and assignee.active)
             out["raw_alerts"] = len(db.scalars(select(RawAlert.id).where(RawAlert.ticket_id == t.id)).all())
             out["synthese"] = {"compromission_initiale": rfc3339(t.compromission_initiale),
                                "chronologie": t.chronologie, "mode_operatoire": t.mode_operatoire,
@@ -832,7 +836,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 raise HTTPException(422, "Utilisateur inconnu ou non affecté à ce client.")
         assign_ticket(db, user, t, target)
         commit(db)
-        return {"ref": t.ref, "assignee": target.display_name if target else None}
+        return {"ref": t.ref, "assignee": target.display_name if target else None,
+                "assignee_username": target.username if target else None}
 
     @app.get("/api/v1/tickets/{ref}/assignables")
     def assignables(ref: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
@@ -872,7 +877,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 if u.id != author.id and t.tenant_id in [x.id for x in u.tenants]:
                     inbox.push(db, u, "mention", t.ref, actor=author.username)
         if author.role == "client":
-            targets = [db.get(User, t.assignee_id)] if t.assignee_id else [
+            assignee = db.get(User, t.assignee_id) if t.assignee_id else None
+            # L'assigné doit pouvoir lire la réponse : actif, toujours agent du SOC, toujours affecté à ce client.
+            # Sinon (compte désactivé, rôle ou affectation changés, ticket non assigné) : repli sur l'équipe du client.
+            reachable = bool(assignee and assignee.active and assignee.role in ("analyst", "manager")
+                             and t.tenant_id in [x.id for x in assignee.tenants])
+            targets = [assignee] if reachable else [
                 u for u in db.scalars(select(User).where(User.role.in_(("analyst", "manager")),
                                                          User.active.is_(True))).all()
                 if t.tenant_id in [x.id for x in u.tenants]]

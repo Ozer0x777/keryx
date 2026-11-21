@@ -509,9 +509,12 @@ function Assignment({ t, enc, run, open }) {
     <section className="card section" aria-label={tr("Affectation")}>
       <h2>{tr("Affectation")}</h2>
       <label>{tr('Assigné à')}
-        <select disabled={!open} value={people.find((p) => p.display_name === t.assignee)?.username || ''}
+        {/* Valeur fondée sur l'identifiant de l'assigné (unique), pas sur son nom affiché (deux comptes peuvent porter le même). */}
+        <select disabled={!open} value={t.assignee_username || ''}
           onChange={(e) => run(() => api(`/tickets/${enc}/assign`, { method: 'POST', json: { username: e.target.value || null } }), tr('Affectation enregistrée.'))}>
           <option value="">{tr("Personne")}</option>
+          {t.assignee_username && !people.some((p) => p.username === t.assignee_username) &&
+            <option value={t.assignee_username} disabled>{t.assignee}{t.assignee_active === false ? ` ${tr('(inactif)')}` : ''}</option>}
           {people.map((p) => <option key={p.username} value={p.username}>{p.display_name}</option>)}
         </select>
       </label>

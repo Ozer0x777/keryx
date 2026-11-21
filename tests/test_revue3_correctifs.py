@@ -279,3 +279,25 @@ def test_bornes_de_dates_du_journal_incluent_minuit(app, db, world, monkeypatch)
     assert found(**{"from": "2026-11-20", "to": "2026-11-20"}) == both
     assert found(**{"from": "2026-11-20"}) == both and found(to="2026-11-20") == both
     assert found(**{"from": "2026-11-21"}) == [] and found(to="2026-11-19") == []
+
+
+# ---------------------------------------------------------------- F7 : réponse du client et assigné
+def test_reponse_client_quand_l_assigne_est_desactive(app, db, world, alert):
+    ingest(app, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE))
+    a, m, c = login(app, db, "analyst_acme"), login(app, db, "manager"), login(app, db, "client_acme")
+    r = a.post("/api/v1/tickets/ACME-1/assign", json={"username": "analyst_acme"})
+    assert r.status_code == 200 and r.json()["assignee_username"] == "analyst_acme"
+    # L'équipe reçoit l'identifiant de l'assigné (le nom affiché n'est pas unique) ; le client ne le reçoit pas
+    seen = m.get("/api/v1/tickets/ACME-1").json()
+    assert seen["assignee_username"] == "analyst_acme" and seen["assignee_active"] is True
+    assert "assignee_username" not in c.get("/api/v1/tickets/ACME-1").json()
+
+    def replies(who):
+        return [n for n in who.get("/api/v1/notifications").json()["items"] if n["kind"] == "reponse_client"]
+
+    assert c.post("/api/v1/tickets/ACME-1/comments", json={"body_html": "<p>première réponse</p>"}).status_code == 201
+    assert len(replies(a)) == 1 and replies(m) == []                          # assigné actif : lui seul
+    assert login(app, db, "admin").patch("/api/v1/admin/users/analyst_acme", json={"active": False}).status_code == 200
+    assert c.post("/api/v1/tickets/ACME-1/comments", json={"body_html": "<p>seconde réponse</p>"}).status_code == 201
+    assert len(replies(m)) == 1                                               # repli sur l'équipe du client
+    assert m.get("/api/v1/tickets/ACME-1").json()["assignee_active"] is False
