@@ -106,6 +106,19 @@ export async function answerDialog(page, values = {}, { cancel = false, stays = 
   return d
 }
 
+// Fiche ticket : les panneaux sont repliables (<details>) et repliés ou non selon la phase du ticket.
+// unfold() déplie un panneau par son titre comme le ferait l'utilisateur ; unfoldAll() les déplie tous (contrôles
+// qui portent sur tout le contenu de la page : traduction, accessibilité, mise en page).
+export async function unfold(page, title) {
+  const d = page.locator(`section[aria-label="${title}"] > details`)
+  await d.waitFor({ state: 'attached' })
+  if (!(await d.evaluate((e) => e.open))) await d.locator('> summary').click()
+}
+export async function unfoldAll(page) {
+  const closed = page.locator('.fold > details:not([open]) > summary')
+  for (let i = 0; i < 40 && await closed.count() > 0; i++) await closed.first().click()   // la liste raccourcit à chaque clic
+}
+
 export function check(cond, label) {
   if (!cond) { console.error(`✗ ${label}`); process.exitCode = 1 } else console.log(`✓ ${label}`)
 }

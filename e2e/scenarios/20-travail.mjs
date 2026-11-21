@@ -1,4 +1,4 @@
-import { answerDialog, until } from '../harness.mjs'
+import { answerDialog, unfold, until } from '../harness.mjs'
 
 export default async ({ stack, BASE, check, login }) => {
   const send = (alert) => fetch(`${BASE}/api/v1/ingest/wazuh`, { method: 'POST', headers: { Authorization: `Bearer ${stack.seeds.apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify(alert) }).then((r) => r.json())
@@ -60,11 +60,31 @@ export default async ({ stack, BASE, check, login }) => {
   await carte.click()
   await until(async () => await carte.getAttribute('aria-pressed') === 'false', 'carte relâchée')
   check(!m.url().includes('status='), 'recliquer la carte retire son filtre')
-  // lien entre tickets depuis la fiche
+  // fiche d'un ticket « Nouveau » : échéance et assigné dans l'en-tête, seuls les panneaux utiles au triage sont ouverts
   await m.goto(`${BASE}/tickets/ACME-1`)
+  await m.waitForSelector('.ticket-facts')
+  const facts = await m.locator('.ticket-facts').innerText()
+  check(facts.includes('Qualifier avant') && facts.includes('Résoudre avant') && facts.includes('UTC'), "en-tête : échéances de qualification et de résolution (UTC)")
+  check(facts.includes('Assigné à') && facts.includes('Test analyste'), "en-tête : assigné du ticket")
+  await m.waitForSelector('section[aria-label="Affectation"]')
+  const ouverts = await m.locator('.fold > details[open]').evaluateAll((l) => l.map((d) => d.parentElement.getAttribute('aria-label')))
+  check(JSON.stringify(ouverts) === JSON.stringify(['Description', 'Qualification', 'Affectation']), `statut Nouveau : alerte (dans la description), qualification et affectation ouvertes, le reste replié (${ouverts.join(', ')})`)
+  check(await m.locator('section[aria-label="Alerte Wazuh"]').count() === 0 && await m.locator('.alert-extra').count() === 1, "l'alerte déjà reprise par la description n'est pas répétée dans un second panneau")
+  check(await m.locator('.ticket-actions button.primary').count() === 1, 'un seul bouton primaire parmi les actions de l\'en-tête')
+  check(await m.evaluate(() => getComputedStyle(document.querySelector('.ticket-aside')).position) !== 'sticky', 'colonne de pilotage non collante')
+  // lien entre tickets depuis la fiche
+  await unfold(m, 'Tickets liés')
   await m.fill('input[placeholder="ACME-2"]', 'ACME-2'); await m.getByRole('button', { name: 'Lier', exact: true }).click()
   await m.waitForSelector('.linklist >> text=ACME-2')
   check(true, 'lien créé depuis la fiche')
+  // éditeur riche : l'état actif d'un bouton suit la mise en forme (classe et aria-pressed)
+  await unfold(m, 'Commentaires')
+  await m.locator('.rich-content').last().click()
+  const gras = m.locator('section[aria-label="Commentaires"] .tool[aria-label="Gras"]')
+  check(await gras.getAttribute('aria-pressed') === 'false', 'éditeur : bouton Gras relâché par défaut')
+  await gras.click(); await m.keyboard.type('x')
+  check(await gras.getAttribute('aria-pressed') === 'true' && (await gras.getAttribute('class')).includes('on'), 'éditeur : bouton Gras marqué actif (aria-pressed et style)')
+  await gras.click(); await m.keyboard.press('Backspace')
   // modèle enregistré depuis un commentaire
   await m.locator('.rich-content').last().click(); await m.keyboard.type('Accusé de réception, analyse en cours.')
   await m.getByRole('button', { name: 'Enregistrer comme modèle' }).click()
@@ -102,7 +122,8 @@ export default async ({ stack, BASE, check, login }) => {
   check(true, 'vue Mes tickets')
   // modèle visible côté ticket
   await a.goto(`${BASE}/tickets/ACME-1`)
-  await a.waitForSelector('select[aria-label="Insérer un modèle"]')
+  await unfold(a, 'Commentaires')
+  await a.waitForSelector('section[aria-label="Commentaires"] select[aria-label="Insérer un modèle"]')
   check(true, 'modèle proposé à l\'éditeur')
   check(a.errors.length === 0, 'aucune erreur JavaScript')
   await a.context().close()

@@ -13,3 +13,11 @@ export const utcClock = (d = new Date()) => `${d.toISOString().slice(11, 16)} UT
 export const utcInputNow = (d = new Date()) => d.toISOString().slice(0, 16)
 export const isoToUtcInput = (iso) => (iso ? new Date(iso).toISOString().slice(0, 16) : '')
 export const utcInputToIso = (value) => (value ? new Date(`${value.slice(0, 16)}:00Z`).toISOString() : null)
+
+// Temps restant avant une échéance (ou écoulé depuis) : { late, days, hours, minutes }. Sert à l'en-tête de la fiche
+// ticket (« Qualifier avant … · dans 2 h 05 »). `now` est injectable pour les tests.
+export function untilUtc(iso, now = Date.now()) {
+  const delta = new Date(iso).getTime() - now
+  const total = Math.floor(Math.abs(delta) / 60000)
+  return { late: delta < 0, days: Math.floor(total / 1440), hours: Math.floor((total % 1440) / 60), minutes: total % 60 }
+}

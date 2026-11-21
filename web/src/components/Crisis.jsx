@@ -1,6 +1,7 @@
 import { t as tr } from '../i18n.js'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api.js'
+import { utcInputToIso } from '../dates.js'
 import { formatUtc } from '../labels.js'
 import { useConfirm } from './Confirm.jsx'
 
@@ -35,7 +36,7 @@ export default function Crisis({ t, enc, isManager, open, onChange }) {
     const fd = new FormData(form)
     const due = fd.get('due_at')
     // Le formulaire n'est vidé qu'après succès : en cas de refus, la saisie reste à l'écran.
-    if (await call(() => api(`/tickets/${enc}/crisis/entries`, { method: 'POST', json: { kind, body: fd.get('body'), owner: fd.get('owner') || null, due_at: due ? new Date(due).toISOString() : null } }))) form.reset()
+    if (await call(() => api(`/tickets/${enc}/crisis/entries`, { method: 'POST', json: { kind, body: fd.get('body'), owner: fd.get('owner') || null, due_at: utcInputToIso(due) } }))) form.reset()
   }
   if (!c) return error ? <p className="error" role="alert">{error}</p> : null
   if (!c.active) {
@@ -79,7 +80,7 @@ export default function Crisis({ t, enc, isManager, open, onChange }) {
             <label>{tr("Type")}<select value={kind} onChange={(e) => setKind(e.target.value)}>{Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
             {kind === 'action' && <label>{tr("Responsable")}<input name="owner" maxLength={120} /></label>}
           </div>
-          {kind === 'action' && <label>{tr("Échéance")}<input type="datetime-local" name="due_at" /></label>}
+          {kind === 'action' && <label>{tr("Échéance (UTC)")}<input type="datetime-local" name="due_at" /></label>}
           <label>{tr("Contenu")}<textarea name="body" required maxLength={5000} rows={3} /></label>
           <div className="row end"><button className="primary">{tr("Ajouter au registre")}</button></div>
         </form>

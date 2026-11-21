@@ -11,6 +11,7 @@ export default function RichEditor({ value, onChange, label, onImage, templates,
   const [ask, dialog] = useConfirm()
   const editor = useEditor({
     injectCSS: false,  // CSP sans style-src 'unsafe-inline' : les styles de l'éditeur sont dans styles.css
+    shouldRerenderOnTransaction: true,  // l'état actif des boutons (gras, liste…) suit le curseur et la sélection
     extensions: [
       StarterKit.configure({ heading: { levels: [2, 3] }, link: { openOnClick: false, protocols: ['https', 'mailto'] } }),
       Image.configure({ inline: false }),
@@ -26,8 +27,8 @@ export default function RichEditor({ value, onChange, label, onImage, templates,
 
   if (!editor) return null
   const btn = (name, title, action, active) => (
-    <button type="button" className={`tool${active ? ' active' : ''}`} aria-label={title} title={title}
-      onClick={action}>{name}</button>
+    <button type="button" className={`tool${active ? ' on' : ''}`} aria-label={title} title={title}
+      aria-pressed={active === null ? undefined : !!active} onClick={action}>{name}</button>
   )
   const setLink = async () => {
     const current = editor.getAttributes('link').href || ''
@@ -61,7 +62,7 @@ export default function RichEditor({ value, onChange, label, onImage, templates,
             {templates.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
         )}
-        {onImage && btn('▣', tr('Image (PNG, JPEG, WebP)'), () => fileRef.current?.click(), false)}
+        {onImage && btn('▣', tr('Image (PNG, JPEG, WebP)'), () => fileRef.current?.click(), null)}
         {onImage && (
           <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden
             onChange={async (e) => {

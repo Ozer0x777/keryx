@@ -1,5 +1,5 @@
 import { t as tr } from '../i18n.js'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api, downloadBlob } from '../api.js'
 import { useAuth } from '../App.jsx'
@@ -8,9 +8,10 @@ import { Severity, Status, Tlp } from '../components/Badges.jsx'
 import { useConfirm } from '../components/Confirm.jsx'
 import Crisis from '../components/Crisis.jsx'
 import IsiPanel from '../components/IsiPanel.jsx'
+import Section, { OPEN_BY_STATUS, OPEN_FOR_CLIENT, PhaseContext } from '../components/Section.jsx'
 import Stamps from '../components/Stamps.jsx'
 import RichEditor from '../components/RichEditor.jsx'
-import { utcClock } from '../dates.js'
+import { isoToUtcInput, untilUtc, utcClock, utcInputNow, utcInputToIso } from '../dates.js'
 import { queuePath } from '../queue.js'
 import {
   DOMMAGES, formatUtc, IMPORTANCES, LIFECYCLE, MITRE_SOURCE, SCAN, STATUS, TLPS, TRANSITIONS, VERDICTS,
@@ -21,16 +22,33 @@ function Html({ html }) {
   return <div className="rich-content" dangerouslySetInnerHTML={{ __html: html || '' }} />
 }
 
-function Section({ title, children, extra }) {
-  return (
-    <section className="card section" aria-label={title}>
-      <header className="section-head"><h2>{title}</h2>{extra}</header>
-      <div className="section-body">{children}</div>
-    </section>
-  )
+// Texte visible d'un HTML assaini. Analyse inerte : le document produit n'exécute ni ne charge rien.
+const textOf = (html) => (new DOMParser().parseFromString(html || '', 'text/html').body.textContent || '').replace(/\s+/g, ' ')
+// La description générée à l'ingestion reprend la règle, sa description et l'agent de l'alerte : tant qu'elle les
+// contient encore, le panneau « Alerte Wazuh » ferait doublon et seules ses données propres sont montrées.
+function alertInDescription(t) {
+  const text = textOf(t.body_html)
+  const has = (v) => { const x = String(v ?? '').replace(/\s+/g, ' ').trim(); return !x || text.includes(x) }
+  return has(t.rule.id) && has(t.rule.description) && has(t.agent.name || t.agent.id)
 }
 
-const nowLocal = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+// Étape suivante normale du cycle de vie : c'est le seul bouton primaire de l'en-tête, les autres sont secondaires.
+const MAIN_NEXT = { nouveau: 'en_evaluation', en_evaluation: 'en_reponse', en_reponse: 'cloture', cloture: 'retour_experience' }
+
+// Échéance de l'en-tête : la date (UTC) et le temps restant ou dépassé, recalculé chaque minute.
+function Deadline({ label, iso }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(id) }, [])
+  const d = untilUtc(iso, now)
+  const span = d.days ? tr('{d} j {h} h', { d: d.days, h: d.hours }) : d.hours ? tr('{h} h {m} min', { h: d.hours, m: String(d.minutes).padStart(2, '0') }) : tr('{m} min', { m: d.minutes })
+  return (
+    <div className={d.late ? 'late' : ''}>
+      <dt>{label}</dt>
+      <dd><span className="mono">{formatUtc(iso)}</span>{' '}
+        {d.late ? <span className="pill danger">{tr('Dépassée depuis {d}', { d: span })}</span> : <span className="muted">{tr('dans {d}', { d: span })}</span>}</dd>
+    </div>
+  )
+}
 
 export default function Ticket() {
   const { ref } = useParams()
@@ -62,6 +80,10 @@ export default function Ticket() {
     await load()
     return out
   }
+
+  const status = t?.status
+  const phase = useMemo(() => ({ status, open: isClient ? OPEN_FOR_CLIENT : OPEN_BY_STATUS[status] || null }), [status, isClient])
+  const alertMerged = useMemo(() => (t ? alertInDescription(t) : false), [t])
 
   if (error) return <p className="error" role="alert">{error}</p>
   if (!t) return <p className="loading">{tr("Chargement…")}</p>
@@ -126,15 +148,28 @@ export default function Ticket() {
           </div>
         </div>
         {isTeam && (
-          <div className="row wrap gap">
+          <div className="row wrap gap ticket-actions">
             <Link to={`/tickets/${enc}/rapport`} className="btn-link">{tr("Rapport imprimable")}</Link>
             <button type="button" onClick={exportIodef}>{tr("Exporter (IODEF JSON)")}</button>
-            {(TRANSITIONS[t.status] || []).map((s) => (
-              <button type="button" key={s} className="primary" onClick={() => transition(s)}>
+            {/* Un seul bouton primaire : l'étape suivante normale, placée en dernier ; l'issue alternative est secondaire. */}
+            {[...(TRANSITIONS[t.status] || [])].sort((a, b) => (a === MAIN_NEXT[t.status]) - (b === MAIN_NEXT[t.status])).map((s) => (
+              <button type="button" key={s} className={s === MAIN_NEXT[t.status] ? 'primary' : undefined} onClick={() => transition(s)}>
                 → {STATUS[s].label}
               </button>
             ))}
           </div>
+        )}
+        {isTeam && (
+          <dl className="ticket-facts">
+            {t.due_qualification && <Deadline label={tr("Qualifier avant")} iso={t.due_qualification} />}
+            {t.due_resolution && <Deadline label={tr("Résoudre avant")} iso={t.due_resolution} />}
+            <div>
+              <dt>{tr('Assigné à')}</dt>
+              <dd>{t.assignee
+                ? <>{t.assignee}{t.assignee_active === false ? ` ${tr('(inactif)')}` : ''}</>
+                : open ? <span className="pill warn">{tr('Non assigné')}</span> : tr('Personne')}</dd>
+            </div>
+          </dl>
         )}
       </header>
       {isTeam && <div className="head-status"><ActionStatus state={headStatus} /></div>}
@@ -144,11 +179,12 @@ export default function Ticket() {
       {t.rex_en_attente && <p className="banner warn">{tr("Incident {sev} clôturé : le retour d'expérience est obligatoire (section Synthèse).", { sev: tr(t.gravite || t.criticite_initiale) })}</p>}
 
       {t.crisis && <p className="banner danger" role="status">{tr("MODE CRISE actif sur ce ticket : toute décision et toute action sont consignées dans le registre de crise.")}</p>}
+      <PhaseContext.Provider value={phase}>
       <div className="ticket-layout">
         <div className="ticket-main">
           {isTeam && <Crisis t={t} enc={enc} isManager={me.role === 'manager'} open={open} onChange={load} />}
-          <Description t={t} enc={enc} canEdit={isTeam && open} run={run} onImage={uploadImage} />
-          {isTeam && <AlertBlock t={t} />}
+          <Description t={t} enc={enc} canEdit={isTeam && open} run={run} onImage={uploadImage} alertMerged={isTeam && alertMerged} />
+          {isTeam && !alertMerged && <AlertBlock t={t} />}
           <Attachments t={t} enc={enc} me={me} run={run} />
           {isTeam && <Synthese t={t} enc={enc} run={run} onImage={uploadImage} templates={templates('synthese')} />}
           <Events t={t} />
@@ -165,6 +201,7 @@ export default function Ticket() {
           </aside>
         )}
       </div>
+      </PhaseContext.Provider>
     </>
   )
 }
@@ -191,16 +228,16 @@ function BodyHistory({ enc, current }) {
   )
 }
 
-function Description({ t, enc, canEdit, run, onImage }) {
+function Description({ t, enc, canEdit, run, onImage, alertMerged }) {
   const [status, track] = useActionStatus()
   const [editing, setEditing] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [html, setHtml] = useState(t.body_html)
   const isTeam = t.raw_alerts !== undefined
   return (
-    <Section title={tr("Description")} extra={<div className="row gap">
+    <Section id="description" title={tr("Description")} tools={(isTeam || (canEdit && !editing)) && <>
       {isTeam && <button type="button" aria-expanded={showHistory} onClick={() => setShowHistory(!showHistory)}>{showHistory ? tr("Masquer l'historique") : tr('Historique')}</button>}
-      {canEdit && !editing && <button type="button" onClick={() => { setHtml(t.body_html); setEditing(true) }}>{tr("Modifier")}</button>}</div>}>
+      {canEdit && !editing && <button type="button" onClick={() => { setHtml(t.body_html); setEditing(true) }}>{tr("Modifier")}</button>}</>}>
       {showHistory && <BodyHistory enc={enc} current={t.body_html} />}
       {editing ? (
         <>
@@ -215,13 +252,24 @@ function Description({ t, enc, canEdit, run, onImage }) {
         </>
       ) : <Html html={t.body_html} />}
       {!editing && status?.ok && <p className="saved-note"><ActionStatus state={status} /></p>}
+      {alertMerged && (
+        // La description reprend déjà la règle, sa description et l'agent : seules les autres données de l'alerte sont ajoutées.
+        <div className="alert-extra">
+          <h3>{tr("Autres données de l'alerte Wazuh")}</h3>
+          <dl className="kv">
+            <dt>{tr("Groupes")}</dt><dd className="mono">{t.rule.groups.join(', ') || '—'}</dd>
+            <dt>{tr("Classification")}</dt><dd className="mono small">{t.classification.join(', ') || '—'}</dd>
+          </dl>
+          <p className="muted small">{tr('{n} alerte(s) brute(s) conservée(s) avec empreinte SHA-256', { n: t.raw_alerts })}</p>
+        </div>
+      )}
     </Section>
   )
 }
 
 function AlertBlock({ t }) {
   return (
-    <Section title={tr("Alerte Wazuh")} extra={<span className="muted small">{tr('{n} alerte(s) brute(s) conservée(s) avec empreinte SHA-256', { n: t.raw_alerts })}</span>}>
+    <Section id="alerte" title={tr("Alerte Wazuh")} summary={tr('{n} alerte(s) brute(s) conservée(s) avec empreinte SHA-256', { n: t.raw_alerts })}>
       <dl className="kv">
         <dt>{tr("Règle")}</dt><dd className="mono">{tr('{id} · niveau {level}', { id: t.rule.id, level: t.rule.level })}</dd>
         <dt>{tr("Description")}</dt><dd>{t.rule.description}</dd>
@@ -288,7 +336,7 @@ function Attachments({ t, enc, me, run }) {
   const submit = async (e) => {
     e.preventDefault()
     const fd = new FormData(e.target)
-    fd.set('collected_at', new Date(fd.get('collected_at')).toISOString())
+    fd.set('collected_at', utcInputToIso(fd.get('collected_at')))
     if (!isClient) fd.set('visible_client', fd.get('visible_client') ? 'true' : 'false')
     if (await track(() => run(() => api(`/tickets/${enc}/attachments`, { method: 'POST', form: fd }), tr('Pièce déposée.')), tr('Pièce déposée à {h}', { h: utcClock() }))) setForm(null)
   }
@@ -296,22 +344,21 @@ function Attachments({ t, enc, me, run }) {
   const submitExt = async (e) => {
     e.preventDefault()
     const fd = Object.fromEntries(new FormData(e.target))
-    const json = { ...fd, collected_at: new Date(fd.collected_at).toISOString(), size: Number(fd.size || 0), sha256: fd.sha256.toLowerCase() }
+    const json = { ...fd, collected_at: utcInputToIso(fd.collected_at), size: Number(fd.size || 0), sha256: fd.sha256.toLowerCase() }
     if (await track(() => run(() => api(`/tickets/${enc}/preuves-externes`, { method: 'POST', json }), tr('Preuve externe déclarée.')), tr('Preuve externe déclarée à {h}', { h: utcClock() }))) setExt(null)
   }
 
   return (
-    <Section title={isClient ? tr('Éléments déposés') : tr('Registre des preuves')} extra={
-      <div className="row gap">
+    <Section id="preuves" title={isClient ? tr('Éléments déposés') : tr('Registre des preuves')} summary={t.attachments.length || null} tools={<>
         {isTeam && <button type="button" onClick={() => { setExt(true); setForm(null) }}>{tr("Déclarer une preuve externe")}</button>}
         <button type="button" className="dark" onClick={() => { setForm(true); setExt(null) }}>{tr('Déposer un fichier ({n} Mo max)', { n: t.attachment_max_mb ?? 20 })}</button>
-      </div>}>
+      </>}>
       {form && (
         <form className="subform" onSubmit={submit}>
           <label>{tr("Fichier (archive ZIP, PNG, JPEG ou WebP)")}<input type="file" name="file" accept=".zip,image/png,image/jpeg,image/webp" required /></label>
           <label>{tr("Description (obligatoire)")}<input name="description" minLength={3} required /></label>
           <div className="grid2">
-            <label>{tr("Date et heure de collecte")}<input type="datetime-local" name="collected_at" defaultValue={nowLocal()} required /></label>
+            <label>{tr("Date et heure de collecte (UTC)")}<input type="datetime-local" name="collected_at" defaultValue={utcInputNow()} required /></label>
             <label>{tr("Sensibilité")}<select name="sensitivity" defaultValue={t.tlp}>{TLPS.map((x) => <option key={x}>{x}</option>)}</select></label>
           </div>
           <label>{tr("Méthode de collecte (obligatoire)")}<input name="method" minLength={3} placeholder={tr("ex. export du journal du pare-feu")} required /></label>
@@ -327,7 +374,7 @@ function Attachments({ t, enc, me, run }) {
           <label>{tr("Nom")}<input name="filename" required /></label>
           <label>{tr("Description")}<input name="description" minLength={3} required /></label>
           <div className="grid2">
-            <label>{tr("Date et heure de collecte")}<input type="datetime-local" name="collected_at" defaultValue={nowLocal()} required /></label>
+            <label>{tr("Date et heure de collecte (UTC)")}<input type="datetime-local" name="collected_at" defaultValue={utcInputNow()} required /></label>
             <label>{tr("Taille (octets)")}<input type="number" name="size" min="0" /></label>
           </div>
           <label>{tr("Méthode de collecte")}<input name="method" minLength={3} required /></label>
@@ -376,18 +423,19 @@ function Attachments({ t, enc, me, run }) {
 function Synthese({ t, enc, run, onImage, templates }) {
   const s = t.synthese || {}
   const [v, setV] = useState({
-    compromission_initiale: s.compromission_initiale ? s.compromission_initiale.slice(0, 16) : '',
+    compromission_initiale: isoToUtcInput(s.compromission_initiale),
     chronologie: s.chronologie || '', mode_operatoire: s.mode_operatoire || '', perimetre: s.perimetre || '', rex_html: s.rex_html || '',
   })
   const [status, track] = useActionStatus()
   const editable = !['faux_positif', 'retour_experience'].includes(t.status)
   const save = () => track(() => run(() => api(`/tickets/${enc}/synthese`, {
     method: 'PUT',
-    json: { ...v, compromission_initiale: v.compromission_initiale ? new Date(v.compromission_initiale + 'Z').toISOString() : null },
+    json: { ...v, compromission_initiale: utcInputToIso(v.compromission_initiale) },
   }), tr('Synthèse enregistrée.')))
+  const rexNote = t.rex_required ? <span className="pill warn">{tr("REX obligatoire")}</span> : null
   if (!editable) {
     return (
-      <Section title={tr("Synthèse de l'incident et retour d'expérience")}>
+      <Section id="synthese" title={tr("Synthèse de l'incident et retour d'expérience")}>
         <h3>{tr("Chronologie")}</h3><Html html={s.chronologie} />
         <h3>{tr("Mode opératoire")}</h3><Html html={s.mode_operatoire} />
         <h3>{tr("Périmètre")}</h3><Html html={s.perimetre} />
@@ -396,7 +444,8 @@ function Synthese({ t, enc, run, onImage, templates }) {
     )
   }
   return (
-    <Section title={tr("Synthèse de l'incident et retour d'expérience")} extra={<span className="muted small">{tr("PRIS VI.5.3.e · ISO 27035")}</span>}>
+    <Section id="synthese" title={tr("Synthèse de l'incident et retour d'expérience")} summary={rexNote}>
+      <p className="muted small">{tr("PRIS VI.5.3.e · ISO 27035")}</p>
       <label>{tr("Date de compromission initiale (UTC)")}
         <input type="datetime-local" value={v.compromission_initiale} onChange={(e) => setV({ ...v, compromission_initiale: e.target.value })} />
       </label>
@@ -422,7 +471,7 @@ function fmtDetail(v) {
 
 function Events({ t }) {
   return (
-    <Section title={tr("Registre des actions")}>
+    <Section id="actions" title={tr("Registre des actions")} summary={t.events.length || null}>
       <ol className="timeline">
         {t.events.map((e, i) => (
           <li key={i}>
@@ -457,7 +506,7 @@ function Comments({ t, enc, isClient, run, onImage, templates }) {
     if (r) setStatus({ ok: tr('Modèle enregistré à {h}', { h: utcClock() }) })
   }
   return (
-    <Section title={isClient ? tr('Échanges avec le SOC') : tr('Commentaires')}>
+    <Section id="commentaires" title={isClient ? tr('Échanges avec le SOC') : tr('Commentaires')} summary={t.comments.length || null}>
       {t.comments.length === 0 && <p className="muted">{tr("Aucun commentaire.")}</p>}
       {t.comments.map((c, i) => (
         <div key={i} className={`comment ${c.visible_client ? 'public' : 'internal'}`}>
@@ -492,8 +541,7 @@ function Qualification({ t, enc, run, open }) {
     track(() => run(() => api(`/tickets/${enc}/qualification`, { method: 'POST', json }), tr('Qualification enregistrée.')))
   }
   return (
-    <section className="card section" aria-label={tr("Qualification")}>
-      <h2>{tr("Qualification")}</h2>
+    <Section id="qualification" title={tr("Qualification")} summary={t.verdict ? VERDICTS[t.verdict] : <span className="pill warn">{tr("À qualifier")}</span>}>
       <label>{tr("Verdict")}
         <select value={v.verdict} disabled={!open || verdictLocked} onChange={(e) => setV({ ...v, verdict: e.target.value })}>
           <option value="">{tr("À qualifier")}</option>
@@ -523,7 +571,7 @@ function Qualification({ t, enc, run, open }) {
       <label>{tr("Marquage")}<select value={v.tlp} disabled={!open} onChange={(e) => setV({ ...v, tlp: e.target.value })}>{TLPS.map((x) => <option key={x}>{x}</option>)}</select></label>
       {open && <button type="button" className="primary wide" onClick={save}>{tr("Enregistrer")}</button>}
       <ActionStatus state={status} />
-    </section>
+    </Section>
   )
 }
 
@@ -538,8 +586,7 @@ function Mitre({ t, enc, run, open }) {
     return () => clearTimeout(h)
   }, [q])
   return (
-    <section className="card section" aria-label={tr("MITRE ATT&CK")}>
-      <h2>MITRE ATT&amp;CK</h2>
+    <Section id="mitre" title={tr("MITRE ATT&CK")} summary={t.mitre.length ? <span className="mono">{t.mitre.join(', ')}</span> : tr("À compléter.")}>
       {t.mitre_detail.length === 0 && <p className="muted">{tr("À compléter.")}</p>}
       {t.mitre_detail.map((m) => (
         <div key={m.id} className="mitre">
@@ -566,7 +613,7 @@ function Mitre({ t, enc, run, open }) {
           </div>
         </>
       )}
-    </section>
+    </Section>
   )
 }
 
@@ -575,8 +622,7 @@ function Assignment({ t, enc, run, open }) {
   const [status, track] = useActionStatus()
   useEffect(() => { api(`/tickets/${enc}/assignables`).then((r) => setPeople(r.items)).catch(() => {}) }, [enc])
   return (
-    <section className="card section" aria-label={tr("Affectation")}>
-      <h2>{tr("Affectation")}</h2>
+    <Section id="affectation" title={tr("Affectation")} summary={t.assignee || tr('Personne')}>
       <label>{tr('Assigné à')}
         {/* Valeur fondée sur l'identifiant de l'assigné (unique), pas sur son nom affiché (deux comptes peuvent porter le même). */}
         <select disabled={!open} value={t.assignee_username || ''}
@@ -588,7 +634,7 @@ function Assignment({ t, enc, run, open }) {
         </select>
       </label>
       <ActionStatus state={status} />
-    </section>
+    </Section>
   )
 }
 
@@ -623,8 +669,7 @@ function Links({ t, enc, run, open }) {
     if (r) setStatus({ ok: tr('Ticket fusionné dans {ref} à {h}', { ref: r.values.into.toUpperCase(), h: utcClock() }) })
   }
   return (
-    <section className="card section" aria-label={tr("Tickets liés")}>
-      <h2>{tr("Tickets liés")}</h2>
+    <Section id="liens" title={tr("Tickets liés")} summary={items.length || null}>
       {items.length === 0 && <p className="muted small">{tr("Aucun lien.")}</p>}
       <ul className="linklist">
         {items.map((l) => (
@@ -642,22 +687,19 @@ function Links({ t, enc, run, open }) {
       {open && <button type="button" className="small-btn danger" onClick={merge}>{tr("Fusionner dans un autre ticket…")}</button>}
       <ActionStatus state={status} />
       {dialog}
-    </section>
+    </Section>
   )
 }
 
 function Details({ t }) {
   return (
-    <section className="card section" aria-label={tr("Détails")}>
-      <h2>{tr("Détails")}</h2>
+    <Section id="details" title={tr("Détails")}>
+      {/* Les échéances et l'assigné sont dans l'en-tête de la fiche. */}
       <dl className="kv">
         <dt>{tr("Client")}</dt><dd>{t.client}</dd>
-        {t.due_qualification && <><dt>{tr("Qualifier avant")}</dt><dd className="mono small">{formatUtc(t.due_qualification)}</dd></>}
-        {t.due_resolution && <><dt>{tr("Résoudre avant")}</dt><dd className="mono small">{formatUtc(t.due_resolution)}</dd></>}
-        {t.overdue && <><dt>{tr("Échéance")}</dt><dd><span className="pill danger">{tr("Dépassée")}</span></dd></>}
         <dt>{tr("Dernière occurrence")}</dt><dd className="mono small">{formatUtc(t.last_seen_at)}</dd>
         <dt>{tr("REX")}</dt><dd>{t.rex_required ? tr('Obligatoire') : tr('Non requis')}</dd>
       </dl>
-    </section>
+    </Section>
   )
 }

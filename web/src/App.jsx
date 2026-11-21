@@ -8,7 +8,7 @@ import AuditPage from './pages/AuditPage.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Kanban from './pages/Kanban.jsx'
 import Login from './pages/Login.jsx'
-import Mitre from './pages/admin/Mitre.jsx'
+import MitrePage from './pages/MitrePage.jsx'
 import Profile from './pages/Profile.jsx'
 import Reports from './pages/Reports.jsx'
 import Ticket from './pages/Ticket.jsx'
@@ -57,7 +57,7 @@ export default function App() {
           <Route path="/tickets/:ref" element={<Ticket />} />
           <Route path="/tickets/:ref/rapport" element={<TicketReport />} />
           <Route path="/admin/*" element={<Admin />} />
-          <Route path="/mitre" element={<Mitre />} />
+          <Route path="/mitre" element={<MitrePage />} />
           <Route path="/pilotage" element={<Dashboard />} />
           <Route path="/audit" element={<AuditPage />} />
           <Route path="/rapports" element={<Reports />} />

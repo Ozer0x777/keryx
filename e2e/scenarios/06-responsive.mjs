@@ -1,4 +1,6 @@
 // Mise en page à plusieurs largeurs : aucune page ne doit déborder horizontalement (hors tableaux défilables).
+import { unfoldAll } from '../harness.mjs'
+
 const PAGES = {
   manager: ['/tickets', '/kanban', '/pilotage', '/rapports', '/tickets/ACME-1', '/mitre', '/audit', '/profil'],
   admin: ['/admin/comptes', '/admin/clients', '/admin/cles', '/admin/mitre', '/admin/revue', '/admin/audit', '/admin/systeme'],
@@ -12,6 +14,7 @@ export default async ({ BASE, check, login }) => {
       const bad = []
       for (const path of paths) {
         await p.goto(`${BASE}${path}`); await p.waitForTimeout(700)
+        await unfoldAll(p)   // fiche ticket : tous les panneaux dépliés, pour mesurer tout le contenu
         const over = await p.evaluate(() => {
           const d = document.documentElement
           const wide = [...document.querySelectorAll('main *, .content *')].filter((e) => {

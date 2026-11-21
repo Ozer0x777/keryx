@@ -638,4 +638,15 @@ export default {
   "Sélectionner tous les tickets affichés": "Select all tickets shown",
   "Détecté (UTC)": "Detected (UTC)",
   "Retirer tous les filtres": "Clear all filters",
+  // Fiche ticket : en-tête, panneaux repliables, saisies en UTC
+  "Échéance (UTC)": "Deadline (UTC)",
+  "Date et heure de collecte (UTC)": "Collection date and time (UTC)",
+  "{d} j {h} h": "{d} d {h} h",
+  "{h} h {m} min": "{h} h {m} min",
+  "{m} min": "{m} min",
+  "Dépassée depuis {d}": "Overdue by {d}",
+  "dans {d}": "in {d}",
+  "Non assigné": "Unassigned",
+  "Autres données de l'alerte Wazuh": "Other data from the Wazuh alert",
+  "REX obligatoire": "Lessons learned required",
 }

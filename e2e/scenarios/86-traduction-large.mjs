@@ -1,4 +1,6 @@
 // Contrôle large : tout texte à accents ou mot-outil français restant en mode anglais est signalé (hors données saisies).
+import { unfoldAll } from '../harness.mjs'
+
 const FR = /[àâçéèêëîïôûùüÿœÀÂÇÉÈÊËÎÏÔÛÙÜŒ]|\b(le|la|les|des|du|une|pour|avec|dans|est|sur|vos|votre|aucun|aucune|cette|ces|nous|sans)\b/
 const IGNORE = /^(?:\d+\t.*|[a-zé_]+ — .*|Réinitialiser les mots de passe.*|Règle\t.*|Décodeur|Description\t.*|Emplacement|Horodatage Wazuh.*|Identifiant d'alerte.*|Français|Accusé|.*(?:Test (?:manager|analyste|admin|client)|Acme Industrie|Transports Delta|Nova SA|nouvel\.analyste|Nouvel Analyste|Journal exporté|export manuel|MITRE ATT&CK|Brute Force|Wazuh|srv-)).*$/
 export default async ({ BASE, check, login }) => {
@@ -7,6 +9,7 @@ export default async ({ BASE, check, login }) => {
     const leaks = []
     for (const path of paths) {
       await p.goto(`${BASE}${path}`); await p.waitForTimeout(1100)
+      await unfoldAll(p)   // les panneaux repliés de la fiche ticket comptent aussi
       const lines = (await p.locator('main, .content').first().innerText()).split('\n').map((l) => l.trim()).filter(Boolean)
       for (const l of lines) if (FR.test(l) && !IGNORE.test(l)) leaks.push(`${path} : ${l.slice(0, 90)}`)
     }

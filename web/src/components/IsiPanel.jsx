@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, downloadBlob } from '../api.js'
 import { t as tr } from '../i18n.js'
 import { ActionStatus, useActionStatus } from './ActionStatus.jsx'
+import Section from './Section.jsx'
 
 const AXIS_TITLES = {
   who_why: 'Qui et/ou pourquoi', what: 'Quoi', how: 'Comment', status: 'Statut de l\'incident', vulnerability: 'Vulnérabilité(s) exploitée(s)',
@@ -41,8 +42,7 @@ export default function IsiPanel({ t, enc, run, open }) {
     </label>
   )
   return (
-    <section className="card section" aria-label={tr('Classification ETSI ISI')}>
-      <h2>{tr('Classification ETSI ISI')}</h2>
+    <Section id="isi" title={tr('Classification ETSI ISI')} summary={t.isi?.category ? <span className="mono">{t.isi.category}</span> : tr('à compléter')}>
       <p className="muted small">{tr("ETSI GS ISI 002 : les axes marqués * sont obligatoires pour exporter.")}</p>
       <label>{tr('Catégorie')}
         <select value={v.category || ''} disabled={!open} onChange={(e) => set('category', e.target.value || undefined)}>
@@ -67,6 +67,6 @@ export default function IsiPanel({ t, enc, run, open }) {
         <button type="button" onClick={exportDoc}>{tr('Exporter (IODEF 2.0, ETSI ISI)')}</button>
       </div>
       <ActionStatus state={status} />
-    </section>
+    </Section>
   )
 }

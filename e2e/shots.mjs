@@ -1,6 +1,6 @@
 // Captures d'écran de tous les écrans principaux : node shots.mjs <dossier> [largeur]
 import { mkdirSync } from 'node:fs'
-import { BASE, launch, login, startStack, waitUp } from './harness.mjs'
+import { BASE, launch, login, startStack, unfoldAll, waitUp } from './harness.mjs'
 const out = process.argv[2]; const width = Number(process.argv[3] || 1400)
 mkdirSync(out, { recursive: true })
 const stack = startStack()
@@ -14,7 +14,7 @@ try {
   const login0 = await b.newPage({ viewport: { width, height: 900 } }); await login0.goto(`${BASE}/`); await login0.waitForTimeout(800); await login0.screenshot({ path: `${out}/00-login.png` }); await login0.close()
   const m = await login(b, stack, 'manager')
   await shot(m, '/tickets', '10-liste'); await shot(m, '/kanban', '11-kanban'); await shot(m, '/pilotage', '12-pilotage'); await shot(m, '/rapports', '13-rapports')
-  await shot(m, '/tickets/ACME-3', '14-ticket'); await shot(m, '/mitre', '15-mitre'); await shot(m, '/audit', '16-audit-manager'); await shot(m, '/profil', '17-profil')
+  await shot(m, '/tickets/ACME-3', '14-ticket'); await shot(m, '/tickets/ACME-3', '14b-ticket-deplie', unfoldAll); await shot(m, '/mitre', '15-mitre'); await shot(m, '/audit', '16-audit-manager'); await shot(m, '/profil', '17-profil')
   await shot(m, '/tickets/ACME-3/rapport', '18-rapport-incident')
   const a = await login(b, stack, 'admin')
   for (const [p, n] of [['comptes', '20-admin-comptes'], ['clients', '21-admin-clients'], ['cles', '22-admin-cles'], ['mitre', '23-admin-mitre'], ['revue', '24-admin-revue'], ['audit', '25-admin-audit'], ['systeme', '26-admin-systeme']])

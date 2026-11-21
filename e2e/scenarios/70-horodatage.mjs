@@ -1,11 +1,12 @@
 // Horodatage RFC 3161 d'une pièce et du point de contrôle d'audit, via l'autorité locale du banc de test.
-import { PASSWORD, PORT } from '../harness.mjs'
+import { PASSWORD, PORT, unfold } from '../harness.mjs'
 import { writeFileSync } from 'node:fs'
 
 export default async ({ BASE, check, login }) => {
   const m = await login('manager')
   await m.goto(`${BASE}/tickets/ACME-1`)
   await m.waitForSelector('text=Registre des preuves')
+  await unfold(m, 'Registre des preuves')
   // dépôt d'une petite archive ZIP
   writeFileSync('/tmp/e2e-preuve.zip', Buffer.from('504b0506000000000000000000000000000000000000', 'hex'))
   await m.getByRole('button', { name: /Déposer un fichier/ }).click()
