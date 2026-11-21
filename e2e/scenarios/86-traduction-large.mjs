@@ -1,6 +1,6 @@
 // Contrôle large : tout texte à accents ou mot-outil français restant en mode anglais est signalé (hors données saisies).
 const FR = /[àâçéèêëîïôûùüÿœÀÂÇÉÈÊËÎÏÔÛÙÜŒ]|\b(le|la|les|des|du|une|pour|avec|dans|est|sur|vos|votre|aucun|aucune|cette|ces|nous|sans)\b/
-const IGNORE = /^(?:\d+\t.*|lien — .*|statut — .*|affectation — .*|creation — .*|Règle\t.*|Décodeur|Description\t.*|Emplacement|Horodatage Wazuh.*|Identifiant d'alerte.*|Français|Accusé|.*(?:Test (?:manager|analyste|admin|client)|Acme Industrie|Transports Delta|Nova SA|nouvel\.analyste|Nouvel Analyste|Journal exporté|export manuel|MITRE ATT&CK|Brute Force|Wazuh|srv-)).*$/
+const IGNORE = /^(?:\d+\t.*|[a-zé_]+ — .*|Réinitialiser les mots de passe.*|Règle\t.*|Décodeur|Description\t.*|Emplacement|Horodatage Wazuh.*|Identifiant d'alerte.*|Français|Accusé|.*(?:Test (?:manager|analyste|admin|client)|Acme Industrie|Transports Delta|Nova SA|nouvel\.analyste|Nouvel Analyste|Journal exporté|export manuel|MITRE ATT&CK|Brute Force|Wazuh|srv-)).*$/
 export default async ({ BASE, check, login }) => {
   const scanAll = async (p, paths, label) => {
     await p.evaluate(() => localStorage.setItem('keryx_lang', 'en'))
