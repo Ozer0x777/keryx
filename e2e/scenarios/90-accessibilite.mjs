@@ -22,6 +22,22 @@ export default async ({ BASE, check, login }) => {
         .map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length, sample: v.nodes[0].target.join(' '), help: v.help })))
       check(res.length === 0, `accessibilité ${role} ${path}${res.length ? ' : ' + JSON.stringify(res) : ''}`)
     }
+    // Dialogues ouverts (<dialog> modal) : même contrôle, sur un dialogue de confirmation avec champ et sur le formulaire d'édition d'un compte.
+    const opened = role === 'manager' ? ['/tickets', 'Enregistrer ce filtre'] : role === 'admin' ? ['/admin/comptes', /^Modifier le compte/] : null
+    if (opened) {
+      await page.goto(`${BASE}${opened[0]}`)
+      await page.getByRole('button', { name: opened[1] }).first().click()
+      await page.locator('dialog[open]').waitFor()
+      if (role === 'manager') await page.locator('dialog[open] button[type=submit]').click()   // nom vide : la validation en ligne s'affiche, le dialogue reste ouvert
+      await page.waitForTimeout(300)
+      if (await page.locator('dialog[open]').count()) {
+        await page.evaluate(axeSource)  // eslint-disable-line
+        const res = await page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } })).violations
+          .map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length, sample: v.nodes[0].target.join(' '), help: v.help })))
+        check(res.length === 0, `accessibilité ${role} : dialogue ouvert sur ${opened[0]}${res.length ? ' : ' + JSON.stringify(res) : ''}`)
+        await page.keyboard.press('Escape')
+      } else check(false, `accessibilité ${role} : le dialogue attendu s'est fermé avant le contrôle`)
+    }
     await page.context().close()
   }
 }

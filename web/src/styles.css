@@ -148,9 +148,10 @@ label.check input { flex: none; }
 .section.fold { padding: 0; }
 .fold > details > summary { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 10px 18px; cursor: pointer; list-style: none; border-radius: var(--radius); }
 .fold > details > summary::-webkit-details-marker { display: none; }
-.fold > details > summary::before { content: ''; flex: none; width: 7px; height: 7px; margin: 0 3px 3px 1px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform .15s ease-out; }
-.fold > details[open] > summary::before { transform: rotate(45deg); margin-bottom: 5px; }
-.fold > details > summary:hover::before { border-color: var(--text); }
+/* Chevron dessiné par découpe (pas d'image : la CSP n'autorise pas les URL data:) ; il pivote quand le panneau est ouvert */
+.fold > details > summary::before { content: ''; flex: none; width: 11px; height: 11px; background: var(--muted); clip-path: polygon(30% 4%, 80% 50%, 30% 96%, 17% 83%, 53% 50%, 17% 17%); transition: transform .15s ease-out; }
+.fold > details[open] > summary::before { transform: rotate(90deg); }
+.fold > details > summary:hover::before { background: var(--text); }
 .fold > details > summary h2 { margin: 0; }
 .fold-summary { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; text-align: right; }
 .fold > details > .section-body { padding: 2px 18px 16px; }
