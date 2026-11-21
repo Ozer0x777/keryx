@@ -111,6 +111,15 @@ class Settings:
     tsa_client_key: str | None = field(default_factory=lambda: os.environ.get("KERYX_TSA_CLIENT_KEY") or None)
     tsa_policy_oid: str | None = field(default_factory=lambda: os.environ.get("KERYX_TSA_POLICY_OID") or None)
 
+    # Contexte Wazuh (ADR-0021) : lecture de l'indexeur d'un client. Les adresses et le compte se règlent par client
+    # (Administration > Clients). Ici : la boucle locale n'est acceptée comme destination que sur demande explicite
+    # (essais, indexeur sur la même machine), et le champ de date des alertes (à confirmer sur un vrai Wazuh).
+    wazuh_allow_loopback: bool = field(default_factory=lambda: _bool("KERYX_WAZUH_ALLOW_LOOPBACK", False))
+    wazuh_time_field: str = field(default_factory=lambda: os.environ.get("KERYX_WAZUH_TIME_FIELD") or "timestamp")
+    # Récupérations de contexte par minute : par analyste, et par client (protège l'indexeur).
+    wazuh_context_user_limit: int = field(default_factory=lambda: _int("KERYX_WAZUH_CONTEXT_USER_LIMIT", 20))
+    wazuh_context_client_limit: int = field(default_factory=lambda: _int("KERYX_WAZUH_CONTEXT_CLIENT_LIMIT", 60))
+
     # Interface web (fichiers construits par Vite)
     web_dist: str = field(default_factory=lambda: os.environ.get(
         "KERYX_WEB_DIST", os.path.join(os.path.dirname(__file__), "web_dist")))

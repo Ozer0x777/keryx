@@ -42,10 +42,11 @@ def rfc3339(dt: datetime | None) -> str | None:
     return dt.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
-def parse_wazuh_timestamp(value: str | None) -> datetime:
-    """Wazuh envoie par ex. 2026-11-20T14:12:07.412+0000."""
-    if not value:
-        return utcnow()
+def parse_timestamp_strict(value: str | None) -> datetime | None:
+    """Date ISO 8601 / RFC 3339 (dont le format Wazuh « 2026-11-20T14:12:07.412+0000 ») en UTC, ou None si illisible.
+    Aucune valeur de repli : à utiliser quand une date inventée fausserait une chronologie."""
+    if not value or not isinstance(value, str):
+        return None
     v = value.strip()
     if v.endswith("Z"):
         v = v[:-1] + "+00:00"
@@ -53,6 +54,12 @@ def parse_wazuh_timestamp(value: str | None) -> datetime:
     if len(v) > 5 and v[-5] in "+-" and v[-4:].isdigit():
         v = v[:-2] + ":" + v[-2:]
     try:
-        return as_utc(datetime.fromisoformat(v))
+        parsed = datetime.fromisoformat(v)
     except ValueError:
-        return utcnow()
+        return None
+    return as_utc(parsed)
+
+
+def parse_wazuh_timestamp(value: str | None) -> datetime:
+    """Wazuh envoie par ex. 2026-11-20T14:12:07.412+0000. Date illisible ou absente : heure de réception."""
+    return parse_timestamp_strict(value) or utcnow()

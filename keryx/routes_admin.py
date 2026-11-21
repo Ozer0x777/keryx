@@ -12,6 +12,7 @@ import secrets
 import shutil
 import socket
 from datetime import timedelta
+from urllib.parse import urlsplit
 
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -19,6 +20,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session as DbSession
 
 from . import audit, notify, security
+from . import wazuh_context as wz
 from .ids import as_utc, rfc3339, utcnow
 from .mitre import valid_technique
 from .models import (ROLES, ApiKey, MitreMapping, Notification, Session, Tenant, Ticket, User, WebAuthnCredential)
@@ -59,6 +61,18 @@ class ClientPatchIn(BaseModel):
     retention_months: int | None = Field(default=None, ge=6, le=120)  # PDIS IV.2.2.w : 6 mois minimum
     sla: dict | None = None
     max_attachment_mb: int | None = Field(default=None, ge=1, le=20)
+    # Contexte Wazuh (ADR-0021). Champ absent = inchangé ; null ou vide = effacé. Les identifiants ne sont jamais relus.
+    wazuh_dashboard_url: str | None = Field(default=None, max_length=500)
+    wazuh_indexer_url: str | None = Field(default=None, max_length=300)
+    wazuh_index_pattern: str | None = Field(default=None, max_length=128)
+    wazuh_indexer_user: str | None = Field(default=None, max_length=128)
+    wazuh_indexer_password: str | None = Field(default=None, max_length=256)
+    wazuh_tls_verify: bool | None = None
+    wazuh_ca_pem: str | None = Field(default=None, max_length=20000)
+
+
+WAZUH_FIELDS = ("wazuh_dashboard_url", "wazuh_indexer_url", "wazuh_index_pattern", "wazuh_indexer_user",
+                "wazuh_indexer_password", "wazuh_tls_verify", "wazuh_ca_pem")
 
 
 class ApiKeyCreateIn(BaseModel):
@@ -257,7 +271,55 @@ def register(app, ctx) -> None:
         return {"key": t.key, "name": t.name, "contact_emails": t.contact_emails or [],
                 "severity_grid": t.severity_grid, "retention_months": t.retention_months, "sla": t.sla,
                 "max_attachment_mb": t.max_attachment_mb,
+                # Contexte Wazuh : adresses et options visibles de l'Admin ; du compte de lecture, seul un indicateur.
+                "wazuh_dashboard_url": t.wazuh_dashboard_url, "wazuh_indexer_url": t.wazuh_indexer_url,
+                "wazuh_index_pattern": t.wazuh_index_pattern, "wazuh_tls_verify": t.wazuh_tls_verify,
+                "wazuh_ca_pem": t.wazuh_ca_pem,
+                "wazuh_credentials_set": bool(t.wazuh_indexer_user and t.wazuh_indexer_password),
+                "wazuh_link_enabled": bool(t.wazuh_dashboard_url), "wazuh_context_enabled": wz.context_configured(t),
                 "tickets": tickets, "created_at": rfc3339(t.created_at)}
+
+    def apply_wazuh(t: Tenant, body: ClientPatchIn, sent: set) -> dict:
+        """Applique les réglages du contexte Wazuh (ADR-0021) et renvoie ce qui en est tracé dans l'audit : des noms
+        d'hôte et des indicateurs, jamais un identifiant ni un mot de passe. Lève ConfigError (422) sans rien enregistrer."""
+        if "wazuh_dashboard_url" in sent:
+            t.wazuh_dashboard_url = wz.validate_dashboard_template(body.wazuh_dashboard_url) if (body.wazuh_dashboard_url or "").strip() else None
+        if "wazuh_index_pattern" in sent:
+            t.wazuh_index_pattern = wz.validate_index_pattern(body.wazuh_index_pattern) if (body.wazuh_index_pattern or "").strip() else None
+        if "wazuh_tls_verify" in sent:
+            t.wazuh_tls_verify = True if body.wazuh_tls_verify is None else body.wazuh_tls_verify
+        if "wazuh_ca_pem" in sent:
+            t.wazuh_ca_pem = wz.normalize_ca_pem(body.wazuh_ca_pem) if (body.wazuh_ca_pem or "").strip() else None
+        credentials = "inchanges"
+        new_user = "wazuh_indexer_user" in sent and bool(body.wazuh_indexer_user)
+        new_password = "wazuh_indexer_password" in sent and bool(body.wazuh_indexer_password)
+        if "wazuh_indexer_url" in sent:
+            previous = t.wazuh_indexer_url
+            if (body.wazuh_indexer_url or "").strip():
+                t.wazuh_indexer_url = wz.parse_indexer_url(body.wazuh_indexer_url, settings.wazuh_allow_loopback).url
+            else:
+                t.wazuh_indexer_url = None
+            # Une adresse retirée ou changée emporte le compte enregistré : sinon, il suffirait de modifier l'adresse
+            # pour faire envoyer ce compte à un autre serveur. Il doit être ressaisi avec la nouvelle adresse.
+            if t.wazuh_indexer_url != previous and (t.wazuh_indexer_user or t.wazuh_indexer_password) \
+                    and not (new_user and new_password):
+                t.wazuh_indexer_user = t.wazuh_indexer_password = None
+                credentials = "effaces"
+        for name, validate in (("wazuh_indexer_user", wz.validate_username), ("wazuh_indexer_password", wz.validate_password)):
+            if name in sent:
+                value = getattr(body, name)
+                # Contexte de chiffrement propre au client et au champ : un secret recopié ailleurs ne se déchiffre pas.
+                setattr(t, name, box.encrypt(validate(value), f"{name}:{t.id}") if value else None)
+                credentials = "definis" if value else "effaces"
+        if bool(t.wazuh_indexer_user) != bool(t.wazuh_indexer_password):
+            raise wz.ConfigError("Indiquer ensemble l'identifiant et le mot de passe du compte de lecture de l'indexeur.")
+        if t.wazuh_indexer_user and not t.wazuh_indexer_url:
+            raise wz.ConfigError("Indiquer l'adresse de l'indexeur avant le compte de lecture.")
+        dashboard = urlsplit(t.wazuh_dashboard_url).hostname if t.wazuh_dashboard_url else None
+        return {"tableau_de_bord": dashboard,
+                "indexeur": wz.parse_indexer_url(t.wazuh_indexer_url, True).label if t.wazuh_indexer_url else None,
+                "motif_index": t.wazuh_index_pattern, "verification_tls": t.wazuh_tls_verify,
+                "autorite_propre": bool(t.wazuh_ca_pem), "identifiants": credentials}
 
     @app.get("/api/v1/admin/clients", dependencies=[Depends(ctx.admin_guard)])
     def clients_list(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
@@ -309,7 +371,14 @@ def register(app, ctx) -> None:
                 raise HTTPException(422, "Délais invalides : par gravité, qualification et resolution en heures.")
             t.sla = body.sla
             changed.append("sla")
-        audit.record(db, user.username, "client.update", "tenant", t.key, t.id, {"champs": changed})
+        details: dict = {"champs": changed}
+        if sent & set(WAZUH_FIELDS):
+            try:
+                details["wazuh"] = apply_wazuh(t, body, sent)
+            except wz.ConfigError as exc:
+                raise HTTPException(422, str(exc))
+            changed.extend(f for f in WAZUH_FIELDS if f in sent)
+        audit.record(db, user.username, "client.update", "tenant", t.key, t.id, details)
         commit(db)
         return client_view(t)
 

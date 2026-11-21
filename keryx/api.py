@@ -32,7 +32,8 @@ from sqlalchemy.orm import Session as DbSession
 from starlette.background import BackgroundTask
 
 from . import attachments as att
-from . import audit, inbox, routes_admin, routes_oidc, routes_ops, routes_isi, routes_reports, routes_timestamp, routes_webauthn, routes_work, security
+from . import audit, inbox, routes_admin, routes_oidc, routes_ops, routes_isi, routes_reports, routes_timestamp, routes_wazuh, routes_webauthn, routes_work, security
+from . import wazuh_context
 from .oidc import load_providers
 from .config import Settings
 from .db import Base, make_engine, make_session_factory
@@ -781,6 +782,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             out["synthese"] = {"compromission_initiale": rfc3339(t.compromission_initiale),
                                "chronologie": t.chronologie, "mode_operatoire": t.mode_operatoire,
                                "perimetre": t.perimetre, "rex_html": t.rex_html}
+            # Contexte Wazuh (ADR-0021) : lien vers l'alerte et lecture de l'indexeur, pour l'équipe seulement. La clé
+            # est absente pour le client, et absente pour tous tant que rien n'est réglé pour ce client.
+            wazuh = wazuh_context.ticket_view(db, t, db.get(Tenant, t.tenant_id))
+            if wazuh:
+                out["wazuh"] = wazuh
         audit.record(db, user.username, "ticket.read", "ticket", t.ref, t.tenant_id)
         commit(db)
         return out
@@ -1226,7 +1232,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         client_ip=client_ip, assign_ticket=assign_ticket, ticket_summary=ticket_summary, promote=promote,
         login_ip_limiter=login_ip_limiter, login_user_limiter=login_user_limiter, sso_only=sso_only,
         count_second_factor_failure=count_second_factor_failure, open_session=open_session,
-        set_cookie=_set_cookie, load_attachment=load_attachment, SESSION_COOKIE=SESSION_COOKIE, CSRF_COOKIE=CSRF_COOKIE, oidc_providers=oidc_providers)
+        set_cookie=_set_cookie, load_attachment=load_attachment, SESSION_COOKIE=SESSION_COOKIE, CSRF_COOKIE=CSRF_COOKIE, oidc_providers=oidc_providers,
+        limiter=limiter, attachment_view=attachment_view)
     routes_admin.register(app, ctx)
     routes_work.register(app, ctx)
     routes_reports.register(app, ctx)
@@ -1235,6 +1242,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     routes_oidc.register(app, ctx)
     routes_timestamp.register(app, ctx)
     routes_isi.register(app, ctx)
+    routes_wazuh.register(app, ctx)
 
     # ---------------------------------------------------------------- interface web
     dist = settings.web_dist

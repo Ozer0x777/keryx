@@ -65,6 +65,17 @@ class Tenant(Base):
     sla: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Taille maximale d'une pièce, en Mio (1 à 20) ; vide = 20 Mio, plafond fixé par le plan [PRIS VI.2.4]
     max_attachment_mb: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Contexte Wazuh [PDIS IV.2.1.aa ; ADR-0021]. Tout est vide par défaut : la fonction est alors masquée.
+    # Modèle d'URL de l'alerte dans le tableau de bord Wazuh (variables entre accolades), montré à l'équipe seulement.
+    wazuh_dashboard_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Indexeur Wazuh (API OpenSearch) lu pour le contexte d'une alerte : adresse HTTPS, motif d'index (vide = wazuh-alerts-*).
+    wazuh_indexer_url: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    wazuh_index_pattern: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Compte en lecture seule de l'indexeur : chiffré AES-256-GCM comme le secret TOTP (ADR-0006), jamais renvoyé par l'API.
+    wazuh_indexer_user: Mapped[str | None] = mapped_column(Text, nullable=True)
+    wazuh_indexer_password: Mapped[str | None] = mapped_column(Text, nullable=True)
+    wazuh_tls_verify: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    wazuh_ca_pem: Mapped[str | None] = mapped_column(Text, nullable=True)   # autorité de certification propre au client (PEM)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
