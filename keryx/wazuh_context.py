@@ -44,7 +44,7 @@ log = logging.getLogger("keryx.wazuh")
 
 ALLOWED_COUNTS = (5, 10, 15)
 DEFAULT_INDEX_PATTERN = "wazuh-alerts-*"
-DEFAULT_TIME_FIELD = "timestamp"
+DEFAULT_TIME_FIELD = "@timestamp"
 CONNECT_TIMEOUT_S = 3.0
 TOTAL_TIMEOUT_S = 8.0            # pour l'ensemble de la récupération (connexion + les deux recherches)
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024

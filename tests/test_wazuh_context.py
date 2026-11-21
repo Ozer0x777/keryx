@@ -335,7 +335,7 @@ def test_contexte_du_meme_agent_autour_de_l_alerte(wapp, db, world, ticket, inde
     assert doc["alert_entry"]["id"] == ALERT_ID and "Failed password" in doc["alert_entry"]["full_log"]
     assert ALERT_ID not in [e["id"] for e in entries]
     assert doc["requested"] == {"before": 5, "after": 10} and doc["fetched_by"] == "analyst_acme" and doc["ticket"] == "ACME-1"
-    assert doc["source"] == {"indexer": f"127.0.0.1:{indexer.port}", "index_pattern": "wazuh-alerts-*", "time_field": "timestamp",
+    assert doc["source"] == {"indexer": f"127.0.0.1:{indexer.port}", "index_pattern": "wazuh-alerts-*", "time_field": "@timestamp",
                              "agent_id": "003", "tls_verified": True}
     assert out["sha256"] == hashlib.sha256(wz.document_bytes(doc)).hexdigest() and len(out["token"]) == 64
     # assaini : texte pur, sans caractère de contrôle ni marque de sens d'écriture ; le balisage reste du texte
@@ -351,8 +351,8 @@ def test_contexte_du_meme_agent_autour_de_l_alerte(wapp, db, world, ticket, inde
     for q, op, order in ((before_q, "lt", "desc"), (after_q, "gte", "asc")):
         term, rng = q["query"]["bool"]["filter"]
         assert term == {"term": {"agent.id": "003"}}
-        assert rng == {"range": {"timestamp": {op: "2026-11-20T14:41:02.118Z", "format": "strict_date_optional_time"}}}
-        assert q["sort"] == [{"timestamp": {"order": order, "unmapped_type": "date"}}]
+        assert rng == {"range": {"@timestamp": {op: "2026-11-20T14:41:02.118Z", "format": "strict_date_optional_time"}}}
+        assert q["sort"] == [{"@timestamp": {"order": order, "unmapped_type": "date"}}]
     assert all(x["headers"]["Authorization"] == f"Basic {BASIC}" for x in indexer.requests)
     # audit : qui, quel ticket, quelle fenêtre, combien ; jamais le contenu
     row = audit_rows(db, "ticket.wazuh_context")[-1]
@@ -679,7 +679,7 @@ def test_assainissement_des_evenements():
     assert wz.clean_text({"a": 1}, 10) == "" and wz.clean_text(["x"], 10) == "" and wz.clean_text(None, 10) == ""
     assert wz.clean_text(12, 10) == "12" and wz.clean_text(True, 10) == "true" and len(wz.clean_text("x" * 500, 40)) == 40
     e = wz.entry_from_source({
-        "timestamp": "pas une date", "id": ["liste"], "rule": "texte", "agent": {"id": 3, "name": {"x": 1}},
+        "@timestamp": "pas une date", "id": ["liste"], "rule": "texte", "agent": {"id": 3, "name": {"x": 1}},
         "full_log": "x" * 20000, "data": {"win": {"eventdata": {"image": "C:\\a.exe", "<b>clé</b>": "v"}}, "liste": ["a", {"b": 1}, 2],
                                           "profond": {"a": {"b": {"c": {"d": {"e": {"f": {"g": "trop"}}}}}}}}})
     assert e["timestamp"] is None and e["timestamp_brut"] == "pas une date" and e["id"] == "" and e["rule_id"] == ""

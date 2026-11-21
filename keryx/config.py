@@ -115,7 +115,7 @@ class Settings:
     # (Administration > Clients). Ici : la boucle locale n'est acceptée comme destination que sur demande explicite
     # (essais, indexeur sur la même machine), et le champ de date des alertes (à confirmer sur un vrai Wazuh).
     wazuh_allow_loopback: bool = field(default_factory=lambda: _bool("KERYX_WAZUH_ALLOW_LOOPBACK", False))
-    wazuh_time_field: str = field(default_factory=lambda: os.environ.get("KERYX_WAZUH_TIME_FIELD") or "timestamp")
+    wazuh_time_field: str = field(default_factory=lambda: os.environ.get("KERYX_WAZUH_TIME_FIELD") or "@timestamp")
     # Récupérations de contexte par minute : par analyste, et par client (protège l'indexeur).
     wazuh_context_user_limit: int = field(default_factory=lambda: _int("KERYX_WAZUH_CONTEXT_USER_LIMIT", 20))
     wazuh_context_client_limit: int = field(default_factory=lambda: _int("KERYX_WAZUH_CONTEXT_CLIENT_LIMIT", 60))

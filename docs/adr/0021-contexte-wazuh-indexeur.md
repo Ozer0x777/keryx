@@ -45,7 +45,7 @@ Le modèle doit être en HTTPS, sans identifiants (`utilisateur:motdepasse@`), s
 
 ## À valider sur un vrai Wazuh (rien de ceci n'a été essayé)
 
-1. **Champ de date** : Keryx interroge et trie sur `timestamp` (`KERYX_WAZUH_TIME_FIELD` pour en changer, par exemple `@timestamp`). Vérifier que ce champ existe, est de type date, et que la borne envoyée (`2026-11-20T14:41:02.118Z`, format `strict_date_optional_time`) est acceptée.
+1. **Champ de date** : Keryx interroge et trie sur `@timestamp`, le seul champ de date que la documentation Wazuh 4.14 (stable en novembre 2026 : 4.14.10) emploie dans ses requêtes sur l'indexeur ; `KERYX_WAZUH_TIME_FIELD` permet de passer à `timestamp`. La documentation ne décrit pas le schéma complet des alertes : vérifier sur une instance réelle que le champ existe, est de type date, et que la borne envoyée (`2026-11-20T14:41:02.118Z`, format `strict_date_optional_time`) est acceptée.
 2. **Champs** : `agent.id` doit être de type mot-clé (filtre `term` exact) et le champ `id` de l'index doit être celui que l'intégration envoie à Keryx. Vérifier `_source` : `rule.*`, `agent.*`, `location`, `decoder.name`, `full_log`, `data`.
 3. **Motif d'index** : `wazuh-alerts-*` par défaut ; les paramètres `ignore_unavailable` et `allow_no_indices` doivent être acceptés par le compte de lecture.
 4. **Droits du compte** : un rôle limité à la lecture (`indices:data/read/search`) sur les index du client doit suffire.

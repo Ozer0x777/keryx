@@ -90,9 +90,9 @@ def register(app, ctx) -> None:
         alert_id, alert_at, payload = wz.origin_alert(db, t)
         origin = "alerte brute conservée" if payload is not None else "ticket (alerte brute non conservée)"
         pivot = alert_at or as_utc(t.detected_at)
-        alert_entry = wz.entry_from_source(payload) if payload is not None else wz.entry_from_source({
+        alert_entry = wz.entry_from_source(payload, "timestamp") if payload is not None else wz.entry_from_source({
             "timestamp": pivot.isoformat(), "rule": {"id": t.rule_id, "level": t.rule_level, "description": t.rule_description},
-            "agent": {"id": t.agent_id, "name": t.agent_name}})
+            "agent": {"id": t.agent_id, "name": t.agent_name}}, "timestamp")
         ticket_ref, tenant_id, tenant_key, agent_id = t.ref, t.tenant_id, tenant.key, t.agent_id
         window = {"before": body.before, "after": body.after}
         # Aucune transaction ouverte pendant l'appel sortant (SQLite : la session tiendrait le verrou d'écriture).
