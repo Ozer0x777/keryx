@@ -1,4 +1,6 @@
 """Horodatage de confiance RFC 3161, contre une autorité locale (openssl ts). [RFC 3161 ; ISO/IEC 27037]"""
+import subprocess
+
 import pytest
 from sqlalchemy import select
 
@@ -111,3 +113,24 @@ def test_point_de_controle_de_l_audit(stamped_app, db, world, alert):
     assert m.post("/api/v1/audit/checkpoint/timestamp").status_code == 403
     assert m.get(f"/api/v1/timestamps/{r.json()['id']}/token").status_code == 403
     assert m.get("/api/v1/me").json()["features"]["timestamping"] is True
+
+
+def test_autorite_reelle(tmp_path):
+    """Essai contre une VRAIE autorité d'horodatage publique (ex. FreeTSA), si KERYX_TEST_TSA_REAL=« url|fichier_ca.pem »."""
+    import os
+    conf = os.environ.get("KERYX_TEST_TSA_REAL")
+    if not conf:
+        pytest.skip("KERYX_TEST_TSA_REAL non défini")
+    url, ca = conf.split("|")
+    msg = ts.message_for("attachment", "essai-test", "cd" * 32)
+    r = ts.stamp(url, msg, ca)
+    assert ts.verify(r["token"], msg, ca) == r["gen_time"]
+    with pytest.raises(ts.TimestampError):
+        ts.verify(r["token"], msg + b"x", ca)
+    # Le jeton est vérifiable par un tiers avec openssl (message et jeton écrits tels quels)
+    if tsa.have_openssl():
+        (tmp_path / "t.tsr").write_bytes(r["token"])
+        (tmp_path / "m.txt").write_bytes(msg)
+        out = subprocess.run(["openssl", "ts", "-verify", "-in", str(tmp_path / "t.tsr"), "-data", str(tmp_path / "m.txt"), "-CAfile", ca],
+                             capture_output=True, text=True)
+        assert "Verification: OK" in out.stdout + out.stderr

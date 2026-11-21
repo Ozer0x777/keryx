@@ -226,7 +226,7 @@ def register(app, ctx) -> None:
         return {"items": items[:50], "min_count": min_count}
 
     # ---------------------------------------------------------------- rétention
-    @app.post("/api/v1/admin/retention")
+    @app.post("/api/v1/admin/retention", dependencies=[Depends(ctx.admin_guard)])
     def retention_run(body: RetentionIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         require_role(user, "admin")
         report = retention.run(db, settings, utcnow(), actor=user.username, dry_run=body.dry_run)

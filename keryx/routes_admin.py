@@ -164,12 +164,12 @@ def register(app, ctx) -> None:
         return u
 
     # ---------------------------------------------------------------- comptes
-    @app.get("/api/v1/admin/users")
+    @app.get("/api/v1/admin/users", dependencies=[Depends(ctx.admin_guard)])
     def users_list(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         require_role(user, "admin")
         return {"items": [user_view(u) for u in db.scalars(select(User).order_by(User.role, User.username))]}
 
-    @app.post("/api/v1/admin/users", status_code=201)
+    @app.post("/api/v1/admin/users", status_code=201, dependencies=[Depends(ctx.admin_guard)])
     def users_create(body: UserCreateIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         require_role(user, "admin")
         tenants = tenants_by_keys(db, body.clients)
@@ -187,7 +187,7 @@ def register(app, ctx) -> None:
         commit(db)
         return {**user_view(u), **grant}  # mot de passe temporaire : le titulaire le change à sa première connexion
 
-    @app.patch("/api/v1/admin/users/{username}")
+    @app.patch("/api/v1/admin/users/{username}", dependencies=[Depends(ctx.admin_guard)])
     def users_patch(username: str, body: UserPatchIn, user: User = Depends(current_user),
                     db: DbSession = Depends(get_db)):
         require_role(user, "admin")
@@ -218,7 +218,7 @@ def register(app, ctx) -> None:
         commit(db)
         return user_view(u)
 
-    @app.post("/api/v1/admin/users/{username}/reset-2fa")
+    @app.post("/api/v1/admin/users/{username}/reset-2fa", dependencies=[Depends(ctx.admin_guard)])
     def users_reset_2fa(username: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         """Réinitialisation de la 2FA, réservée à l'Admin et tracée [plan : exigences fonctionnelles]."""
         require_role(user, "admin")
@@ -232,7 +232,7 @@ def register(app, ctx) -> None:
         commit(db)
         return {**user_view(u), **grant}
 
-    @app.post("/api/v1/admin/users/{username}/reset-password")
+    @app.post("/api/v1/admin/users/{username}/reset-password", dependencies=[Depends(ctx.admin_guard)])
     def users_reset_password(username: str, body: PasswordResetIn, user: User = Depends(current_user),
                              db: DbSession = Depends(get_db)):
         require_role(user, "admin")
@@ -252,13 +252,13 @@ def register(app, ctx) -> None:
                 "max_attachment_mb": t.max_attachment_mb,
                 "tickets": tickets, "created_at": rfc3339(t.created_at)}
 
-    @app.get("/api/v1/admin/clients")
+    @app.get("/api/v1/admin/clients", dependencies=[Depends(ctx.admin_guard)])
     def clients_list(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         require_role(user, "admin")
         counts = dict(db.execute(select(Ticket.tenant_id, func.count()).group_by(Ticket.tenant_id)).all())
         return {"items": [client_view(t, counts.get(t.id, 0)) for t in db.scalars(select(Tenant).order_by(Tenant.key))]}
 
-    @app.post("/api/v1/admin/clients", status_code=201)
+    @app.post("/api/v1/admin/clients", status_code=201, dependencies=[Depends(ctx.admin_guard)])
     def clients_create(body: ClientCreateIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         require_role(user, "admin")
         key = body.key.upper()
@@ -271,7 +271,7 @@ def register(app, ctx) -> None:
         commit(db)
         return client_view(t)
 
-    @app.patch("/api/v1/admin/clients/{key}")
+    @app.patch("/api/v1/admin/clients/{key}", dependencies=[Depends(ctx.admin_guard)])
     def clients_patch(key: str, body: ClientPatchIn, user: User = Depends(current_user),
                       db: DbSession = Depends(get_db)):
         require_role(user, "admin")
@@ -313,14 +313,14 @@ def register(app, ctx) -> None:
         return {"id": k.id, "client": tenant.key, "name": k.name, "prefix": k.prefix, "revoked": k.revoked,
                 "created_at": rfc3339(k.created_at), "last_used_at": rfc3339(k.last_used_at), "silent": silent}
 
-    @app.get("/api/v1/admin/api-keys")
+    @app.get("/api/v1/admin/api-keys", dependencies=[Depends(ctx.admin_guard)])
     def keys_list(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         require_role(user, "admin")
         rows = db.execute(select(ApiKey, Tenant).join(Tenant, Tenant.id == ApiKey.tenant_id)
                           .order_by(Tenant.key, ApiKey.created_at)).all()
         return {"items": [key_view(k, t) for k, t in rows], "silent_after_hours": SILENT_KEY_HOURS}
 
-    @app.post("/api/v1/admin/api-keys", status_code=201)
+    @app.post("/api/v1/admin/api-keys", status_code=201, dependencies=[Depends(ctx.admin_guard)])
     def keys_create(body: ApiKeyCreateIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         require_role(user, "admin")
         t = db.scalars(select(Tenant).where(Tenant.key == body.client.upper())).first()
@@ -334,7 +334,7 @@ def register(app, ctx) -> None:
         commit(db)
         return {**key_view(k, t), "key": plain}  # clé en clair : affichée une seule fois
 
-    @app.post("/api/v1/admin/api-keys/{key_id}/revoke")
+    @app.post("/api/v1/admin/api-keys/{key_id}/revoke", dependencies=[Depends(ctx.admin_guard)])
     def keys_revoke(key_id: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         require_role(user, "admin")
         k = db.get(ApiKey, key_id[:36])
@@ -346,7 +346,7 @@ def register(app, ctx) -> None:
         commit(db)
         return key_view(k, t)
 
-    @app.post("/api/v1/admin/api-keys/{key_id}/rotate", status_code=201)
+    @app.post("/api/v1/admin/api-keys/{key_id}/rotate", status_code=201, dependencies=[Depends(ctx.admin_guard)])
     def keys_rotate(key_id: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         """Crée une clé de remplacement et révoque l'ancienne : à déployer sur le manager Wazuh aussitôt."""
         require_role(user, "admin")
@@ -457,7 +457,7 @@ def register(app, ctx) -> None:
         except OSError:
             return "injoignable"
 
-    @app.get("/api/v1/admin/system")
+    @app.get("/api/v1/admin/system", dependencies=[Depends(ctx.admin_guard)])
     def system_status(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         require_role(user, "admin")
         from . import attachments as att

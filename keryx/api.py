@@ -343,6 +343,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if user.role not in roles:
             raise HTTPException(403, "Action non autorisée pour ce rôle.")
 
+    def admin_guard(user: User = Depends(current_user)) -> None:
+        """Contrôle de rôle placé AVANT la validation du corps : un non-admin reçoit 403, jamais le détail du schéma."""
+        require_role(user, "admin")
+
     def require_open(t: Ticket) -> None:
         if t.status in TERMINAL:
             raise HTTPException(409, "Ticket clos : modification impossible.")
@@ -1098,7 +1102,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         commit(db)
         return {"chain_ok": ok, "first_broken_seq": bad, "entries": count}
 
-    @app.get("/api/v1/admin/revue-comptes")
+    @app.get("/api/v1/admin/revue-comptes", dependencies=[Depends(admin_guard)])
     def account_review(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         """Revue des comptes et des droits [PDIS IV.3.4.b, PRIS IV.3.n]."""
         require_role(user, "admin")
@@ -1123,7 +1127,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         threading.Thread(target=_retry_loop, name="notify-retry", daemon=True).start()
 
     # ---------------------------------------------------------------- routeurs complémentaires
-    ctx = SimpleNamespace(
+    ctx = SimpleNamespace(admin_guard=admin_guard,
         settings=settings, box=box, SessionLocal=SessionLocal, get_db=get_db, current_user=current_user,
         require_role=require_role, require_open=require_open, commit=commit, load_ticket=load_ticket,
         visible_tenant_ids=visible_tenant_ids, event=event, session_from_cookie=_session_from_cookie,

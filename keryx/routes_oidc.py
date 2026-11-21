@@ -119,7 +119,7 @@ def register(app, ctx) -> None:
         ctx.open_session(db, user, resp, ip, "sso", sso=(name, id_token))
         return resp
 
-    @app.post("/api/v1/admin/users/{username}/unlink-sso")
+    @app.post("/api/v1/admin/users/{username}/unlink-sso", dependencies=[Depends(ctx.admin_guard)])
     def unlink(username: str, user: User = Depends(ctx.current_user), db: DbSession = Depends(get_db)):
         ctx.require_role(user, "admin")
         u = db.scalars(select(User).where(User.username == username[:120])).first()
