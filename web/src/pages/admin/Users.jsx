@@ -26,8 +26,8 @@ export default function Users() {
   }
 
   const grantMsg = (r, base) => r.activation === 'courriel'
-    ? `${base} Le code d'activation a été envoyé par courriel au titulaire.`
-    : `${base} Code d'activation (affiché une seule fois, à transmettre hors bande) : ${r.enrollment_code}`
+    ? `${base} ${tr("Le code d'activation a été envoyé par courriel au titulaire.")}`
+    : `${base} ${tr("Code d'activation (affiché une seule fois, à transmettre hors bande) : {code}", { code: r.enrollment_code })}`
 
   const create = async (e) => {
     e.preventDefault()
@@ -39,23 +39,23 @@ export default function Users() {
       role, clients: role === 'admin' ? [] : picked, password: fd.get('password') } }), tr('Compte créé.'))
     if (r) {
       setForm(null)
-      setMsg(grantMsg(r, `Compte ${r.username} créé. Transmettez-lui son mot de passe temporaire par un canal sûr : il activera lui-même sa double authentification à sa première connexion.`))
+      setMsg(grantMsg(r, tr('Compte {u} créé. Transmettez-lui son mot de passe temporaire par un canal sûr : il activera lui-même sa double authentification à sa première connexion.', { u: r.username })))
     }
   }
 
   const reset2fa = async (u) => {
-    if (!window.confirm(`Réinitialiser la 2FA de ${u.username} ? Ses sessions seront fermées et il devra réenrôler son application.`)) return
+    if (!window.confirm(tr('Réinitialiser la 2FA de {u} ? Ses sessions seront fermées et il devra réenrôler son application.', { u: u.username }))) return
     const r = await run(() => api(`/admin/users/${encodeURIComponent(u.username)}/reset-2fa`, { method: 'POST' }), '')
-    if (r) setMsg(grantMsg(r, `2FA de ${u.username} réinitialisée : l'utilisateur la réenrôlera à sa prochaine connexion (définissez-lui un mot de passe temporaire si besoin).`))
+    if (r) setMsg(grantMsg(r, tr("2FA de {u} réinitialisée : l'utilisateur la réenrôlera à sa prochaine connexion (définissez-lui un mot de passe temporaire si besoin).", { u: u.username })))
   }
   const resetPwd = async (u) => {
-    const password = window.prompt(`Nouveau mot de passe pour ${u.username} (12 caractères minimum)`)
+    const password = window.prompt(tr('Nouveau mot de passe pour {u} (12 caractères minimum)', { u: u.username }))
     if (!password) return
     const r = await run(() => api(`/admin/users/${encodeURIComponent(u.username)}/reset-password`, { method: 'POST', json: { password } }), tr('Mot de passe réinitialisé.'))
     if (r && r.activation) setMsg(grantMsg(r, tr('Mot de passe réinitialisé.')))
   }
   const toggle = (u) => {
-    if (u.active && !window.confirm(`Désactiver ${u.username} ?`)) return
+    if (u.active && !window.confirm(tr('Désactiver {u} ?', { u: u.username }))) return
     run(() => api(`/admin/users/${encodeURIComponent(u.username)}`, { method: 'PATCH', json: { active: !u.active } }), u.active ? tr('Compte désactivé.') : tr('Compte réactivé.'))
   }
 
@@ -97,7 +97,7 @@ export default function Users() {
                 <td><div className="row gap wrap">
                   <button type="button" className="small-btn" onClick={() => reset2fa(u)}>{tr("Réinit. 2FA")}</button>
                   <button type="button" className="small-btn" onClick={() => resetPwd(u)}>{tr("Mot de passe")}</button>
-                  {u.sso && <button type="button" className="small-btn" onClick={() => window.confirm(`Délier l'identité SSO de ${u.username} ? Elle sera liée de nouveau à sa prochaine connexion SSO.`) && run(() => api(`/admin/users/${encodeURIComponent(u.username)}/unlink-sso`, { method: 'POST' }), tr('Identité SSO déliée.'))}>{tr("Délier SSO")}</button>}
+                  {u.sso && <button type="button" className="small-btn" onClick={() => window.confirm(tr("Délier l'identité SSO de {u} ? Elle sera liée de nouveau à sa prochaine connexion SSO.", { u: u.username })) && run(() => api(`/admin/users/${encodeURIComponent(u.username)}/unlink-sso`, { method: 'POST' }), tr('Identité SSO déliée.'))}>{tr("Délier SSO")}</button>}
                   <button type="button" className="small-btn danger" onClick={() => toggle(u)}>{u.active ? tr('Désactiver') : tr('Réactiver')}</button>
                 </div></td>
               </tr>

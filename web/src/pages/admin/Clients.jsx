@@ -33,9 +33,9 @@ function ClientEditor({ client, onSaved, onError }) {
   return (
     <form className="subform" onSubmit={save}>
       <label>{tr("Contacts de notification (séparés par des virgules)")}<input value={emails} onChange={(e) => setEmails(e.target.value)} /></label>
-      <label>Rétention des alertes brutes, en mois (6 minimum, vide = valeur par défaut)<input type="number" min="6" max="120" value={retention} onChange={(e) => setRetention(e.target.value)} /></label>
-      <label>Taille maximale d'une pièce, en Mo (1 à 20, vide = 20 : plafond fixé par le plan)<input type="number" min="1" max="20" value={maxMb} onChange={(e) => setMaxMb(e.target.value)} /></label>
-      <h3>Grille de gravité {grid ? tr('(propre au client)') : tr('(grille par défaut)')}</h3>
+      <label>{tr("Rétention des alertes brutes, en mois (6 minimum, vide = valeur par défaut)")}<input type="number" min="6" max="120" value={retention} onChange={(e) => setRetention(e.target.value)} /></label>
+      <label>{tr("Taille maximale d'une pièce, en Mo (1 à 20, vide = 20 : plafond fixé par le plan)")}<input type="number" min="1" max="20" value={maxMb} onChange={(e) => setMaxMb(e.target.value)} /></label>
+      <h3>{tr("Grille de gravité")} {grid ? tr('(propre au client)') : tr('(grille par défaut)')}</h3>
       <div className="table-wrap"><table className="grid">
         <thead><tr><th scope="col">{tr("Dommages \\ Importance")}</th>{Object.entries(IMPORTANCES).map(([k, v]) => <th key={k} scope="col">{v}</th>)}</tr></thead>
         <tbody>{Object.entries(DOMMAGES).map(([d, dl]) => (
@@ -49,8 +49,8 @@ function ClientEditor({ client, onSaved, onError }) {
       <div className="table-wrap"><table className="grid">
         <thead><tr><th scope="col">{tr("Gravité")}</th><th scope="col">{tr("Qualification")}</th><th scope="col">{tr("Résolution")}</th></tr></thead>
         <tbody>{SEVS.map((s) => (
-          <tr key={s}><th scope="row">{s}</th>{['qualification', 'resolution'].map((k) => (
-            <td key={k}><input type="number" min="0" step="0.5" aria-label={`${s}, ${k}`} value={sla[s]?.[k] ?? ''}
+          <tr key={s}><th scope="row">{tr(s)}</th>{['qualification', 'resolution'].map((k) => (
+            <td key={k}><input type="number" min="0" step="0.5" aria-label={`${tr(s)}, ${k === 'qualification' ? tr('Qualification') : tr('Résolution')}`} value={sla[s]?.[k] ?? ''}
               onChange={(e) => setSla({ ...sla, [s]: { ...sla[s], [k]: e.target.value } })} /></td>))}</tr>))}
         </tbody></table></div>
       <div className="row gap end"><button className="primary">{tr("Enregistrer")}</button></div>

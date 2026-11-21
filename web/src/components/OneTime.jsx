@@ -9,14 +9,14 @@ export default function OneTime({ title, items, onClose }) {
   }
   return (
     <div className="banner warn" role="alert">
-      <strong>{title}</strong> — à noter maintenant : ces valeurs ne seront plus affichées.
+      <strong>{title}</strong>{tr(" — à noter maintenant : ces valeurs ne seront plus affichées.")}
       <dl className="onetime">
         {items.map(([label, value]) => (
           <div key={label}>
             <dt>{label}</dt>
             <dd><code className="mono">{Array.isArray(value) ? value.join('  ') : value}</code>{' '}
               <button type="button" className="small-btn" onClick={() => copy(label, Array.isArray(value) ? value.join('\n') : value)}>
-                {copied === label ? tr('Copié') : 'Copier'}
+                {copied === label ? tr('Copié') : tr('Copier')}
               </button></dd>
           </div>
         ))}

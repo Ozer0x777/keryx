@@ -5,14 +5,13 @@ import { api, downloadBlob } from '../api.js'
 import { useAuth } from '../App.jsx'
 import { Severity, Status } from '../components/Badges.jsx'
 import { formatUtc } from '../labels.js'
-
-const iso = (d) => d.toISOString().slice(0, 10)
+import { isoDay, monthStartUtc } from '../dates.js'
 
 export default function Reports() {
   const { me } = useAuth()
   const [qs] = useSearchParams()
   const today = new Date()
-  const [f, setF] = useState({ client: qs.get('client') || me.clients[0]?.key || '', from: iso(new Date(today.getFullYear(), today.getMonth(), 1)), to: iso(today) })
+  const [f, setF] = useState({ client: qs.get('client') || me.clients[0]?.key || '', from: monthStartUtc(today), to: isoDay(today) })
   const [r, setR] = useState(null)
   const [error, setError] = useState('')
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })

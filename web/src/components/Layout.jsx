@@ -46,7 +46,7 @@ export default function Layout() {
           <span className="avatar" aria-hidden="true">{initials}</span>
           <span className="who">
             <span className="name">{me.display_name}</span>
-            <span className="role">{ROLES[me.role]} · {t('2FA active')}</span>
+            <span className="role">{ROLES[me.role]} · {me.sso ? t('Session SSO') : t('2FA active')}</span>
           </span>
         </div>
         <button type="button" className="nav-logout" onClick={logout}>{t('Se déconnecter')}</button>

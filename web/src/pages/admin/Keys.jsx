@@ -15,7 +15,7 @@ export default function Keys() {
   useEffect(() => { load() }, [load])
   const act = async (fn, title) => {
     setError('')
-    try { const r = await fn(); if (r?.key) setSecret({ title, items: [['Clé d\'API', r.key]] }); load() } catch (e) { setError(e.message) }
+    try { const r = await fn(); if (r?.key) setSecret({ title, items: [[tr("Clé d'API"), r.key]] }); load() } catch (e) { setError(e.message) }
   }
   const create = (e) => {
     e.preventDefault()
@@ -28,7 +28,7 @@ export default function Keys() {
     <section className="card section" aria-label={tr("Clés d'API")}>
       <header className="section-head"><h2>{tr("Clés d'API et sources Wazuh")}</h2></header>
       {error && <p className="error" role="alert">{error}</p>}
-      {silent.length > 0 && <p className="banner warn" role="status">{silent.length} source(s) muette(s) depuis plus de 24 h : {silent.map((k) => `${k.client}/${k.name}`).join(', ')}.</p>}
+      {silent.length > 0 && <p className="banner warn" role="status">{tr('{n} source(s) muette(s) depuis plus de 24 h : {list}.', { n: silent.length, list: silent.map((k) => `${k.client}/${k.name}`).join(', ') })}</p>}
       {secret && <OneTime {...secret} onClose={() => setSecret(null)} />}
       <form className="row gap wrap" onSubmit={create}>
         <label>{tr("Client")}<select name="client" required>{clients.map((c) => <option key={c.key} value={c.key}>{c.key}</option>)}</select></label>

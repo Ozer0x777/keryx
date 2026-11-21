@@ -13,7 +13,10 @@ export default function IsiPanel({ t, enc, run, open }) {
   const [v, setV] = useState(t.isi || {})
   const [msg, setMsg] = useState('')
   useEffect(() => { api('/isi/dictionary').then(setDict).catch(() => {}) }, [])
-  useEffect(() => { setV(t.isi || {}) }, [t.isi])
+  // Le ticket est rechargé après chaque action (nouvel objet à chaque fois) : la saisie en cours n'est remplacée que si
+  // la classification enregistrée a réellement changé, pas à chaque rechargement.
+  const saved = JSON.stringify(t.isi || {})
+  useEffect(() => { setV(JSON.parse(saved)) }, [saved])
   if (!dict) return null
   const set = (k, val) => setV((x) => ({ ...x, [k]: val }))
   const setDetail = (k, val) => setV((x) => ({ ...x, detail: { ...(x.detail || {}), [k]: val } }))

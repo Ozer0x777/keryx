@@ -54,7 +54,7 @@ export default function Ticket() {
       await load()
       return true
     } catch (e) {
-      setNotice(`Erreur : ${e.message}`)
+      setNotice(tr('Erreur : {m}', { m: e.message }))
       return false
     }
   }
@@ -80,7 +80,7 @@ export default function Ticket() {
       await load()
       return `/api/v1/attachments/${a.id}/content`
     } catch (e) {
-      setNotice(`Erreur : ${e.message}`)
+      setNotice(tr('Erreur : {m}', { m: e.message }))
       return null
     }
   }
@@ -89,7 +89,7 @@ export default function Ticket() {
     try {
       const doc = await api(`/tickets/${enc}/iodef`)
       downloadBlob(new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' }), `${t.ref}.iodef.json`)
-    } catch (e) { setNotice(`Erreur : ${e.message}`) }
+    } catch (e) { setNotice(tr('Erreur : {m}', { m: e.message })) }
   }
 
   return (
@@ -103,9 +103,9 @@ export default function Ticket() {
           <div className="row wrap gap">
             <Status value={t.status} />
             <Severity value={t.criticite_initiale} prefix={tr("Criticité initiale : ")} />
-            {t.gravite && <Severity value={t.gravite} prefix="Gravité : " />}
+            {t.gravite && <Severity value={t.gravite} prefix={tr("Gravité : ")} />}
             <Tlp value={t.tlp} />
-            <span className="muted small">Détecté {formatUtc(t.detected_at)} · règle Wazuh {t.rule.id} (niveau {t.rule.level}) · {t.occurrences} occurrence(s)</span>
+            <span className="muted small">{tr('Détecté {when} · règle Wazuh {rule} (niveau {level}) · {n} occurrence(s)', { when: formatUtc(t.detected_at), rule: t.rule.id, level: t.rule.level, n: t.occurrences })}</span>
           </div>
         </div>
         {isTeam && (
@@ -114,7 +114,7 @@ export default function Ticket() {
             <button type="button" onClick={exportIodef}>{tr("Exporter (IODEF JSON)")}</button>
             {(TRANSITIONS[t.status] || []).map((s) => (
               <button type="button" key={s} className="primary"
-                onClick={() => run(() => api(`/tickets/${enc}/status`, { method: 'POST', json: { status: s } }), `Statut : ${STATUS[s].label}.`)}>
+                onClick={() => run(() => api(`/tickets/${enc}/status`, { method: 'POST', json: { status: s } }), tr('Statut : {s}.', { s: STATUS[s].label }))}>
                 → {STATUS[s].label}
               </button>
             ))}
@@ -122,7 +122,7 @@ export default function Ticket() {
         )}
       </header>
       <p className="live" role="status" aria-live="polite">{notice}</p>
-      {t.rex_en_attente && <p className="banner warn">Incident {t.gravite || t.criticite_initiale} clôturé : le retour d'expérience est obligatoire (section Synthèse).</p>}
+      {t.rex_en_attente && <p className="banner warn">{tr("Incident {sev} clôturé : le retour d'expérience est obligatoire (section Synthèse).", { sev: tr(t.gravite || t.criticite_initiale) })}</p>}
 
       {t.crisis && <p className="banner danger" role="status">{tr("MODE CRISE actif sur ce ticket : toute décision et toute action sont consignées dans le registre de crise.")}</p>}
       <div className="ticket-layout">
@@ -162,9 +162,9 @@ function BodyHistory({ enc, current }) {
       {[...h.versions].reverse().map((v, i) => (
         <li key={v.ts + i}>
           <details>
-            <summary>{tr("Avant la modification du")} <span className="mono">{formatUtc(v.ts)}</span> {tr("par")} <strong>{v.actor}</strong>{v.truncated ? ' (aperçu tronqué)' : ''}</summary>
+            <summary>{tr("Avant la modification du")} <span className="mono">{formatUtc(v.ts)}</span> {tr("par")} <strong>{v.actor}</strong>{v.truncated ? tr(' (aperçu tronqué)') : ''}</summary>
             <Html html={v.html} />
-            {v.truncated && <p className="muted small">Version complète de {v.length} caractères ; empreinte SHA-256 <span className="mono">{v.sha256}</span>.</p>}
+            {v.truncated && <p className="muted small">{tr('Version complète de {n} caractères ; empreinte SHA-256', { n: v.length })} <span className="mono">{v.sha256}</span>.</p>}
           </details>
         </li>
       ))}
@@ -201,7 +201,7 @@ function AlertBlock({ t }) {
   return (
     <Section title={tr("Alerte Wazuh")} extra={<span className="muted small">{tr('{n} alerte(s) brute(s) conservée(s) avec empreinte SHA-256', { n: t.raw_alerts })}</span>}>
       <dl className="kv">
-        <dt>{tr("Règle")}</dt><dd className="mono">{t.rule.id} · niveau {t.rule.level}</dd>
+        <dt>{tr("Règle")}</dt><dd className="mono">{tr('{id} · niveau {level}', { id: t.rule.id, level: t.rule.level })}</dd>
         <dt>{tr("Description")}</dt><dd>{t.rule.description}</dd>
         <dt>{tr("Groupes")}</dt><dd className="mono">{t.rule.groups.join(', ') || '—'}</dd>
         <dt>{tr("Agent")}</dt><dd className="mono">{[t.agent.id, t.agent.name, t.agent.ip].filter(Boolean).join(' · ') || '—'}</dd>
@@ -220,24 +220,25 @@ function Attachments({ t, enc, me, run, setNotice }) {
   const download = async (a) => {
     let params = {}
     if (a.scan_status === 'quarantaine') {
-      if (!window.confirm(`${a.filename} a été détecté comme malveillant. Il sera fourni dans une archive ZIP chiffrée (mot de passe : voir le guide d\'exploitation). Le télécharger quand même, pour analyse ?`)) return
+      if (!window.confirm(tr("{name} a été détecté comme malveillant. Il sera fourni dans une archive ZIP chiffrée (mot de passe : voir le guide d'exploitation). Le télécharger quand même, pour analyse ?", { name: a.filename }))) return
       params.confirmer_malveillant = 'true'
     }
     if (a.kind === 'fichier' || a.scan_status === 'quarantaine') {
-      const motif = window.prompt('Motif du téléchargement (chaîne de possession)')
+      const motif = window.prompt(tr('Motif du téléchargement (chaîne de possession)'))
       if (!motif || motif.length < 3) return
       params.motif = motif
     }
     try {
       const blob = await api(`/attachments/${a.id}/content`, { params })
       downloadBlob(blob, a.filename + (a.scan_status === 'quarantaine' ? '.quarantaine.zip' : ''))
-    } catch (e) { setNotice(`Erreur : ${e.message}`) }
+    } catch (e) { setNotice(tr('Erreur : {m}', { m: e.message })) }
   }
 
   const lifecycle = (a, value) => {
     const reason = window.prompt(value === 'detruit' ? tr('Motif de la destruction (irréversible)') : tr('Motif de la restitution'))
     if (!reason || reason.length < 3) return
-    run(() => api(`/attachments/${a.id}/lifecycle`, { method: 'POST', json: { lifecycle: value, reason } }), `Pièce ${LIFECYCLE[value].toLowerCase()}e.`)
+    // Une phrase complète par état : pas de mot construit par concaténation (intraduisible).
+    run(() => api(`/attachments/${a.id}/lifecycle`, { method: 'POST', json: { lifecycle: value, reason } }), value === 'detruit' ? tr('Pièce détruite.') : tr('Pièce restituée.'))
   }
 
   const submit = async (e) => {
@@ -277,7 +278,7 @@ function Attachments({ t, enc, me, run, setNotice }) {
       )}
       {ext && (
         <form className="subform" onSubmit={submitExt}>
-          <p className="muted small">Pour une preuve de plus de {t.attachment_max_mb ?? 20} Mo (image disque, dump mémoire, pcap) conservée hors de Keryx, sur un support hors ligne.</p>
+          <p className="muted small">{tr('Pour une preuve de plus de {n} Mo (image disque, dump mémoire, pcap) conservée hors de Keryx, sur un support hors ligne.', { n: t.attachment_max_mb ?? 20 })}</p>
           <label>{tr("Nom")}<input name="filename" required /></label>
           <label>{tr("Description")}<input name="description" minLength={3} required /></label>
           <div className="grid2">
@@ -303,7 +304,7 @@ function Attachments({ t, enc, me, run, setNotice }) {
                   <td className="small"><span className="mono" title={a.sha256}>{a.sha256.slice(0, 12)}…{a.sha256.slice(-6)}</span>
                     {a.lifecycle === 'conserve' && <Stamps attachmentId={a.id} canStamp={isTeam && !!me.features?.timestamping} />}</td>
                   <td><span className={`pill ${a.scan_status === 'quarantaine' ? 'danger' : a.scan_status === 'sain' ? 'ok' : ''}`}>{SCAN[a.scan_status]}</span></td>
-                  <td>{a.kind === 'preuve_externe' ? 'Hors Keryx' : LIFECYCLE[a.lifecycle]}</td>
+                  <td>{a.kind === 'preuve_externe' ? tr('Hors Keryx') : LIFECYCLE[a.lifecycle]}</td>
                   <td className="row gap">
                     {a.kind !== 'preuve_externe' && a.lifecycle === 'conserve' && !(isClient && a.scan_status === 'quarantaine') &&
                       <button type="button" className="small-btn" onClick={() => download(a)}>{tr("Télécharger")}</button>}
@@ -344,7 +345,7 @@ function Synthese({ t, enc, run, onImage, templates }) {
   }
   return (
     <Section title={tr("Synthèse de l'incident et retour d'expérience")} extra={<span className="muted small">{tr("PRIS VI.5.3.e · ISO 27035")}</span>}>
-      <label>Date de compromission initiale (UTC)
+      <label>{tr("Date de compromission initiale (UTC)")}
         <input type="datetime-local" value={v.compromission_initiale} onChange={(e) => setV({ ...v, compromission_initiale: e.target.value })} />
       </label>
       <h3>{tr("Chronologie")}</h3>
@@ -392,7 +393,7 @@ function Comments({ t, enc, isClient, run, onImage, templates }) {
     if (await run(() => api(`/tickets/${enc}/comments`, { method: 'POST', json: { body_html: html, visible_client: visible } }), tr('Commentaire publié.'))) setHtml('')
   }
   const saveTemplate = async () => {
-    const name = window.prompt('Nom du modèle (propre à ce client)')
+    const name = window.prompt(tr('Nom du modèle (propre à ce client)'))
     if (!name) return
     run(() => api('/templates', { method: 'POST', json: { kind: 'commentaire', name, body_html: html, client: t.client_key } }), tr('Modèle enregistré.'))
   }
@@ -401,7 +402,7 @@ function Comments({ t, enc, isClient, run, onImage, templates }) {
       {t.comments.length === 0 && <p className="muted">{tr("Aucun commentaire.")}</p>}
       {t.comments.map((c, i) => (
         <div key={i} className={`comment ${c.visible_client ? 'public' : 'internal'}`}>
-          <div className="comment-head">{c.visible_client ? (isClient ? '' : 'VISIBLE CLIENT · ') : 'INTERNE · '}{c.author} · {formatUtc(c.created_at)}</div>
+          <div className="comment-head">{c.visible_client ? (isClient ? '' : tr('VISIBLE CLIENT · ')) : tr('INTERNE · ')}{c.author} · {formatUtc(c.created_at)}</div>
           <Html html={c.body_html} />
         </div>
       ))}
@@ -431,7 +432,7 @@ function Qualification({ t, enc, run, open }) {
   return (
     <section className="card section" aria-label={tr("Qualification")}>
       <h2>{tr("Qualification")}</h2>
-      <label>Verdict
+      <label>{tr("Verdict")}
         <select value={v.verdict} disabled={!open || verdictLocked} onChange={(e) => setV({ ...v, verdict: e.target.value })}>
           <option value="">{tr("À qualifier")}</option>
           {Object.entries(VERDICTS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
@@ -439,13 +440,13 @@ function Qualification({ t, enc, run, open }) {
       </label>
       {verdictLocked && open && <p className="muted small">{tr("Verdict figé hors de la phase d'évaluation.")}</p>}
       <div className="grid2">
-        <label>Dommages
+        <label>{tr("Dommages")}
           <select value={v.dommages} disabled={!open} onChange={(e) => setV({ ...v, dommages: e.target.value })}>
             <option value="">—</option>
             {Object.entries(DOMMAGES).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select>
         </label>
-        <label>Importance
+        <label>{tr("Importance")}
           <select value={v.importance} disabled={!open} onChange={(e) => setV({ ...v, importance: e.target.value })}>
             {Object.entries(IMPORTANCES).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select>
@@ -522,7 +523,7 @@ function Assignment({ t, enc, run, open }) {
   )
 }
 
-const LINK_LABEL = { parent: 'Parent', enfant: 'Enfant', lie: tr('Lié'), doublon: tr('Doublon de'), 'doublon_de_celui-ci': tr('Doublon de ce ticket') }
+const LINK_LABEL = { parent: tr('Parent'), enfant: tr('Enfant'), lie: tr('Lié'), doublon: tr('Doublon de'), 'doublon_de_celui-ci': tr('Doublon de ce ticket') }
 
 function Links({ t, enc, run, open }) {
   const [items, setItems] = useState([])
@@ -537,9 +538,9 @@ function Links({ t, enc, run, open }) {
   }
   const drop = async (id) => { try { setItems((await api(`/tickets/${enc}/links/${id}`, { method: 'DELETE' })).items) } catch (x) { setErr(x.message) } }
   const merge = async () => {
-    const into = window.prompt('Référence du ticket à conserver (ex. ACME-1). Ce ticket sera clos comme doublon.')
+    const into = window.prompt(tr('Référence du ticket à conserver (ex. ACME-1). Ce ticket sera clos comme doublon.'))
     if (!into) return
-    const reason = window.prompt('Motif de la fusion') || ''
+    const reason = window.prompt(tr('Motif de la fusion')) || ''
     run(() => api(`/tickets/${enc}/merge`, { method: 'POST', json: { into: into.trim().toUpperCase(), reason } }), tr('Ticket fusionné.'))
   }
   return (
@@ -550,7 +551,7 @@ function Links({ t, enc, run, open }) {
         {items.map((l) => (
           <li key={l.id}><span className="muted small">{LINK_LABEL[l.kind] || l.kind}</span>{' '}
             <Link to={`/tickets/${encodeURIComponent(l.ref)}`} className="mono">{l.ref}</Link>
-            <button type="button" className="x" aria-label={`Supprimer le lien avec ${l.ref}`} onClick={() => drop(l.id)}>×</button></li>
+            <button type="button" className="x" aria-label={tr('Supprimer le lien avec {ref}', { ref: l.ref })} onClick={() => drop(l.id)}>×</button></li>
         ))}
       </ul>
       {err && <p className="error" role="alert">{err}</p>}
@@ -574,7 +575,7 @@ function Details({ t }) {
         {t.due_resolution && <><dt>{tr("Résoudre avant")}</dt><dd className="mono small">{formatUtc(t.due_resolution)}</dd></>}
         {t.overdue && <><dt>{tr("Échéance")}</dt><dd><span className="pill danger">{tr("Dépassée")}</span></dd></>}
         <dt>{tr("Dernière occurrence")}</dt><dd className="mono small">{formatUtc(t.last_seen_at)}</dd>
-        <dt>{tr("REX")}</dt><dd>{t.rex_required ? 'Obligatoire' : 'Non requis'}</dd>
+        <dt>{tr("REX")}</dt><dd>{t.rex_required ? tr('Obligatoire') : tr('Non requis')}</dd>
       </dl>
     </section>
   )

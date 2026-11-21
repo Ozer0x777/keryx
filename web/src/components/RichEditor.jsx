@@ -28,7 +28,7 @@ export default function RichEditor({ value, onChange, label, onImage, templates,
       onClick={action}>{name}</button>
   )
   const setLink = () => {
-    const url = window.prompt('Adresse du lien (https://…)')
+    const url = window.prompt(tr('Adresse du lien (https://…)'))
     if (url === null) return
     if (!url) editor.chain().focus().unsetLink().run()
     else if (/^https:\/\//.test(url)) editor.chain().focus().setLink({ href: url }).run()
@@ -36,13 +36,13 @@ export default function RichEditor({ value, onChange, label, onImage, templates,
   return (
     <div className="editor">
       <div className="toolbar" role="toolbar" aria-label={tr("Mise en forme")}>
-        {btn('H2', 'Titre', () => editor.chain().focus().toggleHeading({ level: 2 }).run(), editor.isActive('heading', { level: 2 }))}
-        {btn('B', 'Gras', () => editor.chain().focus().toggleBold().run(), editor.isActive('bold'))}
-        {btn('I', 'Italique', () => editor.chain().focus().toggleItalic().run(), editor.isActive('italic'))}
+        {btn('H2', tr('Titre de section'), () => editor.chain().focus().toggleHeading({ level: 2 }).run(), editor.isActive('heading', { level: 2 }))}
+        {btn('B', tr('Gras'), () => editor.chain().focus().toggleBold().run(), editor.isActive('bold'))}
+        {btn('I', tr('Italique'), () => editor.chain().focus().toggleItalic().run(), editor.isActive('italic'))}
         {btn('•', tr('Liste à puces'), () => editor.chain().focus().toggleBulletList().run(), editor.isActive('bulletList'))}
         {btn('1.', tr('Liste numérotée'), () => editor.chain().focus().toggleOrderedList().run(), editor.isActive('orderedList'))}
         {btn('{ }', tr('Bloc de code'), () => editor.chain().focus().toggleCodeBlock().run(), editor.isActive('codeBlock'))}
-        {btn('↗', 'Lien', setLink, editor.isActive('link'))}
+        {btn('↗', tr('Lien'), setLink, editor.isActive('link'))}
         {templates?.length > 0 && (
           <select className="tpl" aria-label={tr("Insérer un modèle")} value="" onChange={(e) => {
             const m = templates.find((x) => x.id === e.target.value)

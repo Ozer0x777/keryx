@@ -24,10 +24,10 @@ export default function TicketReport() {
       <article className="report card section" aria-label={tr("Rapport d'incident")}>
         <h1>{tr("Rapport d'incident")} {t.ref}</h1>
         <p className="muted">{t.title}</p>
-        <p className="muted small">{t.client} · {t.tlp} · statut {STATUS[t.status]?.label}</p>
+        <p className="muted small">{t.client} · {t.tlp} · {tr('statut {s}', { s: STATUS[t.status]?.label })}</p>
         <dl className="kv">
           <dt>{tr("Détecté le")}</dt><dd>{formatUtc(t.detected_at)}</dd>
-          <dt>{tr("Règle Wazuh")}</dt><dd>{t.rule.id} (niveau {t.rule.level}) — {t.rule.description}</dd>
+          <dt>{tr("Règle Wazuh")}</dt><dd>{t.rule.id} ({tr('niveau {level}', { level: t.rule.level })}) — {t.rule.description}</dd>
           <dt>{tr("Équipement")}</dt><dd>{t.agent.name} {t.agent.ip || ''}</dd>
           <dt>{tr("Criticité initiale")}</dt><dd><Severity value={t.criticite_initiale} /></dd>
           <dt>{tr("Gravité qualifiée")}</dt><dd><Severity value={t.gravite} /></dd>

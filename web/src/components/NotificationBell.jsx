@@ -37,7 +37,7 @@ export default function NotificationBell() {
   return (
     <div className="bell" ref={ref}>
       <button type="button" className="nav-link bell-btn" aria-expanded={open} aria-haspopup="true" onClick={toggle}>
-        {t('Notifications')}{unread > 0 && <span className="bell-count" aria-label={`${unread} non lue(s)`}>{unread}</span>}
+        {t('Notifications')}{unread > 0 && <span className="bell-count" role="img" aria-label={tr('{n} non lue(s)', { n: unread })}>{unread}</span>}
       </button>
       {open && (
         <div className="bell-panel card" role="region" aria-label={tr("Notifications")}>

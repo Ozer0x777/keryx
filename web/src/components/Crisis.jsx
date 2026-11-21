@@ -13,18 +13,19 @@ export default function Crisis({ t, enc, isManager, open, onChange }) {
   const load = useCallback(() => api(`/tickets/${enc}/crisis`).then(setC).catch((e) => setError(e.message)), [enc])
   useEffect(() => { load() }, [load, t.crisis])
 
-  const call = async (fn) => { setError(''); try { setC(await fn()); onChange?.() } catch (e) { setError(e.message) } }
+  const call = async (fn) => { setError(''); try { setC(await fn()); onChange?.(); return true } catch (e) { setError(e.message); return false } }
   const toggle = (active) => {
     const reason = window.prompt(active ? tr('Motif de l\'ouverture du mode crise') : tr('Motif de la clôture de la crise'))
     if (!reason) return
     call(() => api(`/tickets/${enc}/crisis`, { method: 'POST', json: { active, reason } }))
   }
-  const add = (e) => {
+  const add = async (e) => {
     e.preventDefault()
-    const fd = new FormData(e.target)
+    const form = e.target
+    const fd = new FormData(form)
     const due = fd.get('due_at')
-    call(() => api(`/tickets/${enc}/crisis/entries`, { method: 'POST', json: { kind, body: fd.get('body'), owner: fd.get('owner') || null, due_at: due ? new Date(due).toISOString() : null } }))
-    e.target.reset()
+    // Le formulaire n'est vidé qu'après succès : en cas de refus, la saisie reste à l'écran.
+    if (await call(() => api(`/tickets/${enc}/crisis/entries`, { method: 'POST', json: { kind, body: fd.get('body'), owner: fd.get('owner') || null, due_at: due ? new Date(due).toISOString() : null } }))) form.reset()
   }
   if (!c) return error ? <p className="error" role="alert">{error}</p> : null
   if (!c.active) {
@@ -39,7 +40,7 @@ export default function Crisis({ t, enc, isManager, open, onChange }) {
   return (
     <section className="card section crisis" aria-label={tr("Mode crise")}>
       <header className="section-head">
-        <h2>{tr("Mode crise")} <span className="pill danger">ACTIF depuis {formatUtc(c.started_at)}</span></h2>
+        <h2>{tr("Mode crise")} <span className="pill danger">{tr('ACTIF depuis {when}', { when: formatUtc(c.started_at) })}</span></h2>
         {isManager && <button type="button" onClick={() => toggle(false)}>{tr("Clore la crise")}</button>}
       </header>
       {error && <p className="error" role="alert">{error}</p>}
@@ -51,11 +52,11 @@ export default function Crisis({ t, enc, isManager, open, onChange }) {
             {c.items.filter((e) => e.kind === k).map((e) => (
               <li key={e.id} className={e.done ? 'done' : ''}>
                 {k === 'action' && (
-                  <input type="checkbox" checked={e.done} aria-label={`Action faite : ${e.body}`}
+                  <input type="checkbox" checked={e.done} aria-label={tr('Action faite : {x}', { x: e.body })}
                     onChange={(ev) => call(() => api(`/tickets/${enc}/crisis/entries/${e.id}`, { method: 'PATCH', json: { done: ev.target.checked } }))} />
                 )}
                 <div><span className="crisis-text">{e.body}</span>
-                  <span className="muted small"> — {e.created_by}, {formatUtc(e.created_at)}{e.owner ? ` · responsable : ${e.owner}` : ''}{e.due_at ? ` · échéance ${formatUtc(e.due_at)}` : ''}</span></div>
+                  <span className="muted small"> — {e.created_by}, {formatUtc(e.created_at)}{e.owner ? tr(' · responsable : {x}', { x: e.owner }) : ''}{e.due_at ? tr(' · échéance {when}', { when: formatUtc(e.due_at) }) : ''}</span></div>
               </li>
             ))}
           </ul>

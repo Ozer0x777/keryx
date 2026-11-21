@@ -11,8 +11,8 @@ export default function Audit() {
   const [stampMsg, setStampMsg] = useState('')
   const loadStamps = () => api('/audit/timestamps').then(setStamps).catch(() => {})
   useEffect(() => { loadStamps() }, [])
-  const stampCheckpoint = async () => { setStampMsg(''); try { const r = await api('/audit/checkpoint/timestamp', { method: 'POST' }); setStampMsg(`Point de contrôle ${r.seq} horodaté (série ${r.serial}).`); loadStamps() } catch (e) { setError(e.message) } }
-  const verifyStamp = async (id) => { try { const r = await api(`/timestamps/${id}/verify`, { method: 'POST' }); setStampMsg(r.valid ? 'Jeton valide.' : `Jeton NON valide : ${r.error}`) } catch (e) { setError(e.message) } }
+  const stampCheckpoint = async () => { setStampMsg(''); try { const r = await api('/audit/checkpoint/timestamp', { method: 'POST' }); setStampMsg(tr('Point de contrôle {seq} horodaté (série {serial}).', { seq: r.seq, serial: r.serial })); loadStamps() } catch (e) { setError(e.message) } }
+  const verifyStamp = async (id) => { try { const r = await api(`/timestamps/${id}/verify`, { method: 'POST' }); setStampMsg(r.valid ? tr('Jeton valide.') : tr('Jeton NON valide : {err}', { err: r.error })) } catch (e) { setError(e.message) } }
   const verify = async () => {
     setChain(null)
     try { setChain(await api('/audit/verify')) } catch (e) { setError(e.message) }
@@ -25,8 +25,8 @@ export default function Audit() {
         <header className="section-head"><h2>{tr("Intégrité du journal d'audit")}</h2><button type="button" className="primary" onClick={verify}>{tr("Vérifier la chaîne")}</button></header>
         <div className="section-body">
           {chain && (chain.chain_ok
-            ? <p className="banner ok">Chaîne intègre : {chain.entries} entrées vérifiées (scellement HMAC).</p>
-            : <p className="banner danger">Chaîne ROMPUE à l'entrée {chain.first_broken_seq}. Prévenir le RSSI.</p>)}
+            ? <p className="banner ok">{tr('Chaîne intègre : {n} entrées vérifiées (scellement HMAC).', { n: chain.entries })}</p>
+            : <p className="banner danger">{tr("Chaîne ROMPUE à l'entrée {seq}. Prévenir le RSSI.", { seq: chain.first_broken_seq })}</p>)}
           <p className="muted small">{tr("Pour détecter une suppression des dernières entrées, comparer avec un point de contrôle archivé hors de Keryx (")}<span className="mono">{tr("keryx checkpoint")}</span>{tr(") ou avec le flux syslog envoyé à Wazuh.")}</p>
         </div>
       </section>
@@ -40,7 +40,7 @@ export default function Audit() {
             <p className="muted small">{tr("Fait attester par une autorité d'horodatage l'état du journal à cet instant : seule l'empreinte du point de contrôle quitte Keryx.")}</p>
             <button type="button" onClick={stampCheckpoint}>{tr("Horodater le point de contrôle actuel")}</button>
             <p className="live" role="status">{stampMsg}</p>
-            <ul className="found">{stamps.items.map((t) => <li key={t.id} className="small"><span className="mono">n° {t.seq}</span> · {t.gen_time} · <button type="button" className="link" onClick={() => verifyStamp(t.id)}>{tr("Vérifier")}</button></li>)}</ul>
+            <ul className="found">{stamps.items.map((t) => <li key={t.id} className="small"><span className="mono">{tr('n° {seq}', { seq: t.seq })}</span> · {t.gen_time} · <button type="button" className="link" onClick={() => verifyStamp(t.id)}>{tr("Vérifier")}</button></li>)}</ul>
           </>
         )}
       </section>

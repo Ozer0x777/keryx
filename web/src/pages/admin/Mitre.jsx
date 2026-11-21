@@ -31,15 +31,15 @@ export default function Mitre() {
     if (!file) return
     setError(''); setMsg('')
     const form = new FormData(); form.append('file', file)
-    try { const r = await api('/mitre/import', { method: 'POST', form }); setMsg(`${r.added} technique(s) ajoutée(s), ${r.updated} mise(s) à jour (${r.total} au total).`) } catch (err) { setError(err.message) }
+    try { const r = await api('/mitre/import', { method: 'POST', form }); setMsg(tr('{a} technique(s) ajoutée(s), {u} mise(s) à jour ({total} au total).', { a: r.added, u: r.updated, total: r.total })) } catch (err) { setError(err.message) }
   }
   const remove = async (m) => {
-    if (!window.confirm(`Supprimer la correspondance ${m.technique} ?`)) return
+    if (!window.confirm(tr('Supprimer la correspondance {t} ?', { t: m.technique }))) return
     try { await api(`/mitre/mappings/${m.id}`, { method: 'DELETE' }); load() } catch (err) { setError(err.message) }
   }
   return (
     <section className="card section" aria-label={tr("Table MITRE")}>
-      <header className="section-head"><h2>Table de correspondance MITRE ATT&amp;CK</h2></header>
+      <header className="section-head"><h2>{tr("Table de correspondance MITRE ATT&CK")}</h2></header>
       <p className="muted small">{tr("Utilisée quand Wazuh ne fournit pas la technique : d'abord l'identifiant de règle, puis le groupe de règles.")}</p>
       {error && <p className="error" role="alert">{error}</p>}
       <p className="live" role="status">{msg}</p>
@@ -71,7 +71,7 @@ export default function Mitre() {
           {items === null && <tr><td colSpan="6" className="muted">{tr("Chargement…")}</td></tr>}
           {items?.length === 0 && <tr><td colSpan="6" className="muted">{tr("Aucune correspondance.")}</td></tr>}
           {items?.map((m) => (
-            <tr key={m.id}><td className="mono small">{m.rule_id ? `règle ${m.rule_id}` : `groupe ${m.rule_group}`}</td>
+            <tr key={m.id}><td className="mono small">{m.rule_id ? tr('règle {id}', { id: m.rule_id }) : tr('groupe {id}', { id: m.rule_group })}</td>
               <td className="mono">{m.technique}</td><td>{m.name}</td><td>{m.tactic}</td><td className="small">{m.created_by}</td>
               <td><button type="button" className="small-btn danger" onClick={() => remove(m)}>{tr("Supprimer")}</button></td></tr>
           ))}

@@ -141,6 +141,7 @@ def test_flux_complet_liaison_puis_connexion_par_sub(sso, db, world):
     r = c.get("/api/v1/auth/oidc/soc/callback", params={"code": "c1", "state": q["state"][0]}, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/"
     assert c.get("/api/v1/me").json()["username"] == "analyst_acme"
+    assert c.get("/api/v1/me").json()["sso"] is True                     # session SSO : l'interface n'annonce pas « 2FA active »
     # PKCE : le vérificateur transmis au jeton correspond au défi annoncé
     verifier = FakeIdp.exchanged[0][2]
     assert base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode() == q["code_challenge"][0]
@@ -226,7 +227,9 @@ def test_delier_le_sso_reserve_a_ladmin(sso, db, world):
     u.oidc_issuer, u.oidc_sub = ISSUER, "sub-1"
     db.commit()
     assert login(sso, db, "analyst_delta").post("/api/v1/admin/users/analyst_acme/unlink-sso").status_code == 403
-    assert login(sso, db, "admin").post("/api/v1/admin/users/analyst_acme/unlink-sso").status_code == 200
+    adm = login(sso, db, "admin")
+    assert adm.get("/api/v1/me").json()["sso"] is False                 # session locale (mot de passe + second facteur)
+    assert adm.post("/api/v1/admin/users/analyst_acme/unlink-sso").status_code == 200
     db.expire_all()
     assert db.scalars(select(User).where(User.username == "analyst_acme")).one().oidc_sub is None
 

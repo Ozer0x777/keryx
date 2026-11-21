@@ -575,6 +575,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         s = _session_from_cookie(request, db)
         return {"username": user.username, "display_name": user.display_name, "role": user.role,
                 "csrf_token": s.csrf_token if s else None, "features": {"timestamping": bool(settings.tsa_url)},
+                # Session ouverte par SSO : la double authentification est alors celle du fournisseur d'identité, que
+                # Keryx ne constate pas lui-même (l'interface n'affiche « 2FA active » que pour une session locale).
+                "sso": bool(s and s.sso_provider),
                 "clients": [{"key": t.key, "name": t.name} for t in user.tenants]}
 
     # ---------------------------------------------------------------- ingestion Wazuh

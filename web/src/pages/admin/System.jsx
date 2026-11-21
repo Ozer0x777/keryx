@@ -13,9 +13,11 @@ export default function System() {
     if (!dry && !window.confirm(tr('Supprimer définitivement les alertes brutes arrivées en fin de rétention ? Cette opération est tracée.'))) return
     try { setRet(await api('/admin/retention', { method: 'POST', json: { dry_run: dry } })) } catch (e) { setError(e.message) }
   }
-  const tone = (v) => (['ok', 'disponible', tr('configuré')].includes(v) ? 'ok' : v === tr('non configuré') ? '' : 'danger')
+  // Les valeurs d'état viennent du serveur, en français : on les compare telles quelles (traduites à l'affichage seulement).
+  const tone = (v) => (['ok', 'disponible', 'configuré'].includes(v) ? 'ok' : v === 'non configuré' ? '' : 'danger')
+  // Libellés sources (français) : traduits à l'affichage par tr(k).
   const rows = s ? [
-    [tr('Base de données'), s.database], [tr('Courriel (SMTP)'), s.smtp], [tr('Antivirus (ClamAV)'), s.clamav], ['Export syslog', s.syslog],
+    ['Base de données', s.database], ['Courriel (SMTP)', s.smtp], ['Antivirus (ClamAV)', s.clamav], ['Export syslog', s.syslog],
   ] : []
   return (
     <section className="card section" aria-label={tr("État du système")}>
@@ -35,8 +37,8 @@ export default function System() {
       <div className="row gap"><button type="button" onClick={() => retention(true)}>{tr("Simuler")}</button><button type="button" className="danger" onClick={() => retention(false)}>{tr("Purger")}</button></div>
       {ret && (
         <div role="status">
-          <p className="banner ok">{ret.dry_run ? 'Simulation' : tr('Purge effectuée')} : {ret.total} alerte(s) {ret.dry_run ? tr('concernée(s)') : tr('supprimée(s)')}.</p>
-          <ul className="small">{ret.items.map((r) => <li key={r.client}>{r.client} : {r.alerts} alerte(s) antérieure(s) au {r.before} ({r.months} mois)</li>)}</ul>
+          <p className="banner ok">{ret.dry_run ? tr('Simulation') : tr('Purge effectuée')} : {ret.total} {tr('alerte(s)')} {ret.dry_run ? tr('concernée(s)') : tr('supprimée(s)')}.</p>
+          <ul className="small">{ret.items.map((r) => <li key={r.client}>{tr('{client} : {n} alerte(s) antérieure(s) au {before} ({months} mois)', { client: r.client, n: r.alerts, before: r.before, months: r.months })}</li>)}</ul>
         </div>
       )}
     </section>

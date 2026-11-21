@@ -56,7 +56,7 @@ export default function Profile() {
     setError(''); setMsg('')
     try {
       const r = await api('/me/recovery-codes', { method: 'POST', json: { password: fd.get('password') } })
-      e.target.reset(); setSecret({ title: tr('Nouveaux codes de secours (les anciens sont invalides)'), items: [['Codes de secours', r.recovery_codes]] })
+      e.target.reset(); setSecret({ title: tr('Nouveaux codes de secours (les anciens sont invalides)'), items: [[tr('Codes de secours'), r.recovery_codes]] })
     } catch (err) { setError(err.message) }
   }
   const revoke = async (id) => {

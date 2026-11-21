@@ -7,7 +7,8 @@ import { t as tr } from '../i18n.js'
 import { formatUtc, MITRE_SOURCE, STATUS } from '../labels.js'
 
 const EMPTY = { status: '', client: '', rex_en_attente: false, q: '', assignee: '', overdue: false, sort: 'created', order: 'desc' }
-const VIEWS = [['Tous', {}], ['Mes tickets', { assignee: 'me' }], [tr('Non assignés'), { assignee: 'none' }], ['En retard', { overdue: true }]]
+// Libellés sources (français) : traduits à l'affichage par tr(label).
+const VIEWS = [['Tous', {}], ['Mes tickets', { assignee: 'me' }], ['Non assignés', { assignee: 'none' }], ['En retard', { overdue: true }]]
 
 function SortHeader({ label, col, filters, set }) {
   const on = filters.sort === col
@@ -75,7 +76,9 @@ export default function Tickets() {
   const bulkAssign = async (username) => {
     try {
       const r = await api('/tickets/bulk-assign', { method: 'POST', json: { refs: [...picked], username: username || null } })
-      setMsg(`${r.done} ticket(s) affecté(s)${r.done < r.results.length ? `, ${r.results.length - r.done} refusé(s)` : ''}.`)
+      setMsg(r.done < r.results.length
+        ? tr('{n} ticket(s) affecté(s), {k} refusé(s).', { n: r.done, k: r.results.length - r.done })
+        : tr('{n} ticket(s) affecté(s).', { n: r.done }))
       setPicked(new Set()); reload()
     } catch (e) { setError(e.message) }
   }
@@ -118,8 +121,9 @@ export default function Tickets() {
           {saved.length > 0 && <span className="muted small">{tr('Filtres :')}</span>}
           {saved.map((f) => (
             <span key={f.id} className="vchip saved">
-              <button type="button" className="link" onClick={() => set({ ...EMPTY, ...f.params })}>{f.name}</button>
-              <button type="button" className="x" aria-label={`Supprimer le filtre ${f.name}`} onClick={() => dropFilter(f)}>×</button>
+              {/* Le champ de recherche suit le filtre appliqué (sinon il garde l'ancienne saisie et la renvoie au prochain Entrée). */}
+              <button type="button" className="link" onClick={() => { setDraftQ(f.params?.q || ''); set({ ...EMPTY, ...f.params }) }}>{f.name}</button>
+              <button type="button" className="x" aria-label={tr('Supprimer le filtre {name}', { name: f.name })} onClick={() => dropFilter(f)}>×</button>
             </span>
           ))}
         </div>
@@ -159,8 +163,8 @@ export default function Tickets() {
 
       {error && <p className="error" role="alert">{error}</p>}
       <p className="live" role="status">{msg}</p>
-      {items && total > items.length && <p className="muted small" role="status">{items.length} tickets affichés sur {total} : affinez avec les filtres.</p>}
-      {all && !isClient && (all.total ?? 0) > all.items.length && <p className="muted small" role="status">Synthèse calculée sur les {all.items.length} tickets les plus récents (sur {all.total}).</p>}
+      {items && total > items.length && <p className="muted small" role="status">{tr('{n} tickets affichés sur {total} : affinez avec les filtres.', { n: items.length, total })}</p>}
+      {all && !isClient && (all.total ?? 0) > all.items.length && <p className="muted small" role="status">{tr('Synthèse calculée sur les {n} tickets les plus récents (sur {total}).', { n: all.items.length, total: all.total })}</p>}
 
       {picked.size > 0 && (
         <div className="bulkbar card" role="region" aria-label={tr('Actions groupées')}>
@@ -195,7 +199,7 @@ export default function Tickets() {
             {items?.length === 0 && <tr><td colSpan={cols + 1} className="muted">{tr('Aucun ticket ne correspond.')}</td></tr>}
             {items?.map((t) => (
               <tr key={t.ref} className={t.overdue ? 'overdue' : ''}>
-                {!isClient && <td><input type="checkbox" aria-label={`Sélectionner ${t.ref}`} checked={picked.has(t.ref)} onChange={() => toggle(t.ref)} /></td>}
+                {!isClient && <td><input type="checkbox" aria-label={tr('Sélectionner {ref}', { ref: t.ref })} checked={picked.has(t.ref)} onChange={() => toggle(t.ref)} /></td>}
                 <td className="mono"><Link to={`/tickets/${encodeURIComponent(t.ref)}`}>{t.ref}</Link></td>
                 <td className="strong title-cell">{t.title}{t.overdue && <span className="pill danger" style={{ marginLeft: 8 }}>{tr('En retard')}</span>}{t.crisis && <span className="pill danger" style={{ marginLeft: 8 }}>{tr("CRISE")}</span>}</td>
                 {me.clients.length > 1 && <td className="mono small" title={t.client}>{t.client_key}</td>}

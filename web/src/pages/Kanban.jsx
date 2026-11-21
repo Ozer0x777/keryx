@@ -18,7 +18,7 @@ export default function Kanban() {
   const move = async (ticket, target) => {
     if (ticket.status === target) return
     if (!TRANSITIONS[ticket.status]?.includes(target)) {
-      setMessage(`Passage impossible : ${STATUS[ticket.status].label} → ${STATUS[target].label}.`)
+      setMessage(tr('Passage impossible : {a} → {b}.', { a: STATUS[ticket.status].label, b: STATUS[target].label }))
       return
     }
     try {
@@ -49,7 +49,7 @@ export default function Kanban() {
       </header>
       <label className="check"><input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} /> {tr('Mes tickets seulement')}</label>
       <p className="live" role="status" aria-live="polite">{message}</p>
-      {total > items.length && <p className="muted small" role="status">{items.length} tickets affichés sur {total} : les plus anciens ne figurent pas dans le tableau.</p>}
+      {total > items.length && <p className="muted small" role="status">{tr('{n} tickets affichés sur {total} : les plus anciens ne figurent pas dans le tableau.', { n: items.length, total })}</p>}
       <div className="kanban">
         {columns.map((col) => (
           <section key={col.status} className={`column${dragging ? ' droppable' : ''}`} aria-label={STATUS[col.status].label}

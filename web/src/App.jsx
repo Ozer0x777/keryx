@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { api } from './api.js'
+import { t } from './i18n.js'
 import Layout from './components/Layout.jsx'
 import Admin from './pages/Admin.jsx'
 import AuditPage from './pages/AuditPage.jsx'
@@ -44,7 +45,7 @@ export default function App() {
     navigate('/connexion')
   }
 
-  if (me === undefined) return <p className="loading">Chargement…</p>
+  if (me === undefined) return <p className="loading">{t('Chargement…')}</p>
   const home = me?.role === 'admin' ? '/admin' : '/tickets'
   return (
     <AuthContext.Provider value={{ me, refresh, logout }}>
