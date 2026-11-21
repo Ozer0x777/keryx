@@ -303,6 +303,7 @@ select.narrow-select { max-width: 260px; }
 /* Petits écrans : le contenu peut rétrécir sous la largeur de ses tableaux (qui défilent dans leur cadre) */
 .shell > .content, .content { min-width: 0; }
 .card, .section { min-width: 0; max-width: 100%; }
+.card.login-card { max-width: 380px; }
 /* Les éléments .sr-only (position absolue) dans un tableau défilant doivent être rognés avec lui, sinon ils élargissent la page */
 .table-wrap { position: relative; }
 
