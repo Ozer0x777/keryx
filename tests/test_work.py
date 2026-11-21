@@ -202,3 +202,48 @@ def test_file_de_triage_tri_et_filtres_par_gravite(app, db, world, alert):
     assert f.status_code == 201 and f.json()["params"] == {"severity": "Critique", "sort": "gravite"}
     # Le cloisonnement ne change pas : l'analyste d'un autre client ne voit rien de tout cela.
     assert login(app, db, "analyst_delta").get("/api/v1/tickets", params={"severity": "Critique"}).json()["items"] == []
+
+
+def test_compteurs_de_la_file_cloisonnes_et_sans_entree_d_audit(app, db, world, alert):
+    """Cartes de synthèse de la file : des nombres calculés par le serveur sur tous les tickets visibles, cloisonnés par
+    client [PDIS IV.3.8.g]. Le relevé périodique ne lit plus la liste une seconde fois : aucune entrée d'audit ajoutée."""
+    from keryx.models import AuditEntry
+    two_tickets(app, world, alert)                                       # ACME-1 (Moyenne), ACME-2 (Faible)
+    ingest(app, world["keys"]["ACME"], alert(ALERT_CRITICAL))            # ACME-3 (Critique)
+    ingest(app, world["keys"]["DELTA"], alert(ALERT_CRITICAL))           # DELTA-1 (Critique)
+    m = login(app, db, "manager")
+    a = login(app, db, "analyst_acme")
+    before = db.scalar(select(AuditEntry.seq).order_by(AuditEntry.seq.desc()).limit(1))
+    db.rollback()
+    c = m.get("/api/v1/tickets/counts").json()
+    assert c["total"] == 4 and c["by_status"]["nouveau"] == 4 and c["by_status"]["cloture"] == 0
+    assert c["open_by_severity"] == {"Faible": 1, "Moyenne": 1, "Élevée": 0, "Critique": 2}
+    assert c["overdue"] == 0 and c["rex_en_attente"] == 0
+    assert m.get("/api/v1/tickets/counts", params={"client": "delta"}).json()["total"] == 1
+    mine = a.get("/api/v1/tickets/counts").json()
+    assert mine["total"] == 3 and mine["open_by_severity"]["Critique"] == 1          # jamais les tickets d'un autre client
+    assert a.get("/api/v1/tickets/counts", params={"client": "DELTA"}).json()["total"] == 0
+    assert db.scalar(select(AuditEntry.seq).order_by(AuditEntry.seq.desc()).limit(1)) == before   # aucun ajout au journal
+    db.rollback()
+    # Les compteurs suivent la vie des tickets : qualification (gravité), échéance dépassée, clôture avec REX obligatoire
+    a.post("/api/v1/tickets/ACME-1/status", json={"status": "en_evaluation"})
+    a.post("/api/v1/tickets/ACME-1/qualification", json={"verdict": "vrai_positif_avere", "dommages": "graves"})   # sensible × graves = Critique
+    t = db.scalars(select(Ticket).where(Ticket.ref == "ACME-2")).one()
+    t.created_at = utcnow() - timedelta(days=30)
+    db.commit()
+    c = a.get("/api/v1/tickets/counts").json()
+    assert c["by_status"]["en_evaluation"] == 1 and c["open_by_severity"]["Critique"] == 2 and c["open_by_severity"]["Moyenne"] == 0
+    assert c["overdue"] == 1
+    a.post("/api/v1/tickets/ACME-1/status", json={"status": "en_reponse"})
+    assert a.post("/api/v1/tickets/ACME-1/status", json={"status": "cloture"}).status_code == 200
+    c = a.get("/api/v1/tickets/counts").json()
+    assert c["rex_en_attente"] == 1 and c["by_status"]["cloture"] == 1 and c["open_by_severity"]["Critique"] == 1
+    # Mêmes nombres que les filtres de la liste que chaque carte applique
+    listed = lambda **p: a.get("/api/v1/tickets", params=p).json()["total"]
+    assert listed(status="nouveau,en_evaluation") == c["by_status"]["nouveau"] + c["by_status"]["en_evaluation"]
+    assert listed(status="nouveau,en_evaluation,en_reponse", severity="Critique") == c["open_by_severity"]["Critique"]
+    assert listed(overdue=True) == c["overdue"] and listed(rex_en_attente=True) == c["rex_en_attente"]
+    # Ni l'Admin (aucun accès aux tickets), ni le client (pas d'indicateurs internes)
+    assert login(app, db, "admin").get("/api/v1/tickets/counts").status_code == 403
+    assert login(app, db, "client_acme").get("/api/v1/tickets/counts").status_code == 403
+    assert a.get("/api/v1/tickets/counts", params={"client": "x" * 40}).status_code == 422

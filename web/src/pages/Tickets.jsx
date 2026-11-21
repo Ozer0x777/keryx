@@ -14,14 +14,15 @@ import {
 const REFRESH_MS = 45000
 // Libellés sources (français) : traduits à l'affichage par tr(label).
 const VIEWS = [['Tous', ''], ['Mes tickets', 'me'], ['Non assignés', 'none']]
-const CLOSED = ['cloture', 'faux_positif', 'retour_experience']
-// Cartes de chiffres : chacune est un filtre rapide (voir queue.js) et compte les tickets qu'elle afficherait.
+// Cartes de chiffres : chacune est un filtre rapide (voir queue.js) et affiche le nombre de tickets qu'elle listerait.
+// Les nombres viennent du point d'API de comptage (/tickets/counts), calculés par le serveur sur tous les tickets
+// visibles : le relevé de la file ne recharge plus 500 tickets pour les compter.
 const CARDS = [
-  { label: 'À qualifier', hint: 'nouveaux ou en évaluation', patch: { status: TO_QUALIFY }, match: (t) => ['nouveau', 'en_evaluation'].includes(t.status) },
-  { label: 'En réponse', hint: 'confinement / éradication', patch: { status: 'en_reponse' }, match: (t) => t.status === 'en_reponse' },
-  { label: 'Critiques ouverts', hint: 'gravité ou criticité', patch: { status: OPEN_STATUSES, severity: 'Critique' }, match: (t) => (t.gravite || t.criticite_initiale) === 'Critique' && !CLOSED.includes(t.status) },
-  { label: 'En retard', hint: 'échéance dépassée', patch: { overdue: true }, match: (t) => t.overdue },
-  { label: 'REX en attente', hint: 'obligatoire si Élevée ou Critique', patch: { rex_en_attente: true }, match: (t) => t.rex_en_attente },
+  { label: 'À qualifier', hint: 'nouveaux ou en évaluation', patch: { status: TO_QUALIFY }, count: (c) => c.by_status.nouveau + c.by_status.en_evaluation },
+  { label: 'En réponse', hint: 'confinement / éradication', patch: { status: 'en_reponse' }, count: (c) => c.by_status.en_reponse },
+  { label: 'Critiques ouverts', hint: 'gravité ou criticité', patch: { status: OPEN_STATUSES, severity: 'Critique' }, count: (c) => c.open_by_severity.Critique },
+  { label: 'En retard', hint: 'échéance dépassée', patch: { overdue: true }, count: (c) => c.overdue },
+  { label: 'REX en attente', hint: 'obligatoire si Élevée ou Critique', patch: { rex_en_attente: true }, count: (c) => c.rex_en_attente },
 ]
 
 // Date de détection sans le suffixe « UTC » (il est dans l'en-tête de colonne) : la colonne reste étroite.
@@ -45,7 +46,7 @@ export default function Tickets() {
   const [search, setSearch] = useSearchParams()
   const filters = useMemo(() => filtersFromSearch(search), [search])
   const [items, setItems] = useState(null)
-  const [all, setAll] = useState(null) // synthèse : tous les statuts, indépendante des filtres
+  const [counts, setCounts] = useState(null) // synthèse : compteurs de tous les tickets visibles, indépendants des filtres
   const [total, setTotal] = useState(0)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState([])
@@ -105,7 +106,7 @@ export default function Tickets() {
   useEffect(() => {
     if (isClient) return undefined
     let alive = true
-    api('/tickets', { params: { client: filters.client || undefined, limit: 500 } }).then((r) => alive && setAll(r)).catch(() => alive && setAll(null))
+    api('/tickets/counts', { params: { client: filters.client || undefined } }).then((r) => alive && setCounts(r)).catch(() => alive && setCounts(null))
     return () => { alive = false }
   }, [filters.client, isClient, items])
 
@@ -187,7 +188,7 @@ export default function Tickets() {
               <button type="button" className={`card stat stat-filter${on ? ' on' : ''}`} key={c.label} aria-pressed={on}
                 onClick={() => set(cardPatch(on ? {} : c.patch))}>
                 <span className="stat-label">{tr(c.label)}</span>
-                <strong>{all ? all.items.filter(c.match).length : '…'}</strong>
+                <strong>{counts ? c.count(counts) : '…'}</strong>
                 <span className="stat-hint small">{on ? tr('filtre actif') : tr(c.hint)}</span>
               </button>
             )
@@ -256,7 +257,6 @@ export default function Tickets() {
         </div>
       </div>
       <p className="live" role="status">{msg}</p>
-      {all && !isClient && (all.total ?? 0) > all.items.length && <p className="muted small" role="status">{tr('Synthèse calculée sur les {n} tickets les plus récents (sur {total}).', { n: all.items.length, total: all.total })}</p>}
 
       {picked.size > 0 && (
         <div className="bulkbar card" role="region" aria-label={tr('Actions groupées')}>

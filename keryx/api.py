@@ -42,7 +42,7 @@ from .iodef import validate as iodef_validate
 from .ingest import AlertRejected, ingest_alert
 from .mitre import valid_technique
 from .models import (
-    LIFECYCLE, SEVERITIES, TLP, VERDICTS, ApiKey, Attachment, AuditEntry, Comment, CustodyEvent, MitreTechnique, RateHit,
+    LIFECYCLE, SEVERITIES, STATUSES, TLP, VERDICTS, ApiKey, Attachment, AuditEntry, Comment, CustodyEvent, MitreTechnique, RateHit,
     RawAlert, Session, WebAuthnCredential, Tenant, Ticket, TicketEvent, User,
 )
 from .notify import retry_failed, send_pending
@@ -734,6 +734,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"items": [ticket_summary(t, tenants, users, with_sla=user.role != "client") for t in tickets],
                 "limit": limit, "offset": offset,
                 "total": total}
+
+    @app.get("/api/v1/tickets/counts")
+    def ticket_counts(client: str | None = Query(default=None, max_length=16),
+                      user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        """Compteurs de la file pour l'équipe (cartes de synthèse) : tickets par statut, tickets ouverts par gravité
+        (qualifiée ou, à défaut, criticité initiale), en retard, retours d'expérience en attente. Mêmes clients que la
+        liste [PDIS IV.3.8.g]. Ce ne sont que des nombres : le relevé périodique de la file n'ajoute pas d'entrée au
+        journal d'audit ; la lecture de la liste, elle, reste tracée (`ticket.list`)."""
+        require_role(user, "analyst", "manager")   # ni l'Admin (aucun accès aux tickets), ni le client (pas d'échéances internes)
+        tenants = {t.id: t for t in user.tenants}
+        ids = [i for i, t in tenants.items() if not client or t.key == client.upper()]
+        mine = Ticket.tenant_id.in_(ids)
+        open_statuses = ("nouveau", "en_evaluation", "en_reponse")
+        by_status = dict(db.execute(select(Ticket.status, func.count()).where(mine).group_by(Ticket.status)).all())
+        severity = func.coalesce(Ticket.gravite, Ticket.criticite_initiale)
+        by_severity = dict(db.execute(select(severity, func.count()).where(mine, Ticket.status.in_(open_statuses))
+                                      .group_by(severity)).all())
+        rex = db.scalar(select(func.count()).select_from(Ticket).where(mine, Ticket.status == "cloture",
+                                                                       Ticket.rex_required.is_(True))) or 0
+        overdue = sum(1 for t in db.scalars(select(Ticket).where(mine, Ticket.status.in_(open_statuses)))
+                      if sla_state(t, tenants.get(t.tenant_id))["overdue"])
+        return {"total": sum(by_status.values()), "by_status": {s: by_status.get(s, 0) for s in STATUSES},
+                "open_by_severity": {s: by_severity.get(s, 0) for s in SEVERITIES},
+                "overdue": overdue, "rex_en_attente": rex}
 
     def attachment_view(a: Attachment) -> dict:
         return {"id": a.id, "kind": a.kind, "filename": a.filename, "content_type": a.content_type, "size": a.size,

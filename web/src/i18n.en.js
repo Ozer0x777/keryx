@@ -478,7 +478,6 @@ export default {
   "{n} ticket(s) affecté(s), {k} refusé(s).": "{n} ticket(s) assigned, {k} refused.",
   "Supprimer le filtre {name}": "Delete the filter {name}",
   "{n} tickets affichés sur {total} : affinez avec les filtres.": "{n} tickets shown out of {total}: narrow down with the filters.",
-  "Synthèse calculée sur les {n} tickets les plus récents (sur {total}).": "Summary computed on the {n} most recent tickets (out of {total}).",
   "Sélectionner {ref}": "Select {ref}",
   "Passage impossible : {a} → {b}.": "Transition not allowed: {a} → {b}.",
   "{n} tickets affichés sur {total} : les plus anciens ne figurent pas dans le tableau.": "{n} tickets shown out of {total}: the oldest ones are not on the board.",
