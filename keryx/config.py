@@ -12,6 +12,10 @@ def _bool(name: str, default: bool) -> bool:
     return v.strip().lower() in {"1", "true", "yes", "on"}
 
 
+# Rétention minimale des alertes brutes [PDIS IV.2.2.w : 6 mois minimum, texte non revérifié ici] : plancher ET valeur par défaut.
+MIN_RETENTION_MONTHS = 6
+
+
 def _int(name: str, default: int) -> int:
     return int(os.environ.get(name, str(default)))
 
@@ -82,7 +86,7 @@ class Settings:
 
     # Rétention des alertes brutes des tickets clos, en mois (PDIS IV.2.2.w : 6 mois minimum ; ISM : 12 mois).
     # À valider avec le DPO ; chaque client peut avoir sa propre valeur.
-    retention_months: int = field(default_factory=lambda: max(6, _int("KERYX_RETENTION_MONTHS", 12)))
+    retention_months: int = field(default_factory=lambda: max(MIN_RETENTION_MONTHS, _int("KERYX_RETENTION_MONTHS", MIN_RETENTION_MONTHS)))
 
     # Authentification unique OIDC (Keycloak). JSON : [{"name":"soc","label":"Compte SOC","issuer":"https://…/realms/soc",
     # "client_id":"keryx","client_secret":"…"}]. Plusieurs fournisseurs possibles (realms « soc » et « clients »).

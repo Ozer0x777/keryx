@@ -33,7 +33,7 @@ function ClientEditor({ client, onSaved, onError }) {
   return (
     <form className="subform" onSubmit={save}>
       <label>{tr("Contacts de notification (séparés par des virgules)")}<input value={emails} onChange={(e) => setEmails(e.target.value)} /></label>
-      <label>{tr("Rétention des alertes brutes, en mois (6 minimum, vide = valeur par défaut)")}<input type="number" min="6" max="120" value={retention} onChange={(e) => setRetention(e.target.value)} /></label>
+      <label>{tr("Rétention des alertes brutes, en mois (6 minimum, vide = durée par défaut de l'instance)")}<input type="number" min="6" max="120" value={retention} onChange={(e) => setRetention(e.target.value)} /></label>
       <label>{tr("Taille maximale d'une pièce, en Mo (1 à 20, vide = 20 : plafond fixé par le plan)")}<input type="number" min="1" max="20" value={maxMb} onChange={(e) => setMaxMb(e.target.value)} /></label>
       <h3>{tr("Grille de gravité")} {grid ? tr('(propre au client)') : tr('(grille par défaut)')}</h3>
       <div className="table-wrap"><table className="grid">

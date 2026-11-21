@@ -25,4 +25,4 @@ Identifiants UUIDv7 (RFC 9562), dates en UTC (RFC 3339).
 | `saved_filters` | Filtres de liste enregistrés par utilisateur | Confort d'analyste |
 | `crisis_entries` | Registre de crise : décisions, plan d'action, synthèse de crise | PRIS VI.5.5.1 ; ADR-0013 |
 | `mitre_techniques` | Référentiel ATT&CK importé (STIX 2.1) : nom et tactiques | MITRE ATT&CK ; ADR-0014 |
-Colonnes ajoutées : `tenants.retention_months`, `tenants.sla`, `api_keys.last_used_at`, `users.notif_prefs`, `tickets.crisis`, `tickets.crisis_started_at`, `notifications.attempts`.
+Table `system_settings` (migration 0016 : réglages globaux modifiables par l'Admin, dont la rétention par défaut). Colonnes ajoutées : `tenants.retention_months`, `tenants.sla`, `api_keys.last_used_at`, `users.notif_prefs`, `tickets.crisis`, `tickets.crisis_started_at`, `notifications.attempts`.

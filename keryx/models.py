@@ -410,6 +410,15 @@ class MitreTechnique(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class SystemSetting(Base):
+    """Réglage global de l'instance, modifiable par l'Admin (ex. durée de rétention par défaut). Absent = valeur par défaut."""
+    __tablename__ = "system_settings"
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[dict] = mapped_column(JSON)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_by: Mapped[str] = mapped_column(String(64), default="")
+
+
 class RateHit(Base):
     """Passage compté par une limite de débit partagée (plusieurs processus ou conteneurs). [ADR-0010]"""
     __tablename__ = "rate_hits"

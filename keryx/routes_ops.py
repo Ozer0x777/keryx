@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from . import audit, mitre_stix, retention
 from .ids import rfc3339, utcnow
-from .models import CRISIS_KINDS, AuditEntry, CrisisEntry, MitreMapping, MitreTechnique, Tenant, Ticket, User
+from .models import CRISIS_KINDS, AuditEntry, CrisisEntry, MitreMapping, MitreTechnique, SystemSetting, Tenant, Ticket, User
 
 MAX_STIX_BYTES = 80 * 1024 * 1024
 CONTENT_ACTIONS = ("ticket.", "attachment.", "report.", "registry.", "template.")
@@ -40,6 +40,10 @@ class CrisisPatchIn(BaseModel):
 
 class RetentionIn(BaseModel):
     dry_run: bool = True
+
+
+class RetentionDefaultIn(BaseModel):
+    months: int | None = Field(default=None, ge=6, le=120)   # None = revenir à la valeur par défaut (minimum de 6 mois)
 
 
 def register(app, ctx) -> None:
@@ -241,6 +245,34 @@ def register(app, ctx) -> None:
         return {"items": items[:50], "min_count": min_count}
 
     # ---------------------------------------------------------------- rétention
+    def _retention_setting(db: DbSession) -> dict:
+        months, source = retention.default_months(db, settings)
+        return {"months": months, "source": source, "minimum": 6, "maximum": 120}
+
+    @app.get("/api/v1/admin/settings/retention", dependencies=[Depends(ctx.admin_guard)])
+    def retention_setting(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        require_role(user, "admin")
+        return _retention_setting(db)
+
+    @app.put("/api/v1/admin/settings/retention", dependencies=[Depends(ctx.admin_guard)])
+    def retention_setting_set(body: RetentionDefaultIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        require_role(user, "admin")
+        before = _retention_setting(db)["months"]
+        row = db.get(SystemSetting, retention.SETTING_KEY)
+        if body.months is None:
+            if row is not None:
+                db.delete(row)
+        elif row is None:
+            db.add(SystemSetting(key=retention.SETTING_KEY, value={"months": body.months}, updated_by=user.username))
+        else:
+            row.value, row.updated_at, row.updated_by = {"months": body.months}, utcnow(), user.username
+        db.flush()
+        after = _retention_setting(db)
+        audit.record(db, user.username, "settings.retention", "system", retention.SETTING_KEY, None,
+                     {"mois": [before, after["months"]], "source": after["source"]})
+        commit(db)
+        return after
+
     @app.post("/api/v1/admin/retention", dependencies=[Depends(ctx.admin_guard)])
     def retention_run(body: RetentionIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         require_role(user, "admin")

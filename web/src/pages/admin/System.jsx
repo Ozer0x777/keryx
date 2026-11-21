@@ -7,8 +7,16 @@ export default function System() {
   const [s, setS] = useState(null)
   const [error, setError] = useState('')
   const [ret, setRet] = useState(null)
+  const [rs, setRs] = useState(null)        // réglage de rétention par défaut : { months, source, minimum, maximum }
+  const [months, setMonths] = useState('')
+  const [saved, setSaved] = useState('')
   const load = () => api('/admin/system').then(setS).catch((e) => setError(e.message))
-  useEffect(() => { load() }, [])
+  const loadRs = () => api('/admin/settings/retention').then((r) => { setRs(r); setMonths(String(r.months)) }).catch((e) => setError(e.message))
+  useEffect(() => { load(); loadRs() }, [])
+  const saveRs = async (value) => {
+    setError(''); setSaved('')
+    try { const r = await api('/admin/settings/retention', { method: 'PUT', json: { months: value } }); setRs(r); setMonths(String(r.months)); setSaved(tr('Durée de rétention enregistrée.')) } catch (e) { setError(e.message) }
+  }
   const retention = async (dry) => {
     if (!dry && !window.confirm(tr('Supprimer définitivement les alertes brutes arrivées en fin de rétention ? Cette opération est tracée.'))) return
     try { setRet(await api('/admin/retention', { method: 'POST', json: { dry_run: dry } })) } catch (e) { setError(e.message) }
@@ -33,7 +41,18 @@ export default function System() {
         </dl>
       </>}
       <h3>{tr("Rétention des alertes brutes")}</h3>
-      <p className="muted small">{tr("Seules les alertes brutes des tickets clos, plus anciennes que la durée du client (12 mois par défaut, 6 minimum), sont supprimées. Les tickets, le registre des actions et les pièces sont conservés.")}</p>
+      <p className="muted small">{tr("Seules les alertes brutes des tickets clos, plus anciennes que la durée du client, sont supprimées. Les tickets, le registre des actions et les pièces sont conservés. La durée d'un client se règle dans sa fiche ; sans valeur propre, la durée par défaut ci-dessous s'applique.")}</p>
+      {rs && (
+        <form className="row gap" onSubmit={(e) => { e.preventDefault(); saveRs(Number(months)) }}>
+          <label>{tr("Durée de rétention par défaut, en mois")}
+            <input type="number" min={rs.minimum} max={rs.maximum} value={months} onChange={(e) => setMonths(e.target.value)} required />
+          </label>
+          <button type="submit">{tr("Enregistrer")}</button>
+          <button type="button" onClick={() => saveRs(null)}>{tr("Revenir au minimum")}</button>
+        </form>
+      )}
+      {rs && <p className="muted small">{tr("Minimum {min} mois (exigence PDIS), maximum {max}. Origine de la valeur actuelle : {source}.", { min: rs.minimum, max: rs.maximum, source: tr(rs.source === 'reglage' ? 'réglage de l\'administrateur' : rs.source === 'environnement' ? 'variable d\'environnement' : 'minimum par défaut') })}</p>}
+      {saved && <p className="banner ok" role="status">{saved}</p>}
       <div className="row gap"><button type="button" onClick={() => retention(true)}>{tr("Simuler")}</button><button type="button" className="danger" onClick={() => retention(false)}>{tr("Purger")}</button></div>
       {ret && (
         <div role="status">

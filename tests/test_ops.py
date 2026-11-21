@@ -116,3 +116,38 @@ def test_retention_ne_purge_que_les_tickets_clos_en_fin_de_duree(app, db, world,
     # Rétention propre au client : 6 mois minimum
     assert adm.patch("/api/v1/admin/clients/ACME", json={"retention_months": 3}).status_code == 422
     assert login(app, db, "manager").post("/api/v1/admin/retention", json={}).status_code == 403
+
+
+def test_duree_de_retention_par_defaut_reglable_par_l_admin(app, db, world, alert, monkeypatch):
+    adm = login(app, db, "admin")
+    r = adm.get("/api/v1/admin/settings/retention").json()
+    assert r["months"] == 6 and r["source"] == "defaut" and r["minimum"] == 6        # défaut : minimum PDIS
+    # Réglage : appliqué aux clients sans durée propre, tracé, borné
+    ok = adm.put("/api/v1/admin/settings/retention", json={"months": 24})
+    assert ok.status_code == 200 and ok.json() == {"months": 24, "source": "reglage", "minimum": 6, "maximum": 120}
+    assert adm.put("/api/v1/admin/settings/retention", json={"months": 5}).status_code == 422
+    assert adm.put("/api/v1/admin/settings/retention", json={"months": 121}).status_code == 422
+    entry = next(i for i in adm.get("/api/v1/audit/entries").json()["items"] if i["action"] == "settings.retention")
+    assert entry["details"]["mois"] == [6, 24]
+    ingest(app, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE))
+    a = login(app, db, "analyst_acme")
+    a.post("/api/v1/tickets/ACME-1/status", json={"status": "en_evaluation"})
+    a.post("/api/v1/tickets/ACME-1/qualification", json={"verdict": "faux_positif"})
+    a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif"})
+    old = utcnow() - timedelta(days=30 * 13)               # 13 mois : au-delà de 6, en deçà de 24
+    for ra in db.scalars(select(RawAlert)).all():
+        ra.received_at = old
+    db.scalars(select(Ticket).where(Ticket.ref == "ACME-1")).one().closed_at = old
+    db.commit()
+    assert adm.post("/api/v1/admin/retention", json={"dry_run": True}).json()["total"] == 0      # 24 mois : rien à purger
+    adm.patch("/api/v1/admin/clients/ACME", json={"retention_months": 6})                          # durée propre au client
+    assert adm.post("/api/v1/admin/retention", json={"dry_run": True}).json()["total"] == 1
+    adm.patch("/api/v1/admin/clients/ACME", json={"retention_months": None})
+    # Retour au minimum, puis seul l'Admin peut lire ou changer
+    back = adm.put("/api/v1/admin/settings/retention", json={"months": None}).json()
+    assert back["months"] == 6 and back["source"] == "defaut"
+    assert adm.post("/api/v1/admin/retention", json={"dry_run": True}).json()["total"] == 1
+    for who in ("manager", "analyst_acme", "client_acme"):
+        c = login(app, db, who)
+        assert c.get("/api/v1/admin/settings/retention").status_code == 403
+        assert c.put("/api/v1/admin/settings/retention", json={"months": 7}).status_code == 403
