@@ -10,6 +10,7 @@ import Crisis from '../components/Crisis.jsx'
 import IsiPanel from '../components/IsiPanel.jsx'
 import Section, { OPEN_BY_STATUS, OPEN_FOR_CLIENT, PhaseContext } from '../components/Section.jsx'
 import Stamps from '../components/Stamps.jsx'
+import WazuhContext from '../components/WazuhContext.jsx'
 import RichEditor from '../components/RichEditor.jsx'
 import { isoToUtcInput, untilUtc, utcClock, utcInputNow, utcInputToIso } from '../dates.js'
 import { queuePath } from '../queue.js'
@@ -150,6 +151,12 @@ export default function Ticket() {
         {isTeam && (
           <div className="row wrap gap ticket-actions">
             <Link to={`/tickets/${enc}/rapport`} className="btn-link">{tr("Rapport imprimable")}</Link>
+            {/* Lien calculé par le serveur pour l'équipe seulement (absent pour le client) ; HTTPS exigé ici aussi. */}
+            {t.wazuh?.alert_url?.startsWith('https://') && (
+              <a className="btn-link" href={t.wazuh.alert_url} target="_blank" rel="noopener noreferrer">
+                {tr("Ouvrir l'alerte dans Wazuh")}<span aria-hidden="true"> ↗</span><span className="sr-only"> {tr("(nouvel onglet)")}</span>
+              </a>
+            )}
             <button type="button" onClick={exportIodef}>{tr("Exporter (IODEF JSON)")}</button>
             {/* Un seul bouton primaire : l'étape suivante normale, placée en dernier ; l'issue alternative est secondaire. */}
             {[...(TRANSITIONS[t.status] || [])].sort((a, b) => (a === MAIN_NEXT[t.status]) - (b === MAIN_NEXT[t.status])).map((s) => (
@@ -185,6 +192,7 @@ export default function Ticket() {
           {isTeam && <Crisis t={t} enc={enc} isManager={me.role === 'manager'} open={open} onChange={load} />}
           <Description t={t} enc={enc} canEdit={isTeam && open} run={run} onImage={uploadImage} alertMerged={isTeam && alertMerged} />
           {isTeam && !alertMerged && <AlertBlock t={t} />}
+          {isTeam && t.wazuh?.context && <WazuhContext t={t} enc={enc} run={run} open={open} />}
           <Attachments t={t} enc={enc} me={me} run={run} />
           {isTeam && <Synthese t={t} enc={enc} run={run} onImage={uploadImage} templates={templates('synthese')} />}
           <Events t={t} />

@@ -36,11 +36,27 @@ export function startTsa(dir) {
   return { url: `http://127.0.0.1:${port}/tsa`, ca: `${dir}/ca.pem`, stop: () => server.close() }
 }
 
+// Faux indexeur Wazuh (tests/fake_indexer.py, le même que celui des tests pytest) : HTTPS local, autorité générée.
+// `ready` donne son adresse, le fichier de son autorité et le compte de lecture attendu.
+export function startIndexer(alertId) {
+  const dir = mkdtempSync(join(tmpdir(), 'keryx-indexeur-'))
+  const port = 19600 + Math.floor(Math.random() * 300)
+  const proc = spawn(PY, [join(ROOT, 'tests', 'fake_indexer.py'), dir, String(port), alertId], { stdio: ['ignore', 'pipe', 'ignore'] })
+  const ready = new Promise((resolve, reject) => {
+    proc.stdout.once('data', (b) => resolve(JSON.parse(String(b).split('\n')[0])))
+    proc.once('exit', () => reject(new Error('faux indexeur arrêté avant d\'être prêt')))
+  })
+  ready.catch(() => {})
+  return { ready, stop: () => proc.kill('SIGTERM') }
+}
+export const WAZUH_ALERT_ID = 'e2e-wazuh-1'   // alerte du scénario « contexte Wazuh », connue du faux indexeur
+
 export function startStack() {
   const dir = mkdtempSync(join(tmpdir(), 'keryx-e2e-'))
   const tsa = process.env.E2E_NO_TSA ? null : startTsa(mkdtempSync(join(tmpdir(), 'keryx-tsa-')))
+  const indexer = startIndexer(WAZUH_ALERT_ID)
   const key = execFileSync(PY, ['-m', 'keryx.cli', 'gen-key'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
-  const env = { ...process.env, KERYX_SECRET_KEY: key, KERYX_DATABASE_URL: `sqlite:///${dir}/e2e.db`, KERYX_ATTACHMENTS_DIR: `${dir}/pj`, KERYX_COOKIE_SECURE: 'false', KERYX_PUBLIC_URL: `http://localhost:${PORT}`, KERYX_LOGIN_IP_LIMIT: '1000', ...(tsa ? { KERYX_TSA_URL: tsa.url, KERYX_TSA_CA_FILE: tsa.ca } : {}), ...(process.env.E2E_KEYCLOAK ? { KERYX_OIDC_ALLOW_HTTP: 'true', KERYX_OIDC_PROVIDERS: JSON.stringify([{ name: 'soc', label: 'Compte SOC', issuer: `${process.env.E2E_KEYCLOAK}/realms/soc`, client_id: 'keryx', client_secret: 'keryx-secret-e2e' }]) } : {}), KERYX_LOGIN_USER_LIMIT: '1000', PYTHONWARNINGS: 'ignore' }
+  const env = { ...process.env, KERYX_SECRET_KEY: key, KERYX_DATABASE_URL: `sqlite:///${dir}/e2e.db`, KERYX_ATTACHMENTS_DIR: `${dir}/pj`, KERYX_COOKIE_SECURE: 'false', KERYX_PUBLIC_URL: `http://localhost:${PORT}`, KERYX_LOGIN_IP_LIMIT: '1000', ...(tsa ? { KERYX_TSA_URL: tsa.url, KERYX_TSA_CA_FILE: tsa.ca } : {}), ...(process.env.E2E_KEYCLOAK ? { KERYX_OIDC_ALLOW_HTTP: 'true', KERYX_OIDC_PROVIDERS: JSON.stringify([{ name: 'soc', label: 'Compte SOC', issuer: `${process.env.E2E_KEYCLOAK}/realms/soc`, client_id: 'keryx', client_secret: 'keryx-secret-e2e' }]) } : {}), KERYX_LOGIN_USER_LIMIT: '1000', KERYX_WAZUH_ALLOW_LOOPBACK: 'true', PYTHONWARNINGS: 'ignore' }
   const cli = (...args) => execFileSync(PY, ['-m', 'keryx.cli', ...args], { cwd: ROOT, env: { ...env, KERYX_NEW_PASSWORD: PASSWORD }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
   execFileSync(PY, ['-m', 'alembic', 'upgrade', 'head'], { cwd: ROOT, env, stdio: 'ignore' })
   const seeds = {}
@@ -51,7 +67,7 @@ export function startStack() {
   }
   seeds.apiKey = /(kx_[\w-]+)/.exec(cli('add-api-key', 'ACME', 'wazuh-e2e'))[1]
   const server = spawn(PY, ['-m', 'uvicorn', 'keryx.api:create_app', '--factory', '--port', String(PORT)], { cwd: ROOT, env, stdio: ['ignore', openSync(`${dir}/server.log`, 'a'), openSync(`${dir}/server.log`, 'a')] })
-  return { dir, seeds, server, stop: () => { server.kill('SIGTERM'); tsa?.stop() } }
+  return { dir, seeds, server, indexer, stop: () => { server.kill('SIGTERM'); tsa?.stop(); indexer.stop() } }
 }
 
 // Requête SQL directe sur la base de test (préparation de données que l'interface ne propose pas).
