@@ -5,7 +5,7 @@
 ## 1. Système décrit
 - **Rôle** : gestion des incidents de sécurité alimentée par Wazuh (tickets, registres, preuves, notifications, rapports).
 - **Composants** : application web (FastAPI + interface React servie par l'application), base de données (SQLite pour les essais, PostgreSQL en production), stockage des pièces (disque ou stockage objet S3 chiffré avant envoi), antivirus ClamAV (optionnel), SMTP (optionnel), annuaire OpenID Connect Keycloak (optionnel), autorité d'horodatage RFC 3161 (optionnelle), export syslog vers Wazuh (optionnel).
-- **Flux entrants** : alertes Wazuh (HTTPS, clé d'API par manager et par client) ; navigateurs des utilisateurs (HTTPS derrière un proxy TLS). **Flux sortants** : SMTP, ClamAV, Keycloak, stockage objet, autorité d'horodatage, syslog ; tous désactivés par défaut et configurables.
+- **Flux entrants** : alertes Wazuh (HTTPS, clé d'API par manager et par client) ; navigateurs des utilisateurs (HTTPS derrière un proxy TLS). **Flux sortants** : SMTP, ClamAV, Keycloak, stockage objet, autorité d'horodatage, syslog, indexeur Wazuh d'un client (lecture seule, HTTPS, réglé par client, ADR-0021) ; tous désactivés par défaut et configurables.
 - **Hébergement visé** : UE, sans service externe obligatoire (décision du plan).
 - **Rôles** : Admin (sans accès au contenu des tickets), Manager, Analyste, Client (cloisonnés par client).
 
@@ -38,6 +38,7 @@ Voir `docs/matrice-tracabilite.md` (exigence → fonction → code → test) et 
 - Écart à valider avec un destinataire : l'export ETSI ISI utilise `AdditionalData` pour un incident individuel (ADR-0020).
 - Le contrôle IODEF est structurel, pas contre le schéma officiel complet.
 - Les alertes d'un manager Wazuh muet ne sont signalées qu'à l'administrateur (bandeau), pas notifiées.
+- Contexte Wazuh (ADR-0021) : essayé contre un faux indexeur seulement. Un Admin peut faire émettre à Keryx une recherche authentifiée vers un hôte interne en HTTPS (les adresses privées sont acceptées, un indexeur étant interne) : le cloisonnement réseau du serveur reste nécessaire. Le compte de lecture doit être restreint, dans l'indexeur, aux index du client.
 
 ## 6. À décider ou fournir par l'organisation
 Durées de conservation (DPO) ; autorité d'horodatage : **prestataire qualifié eIDAS de l'UE retenu**, à désigner dans la liste de confiance (guide : `docs/horodatage-qualifie.md`) ; stockage des pièces : **Garage auto-hébergé retenu** (guide : `docs/deploiement-stockage-garage.md`) ; hébergeur et proxy TLS (TLS 1.2 minimum) ; politique de mots de passe et de rotation des clés d'API ; configuration MFA du realm Keycloak ; stratégie de sauvegarde (fréquence, lieu, test de restauration) ; supervision de Keryx lui-même ; niveau de sécurité visé (PRIS substantiel, compatible élevé) et commission d'homologation.

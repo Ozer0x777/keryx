@@ -1,0 +1,62 @@
+# ADR-0021 — Contexte Wazuh : lien vers l'alerte et lecture de l'indexeur
+
+- **Statut** : accepté (21/11/2026). **Essayé uniquement contre le faux indexeur des tests** (`tests/fake_indexer.py`, sous-ensemble de l'API OpenSearch), **jamais contre un vrai Wazuh** : voir « À valider » plus bas. Désactivé par défaut : tant qu'un Admin n'a rien réglé pour un client, la fonction n'apparaît nulle part (ni dans l'API, ni dans l'interface).
+- **Pourquoi** : pour qualifier une alerte, l'analyste a besoin de ce que le même équipement a journalisé juste avant et juste après, et d'un accès direct à l'alerte dans le tableau de bord Wazuh. Sans cela, il quitte Keryx, cherche l'agent et l'heure à la main, et ce qu'il a vu n'est rattaché à rien. Première intégration **sortante** de Keryx vers Wazuh (jusqu'ici, Wazuh poussait ses alertes vers Keryx) : d'où cet ADR.
+- **Hébergement** : l'indexeur et le tableau de bord sont ceux du SOC ou du client, sur un réseau interne. Ce n'est pas un service tiers : la décision « UE, aucun service externe » n'est pas modifiée. Aucune dépendance ajoutée (bibliothèque standard de Python et `cryptography`, déjà présente).
+
+## Décision
+
+**Réglages par client** (Administration > Clients, migration 0017, colonnes `tenants.wazuh_*`) : modèle d'URL du tableau de bord ; adresse de l'indexeur ; motif d'index (vide = `wazuh-alerts-*`) ; compte de lecture (identifiant et mot de passe) ; contrôle du certificat TLS (activé par défaut) ; autorité de certification propre au client (PEM). Le lien n'existe que si le modèle d'URL est réglé ; la lecture n'existe que si l'adresse **et** le compte le sont.
+
+**Lien vers l'alerte** : calculé par le serveur dans `GET /api/v1/tickets/{ref}` (`wazuh.alert_url`), pour l'analyste et le manager seulement. La clé `wazuh` est absente pour le client (et l'Admin n'a pas accès au ticket). Variables du modèle, remplacées et encodées par Keryx :
+
+| Variable | Valeur |
+|---|---|
+| `{alert_id}` | identifiant Wazuh de l'alerte d'origine (champ `id` de l'alerte, conservé dans `raw_alerts.wazuh_id`) |
+| `{agent_id}`, `{rule_id}` | agent et règle du ticket |
+| `{timestamp}` | date de l'alerte d'origine, UTC, RFC 3339 |
+| `{from}`, `{to}` | cinq minutes avant et après l'alerte (bornes d'une recherche) |
+| `{index_pattern}` | motif d'index du client |
+
+Le modèle doit être en HTTPS, sans identifiants (`utilisateur:motdepasse@`), sans variable dans le nom d'hôte, et ne contenir que ces variables. `{index}` et l'identifiant interne du document (`_id`) **ne sont pas proposés** : l'alerte poussée par l'intégration Wazuh ne les contient pas, et Keryx ne les devine pas. Le modèle passe donc par une recherche sur `{alert_id}`, par exemple (non essayé sur un vrai tableau de bord) : `https://wazuh.exemple/app/data-explorer/discover#?_q=(query:(language:kuery,query:'id:%22{alert_id}%22'))&_g=(time:(from:'{from}',to:'{to}'))`. L'identifiant vient de l'alerte, donnée non fiable : s'il sort du jeu `[A-Za-z0-9._:-]`, aucun lien n'est produit.
+
+**Lecture de l'indexeur** : `POST /api/v1/tickets/{ref}/wazuh-context`, corps `{"before": 5|10|15, "after": 5|10|15}` (toute autre valeur : 422). Deux recherches `_search` sur le motif d'index du client : filtre exact `term` sur `agent.id` = l'agent du ticket, `range` sur le champ de date autour de l'instant de l'alerte d'origine (`lt` trié décroissant pour « avant », `gte` trié croissant pour « après »), `size` borné. Keryx ne croit pas l'indexeur sur parole : tout événement d'un autre agent ou hors de la fenêtre est écarté côté Keryx (et compté dans l'audit). L'alerte d'origine est affichée depuis la copie que Keryx conserve, pas depuis l'indexeur. Les événements sont ramenés à des champs de texte bornés : pas de caractère de contrôle, pas de marque de sens d'écriture, jamais de HTML ; l'interface les rend comme du texte.
+
+**Conservation comme preuve**, à la demande : `POST /api/v1/tickets/{ref}/wazuh-context/keep`. La lecture renvoie le jeu, son empreinte SHA-256 et un sceau HMAC (clé dérivée de `KERYX_SECRET_KEY`) qui lie l'empreinte au client, au ticket et à l'analyste. Pour conserver, le navigateur renvoie le jeu et le sceau : Keryx recalcule l'empreinte et vérifie le sceau, donc ce qui est conservé est **à l'octet près** ce que Keryx a lu, et rien n'a été écrit en base entre-temps (ne pas conserver n'écrit rien d'autre que l'entrée d'audit de la lecture). Sceau valable 30 minutes ; un jeu modifié, d'un autre analyste ou d'un autre ticket est refusé (409) ; le même jeu ne se conserve pas deux fois. La pièce suit le chemin des autres pièces (ADR-0008) : même stockage (disque ou S3 chiffré), analyse ClamAV si configurée, registre de collecte (description saisie, date de lecture en UTC, méthode « Extraction indexeur Wazuh : … », sensibilité TLP), chaîne de possession, téléchargement motivé, horodatage RFC 3161 par le bouton habituel si l'autorité est configurée (ADR-0018). Elle est interne : jamais visible du client. Conservation refusée sur un ticket clos (chaîne de possession figée), la lecture restant possible.
+
+**Rétention** : identique aux autres pièces (PRIS VI.2.4, ADR-0014) : conservée sur la durée de la convention, restitution ou destruction tracée (destruction réservée au manager). La purge des alertes brutes ne la touche pas. Sans alerte brute (purgée), la lecture reste possible avec la date du ticket ; le lien, lui, disparaît faute d'identifiant.
+
+## Risques et mesures
+
+**Requête forgée côté serveur (SSRF).** L'adresse est posée par un Admin, pas par un utilisateur quelconque, mais un Admin n'a pas à pouvoir faire parler Keryx à n'importe quoi. Règle de sortie, appliquée à la saisie et de nouveau à chaque appel :
+
+- HTTPS seulement ; ni identifiants, ni paramètres, ni fragment dans l'adresse ; aucune redirection suivie ; aucun mandataire d'environnement ; réponse non compressée, bornée à 2 Mio ; 3 s pour se connecter, 8 s pour l'ensemble de la lecture.
+- Le nom est résolu par Keryx, **chaque** adresse obtenue est contrôlée (une seule adresse refusée refuse l'appel), et la connexion part vers l'adresse contrôlée : pas de seconde résolution entre le contrôle et la connexion (rebond DNS).
+- Refusées : adresse non spécifiée (`0.0.0.0/8`, `::`), lien local (`169.254.0.0/16`, `fe80::/10`, donc les services de métadonnées `169.254.169.254`), adresses de métadonnées connues hors lien local (`100.100.100.200`, `192.0.0.192`, `fd00:ec2::254`), multidiffusion, plages réservées ; les formes IPv6 qui embarquent une adresse IPv4 (`::ffff:`, 6to4, NAT64) sont jugées sur l'adresse embarquée. Boucle locale refusée, sauf `KERYX_WAZUH_ALLOW_LOOPBACK=true` (essais, indexeur sur la même machine).
+- **Acceptées, par choix** : les adresses privées (RFC 1918, ULA). Un indexeur Wazuh vit sur un réseau interne ; les refuser rendrait la fonction inutilisable. Conséquence assumée : un Admin peut faire émettre à Keryx une requête `POST …/_search` authentifiée vers un hôte interne en HTTPS. Elle ne renvoie à l'analyste que des champs d'une réponse de recherche valide, et l'hôte et le port de chaque réglage sont tracés dans l'audit (`client.update`). Le cloisonnement réseau du serveur Keryx reste la mesure principale.
+
+**Secrets.** Identifiant et mot de passe sont chiffrés au repos en AES-256-GCM comme le secret TOTP (ADR-0006), avec un contexte propre au client et au champ (un secret recopié sur un autre client ne se déchiffre pas). L'API ne les renvoie jamais (indicateur « compte enregistré » seulement), ils ne figurent ni dans l'audit, ni dans les journaux, ni dans les messages d'erreur. **Changer ou retirer l'adresse de l'indexeur efface le compte enregistré** : sinon, modifier l'adresse suffirait à faire envoyer ce compte à un autre serveur. Le compte doit être un compte de l'indexeur **limité à la lecture des index du client** : c'est l'indexeur qui borne ce que ce compte peut lire, Keryx ne filtre que sur l'agent.
+
+**Cloisonnement.** Analyste et manager affectés au client du ticket seulement ; client et Admin : 403 (contrôle de rôle avant la validation du corps) ; autre client : 404. L'Admin règle l'accès mais ne lit aucun événement (PDIS IV.3.9.d à h). Si un même indexeur sert plusieurs clients dont les numéros d'agent se recoupent (plusieurs managers Wazuh), le filtre sur `agent.id` ne suffit pas : donner à chaque client son motif d'index et un compte restreint à ses index.
+
+**TLS.** Contrôle du certificat activé par défaut, contre l'autorité du client si elle est fournie (elle remplace alors le magasin du système), sinon contre le système. Le contrôle peut être désactivé par client pour un essai : le compte de lecture peut alors être intercepté ; le choix est tracé dans l'audit et inscrit dans chaque jeu conservé (`tls_verified`). Avec une autorité propre, le contrôle strict RFC 5280 de Python 3.13+ est retiré (les autorités privées ne le passent pas toujours) ; la chaîne et le nom restent vérifiés.
+
+**Journalisation et débit.** `ticket.wazuh_context` (client, ticket, fenêtre demandée, nombres de résultats et d'événements écartés, jamais le contenu), `ticket.wazuh_context_failed` (catégorie de l'échec), `ticket.wazuh_context_keep` (pièce, empreinte), `ticket.wazuh_context_keep_refused`. Limites : 20 lectures par minute et par analyste, 60 par minute et par client (`KERYX_WAZUH_CONTEXT_USER_LIMIT`, `_CLIENT_LIMIT`), réponse 429. Erreurs : 503 si l'indexeur est injoignable ou trop lent, 502 pour toute réponse inutilisable (authentification refusée, certificat, redirection, statut, taille, forme), sans jamais recopier la réponse de l'indexeur.
+
+## À valider sur un vrai Wazuh (rien de ceci n'a été essayé)
+
+1. **Champ de date** : Keryx interroge et trie sur `timestamp` (`KERYX_WAZUH_TIME_FIELD` pour en changer, par exemple `@timestamp`). Vérifier que ce champ existe, est de type date, et que la borne envoyée (`2026-11-20T14:41:02.118Z`, format `strict_date_optional_time`) est acceptée.
+2. **Champs** : `agent.id` doit être de type mot-clé (filtre `term` exact) et le champ `id` de l'index doit être celui que l'intégration envoie à Keryx. Vérifier `_source` : `rule.*`, `agent.*`, `location`, `decoder.name`, `full_log`, `data`.
+3. **Motif d'index** : `wazuh-alerts-*` par défaut ; les paramètres `ignore_unavailable` et `allow_no_indices` doivent être acceptés par le compte de lecture.
+4. **Droits du compte** : un rôle limité à la lecture (`indices:data/read/search`) sur les index du client doit suffire.
+5. **Certificat** : celui de l'indexeur doit porter le nom ou l'adresse configurés ; essayer avec l'autorité produite par l'outil de certificats de Wazuh.
+6. **Modèle d'URL du tableau de bord** : l'exemple ci-dessus est à ajuster à la version du tableau de bord.
+7. **Événements au même instant que l'alerte** : ils sont rangés parmi les « après ».
+
+## Écarts et limites
+
+- La pièce conservée est un document JSON produit par Keryx (`keryx-wazuh-context-v1`), alors qu'ADR-0008 limite les **dépôts** aux archives ZIP et aux images : la règle vise ce qu'un utilisateur dépose, pas ce que Keryx produit ; la pièce est servie comme les archives (téléchargement motivé, `application/octet-stream`).
+- Pas d'horodatage RFC 3161 automatique à la conservation : le bouton habituel de la pièce s'en charge, comme pour un dépôt.
+- Pas de bouton « tester la connexion » pour l'Admin : il servirait de sonde réseau et l'Admin ne lit aucun événement ; l'essai se fait par un analyste sur un ticket.
+- Fenêtre en nombre d'événements (5, 10, 15), pas en durée ; un seul agent ; pas de pagination au-delà.
+- **Exigences** : PDIS IV.2.1.aa (contexte rattaché à l'alerte) ; PRIS VI.5.3.c (registre des informations collectées), VI.2.4 ; ISO/IEC 27037 et RFC 3227 (intégrité, chaîne de possession) ; PDIS IV.3.8.g (cloisonnement), IV.3.9.c (journalisation), IV.3.9.d à h (séparation Admin / opérateurs) ; ISO/IEC 27002:2022 8.24 (secrets, via ADR-0006) ; RFC 7617 (authentification Basic), RFC 6585 (429), RFC 9457 (erreurs), RFC 3339 (dates UTC) ; OWASP ASVS 5.0 (exigence de protection contre les requêtes forgées côté serveur). Les références PDIS et PRIS sont reprises de la matrice du projet ; le numéro exact de l'exigence ASVS et le texte des normes ISO n'ont pas été revérifiés ici.
