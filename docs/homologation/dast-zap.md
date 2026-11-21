@@ -21,3 +21,15 @@ Aucun autre constat de gravité moyenne ou haute. Les règles d'injection XSS, d
 
 ## Limites de cette analyse
 Cinq minutes d'analyse active ; routes importées depuis OpenAPI seulement ; un seul rôle (manager) ; pas de parcours multi-comptes (cloisonnement entre clients, élévation de privilèges), pas de test des flux SSO, WebAuthn et d'ingestion Wazuh avec clé d'API, pas d'infrastructure réelle (proxy TLS, base de production). Ces points sont dans le périmètre du test d'intrusion à commander.
+
+## Second passage (21/11/2026), après les corrections de la revue de code
+
+Même plan, 6 minutes, manager authentifié, code des commits jusqu'à `edc1cfa`. Aucune alerte de gravité haute confirmée, aucune alerte moyenne confirmée.
+
+| Constat ZAP | Analyse | Suite |
+|---|---|---|
+| Injection SQL (SQLite), `GET /audit/entries` paramètre `actor` et `POST /admin/users` paramètre `display_name` | **Faux positif**, même mécanisme que le premier passage (détection temporelle `randomblob`). Mesuré en direct, 40 essais par charge : médiane 11,5 / 12,1 ms pour les charges contre 11,8 ms pour une valeur banale (`actor`) ; 9,4 / 9,1 contre 8,9 ms (`display_name`) ; maximum 18,5 ms. Les 469 ms rapportés par ZAP viennent du bruit pendant le scan actif. Requêtes paramétrées ; le point `actor` est couvert par `tests/test_injection.py`. | Aucune |
+| Fichier caché trouvé : `GET /BitKeeper` (200) | **Faux positif.** Le chemin n'a pas d'extension : le repli de l'application monopage renvoie `index.html` (200, `text/html`) pour toute route inconnue, ce qui est le comportement voulu (routes du navigateur). Aucun fichier `BitKeeper` n'existe ; les chemins à extension ou commençant par un point répondent 404. | Aucune |
+| Divers (informatifs) | Commentaires suspects (bundle JavaScript), détection d'une application moderne, identification d'authentification : sans effet. | Aucune |
+
+Limite inchangée : un scan automatique ne remplace pas un test d'intrusion indépendant.
