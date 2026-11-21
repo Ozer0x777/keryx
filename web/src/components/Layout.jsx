@@ -4,15 +4,10 @@ import { useAuth } from '../App.jsx'
 import { t, t as tr } from '../i18n.js'
 import { ROLES } from '../labels.js'
 import NotificationBell from './NotificationBell.jsx'
+import Logo from './Logo.jsx'
 
 function Shield() {
-  return (
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#5B8DEF" strokeWidth="2"
-      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" />
-      <path d="M9 12l2 2 4-4" />
-    </svg>
-  )
+  return <Logo size={30} />
 }
 
 // Titre de page propre à chaque écran (RGAA 8.5) : « Écran — Keryx ».

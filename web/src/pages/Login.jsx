@@ -1,3 +1,4 @@
+import Logo from '../components/Logo.jsx'
 import { useEffect, useState } from 'react'
 import { api } from '../api.js'
 import OneTime from '../components/OneTime.jsx'
@@ -91,9 +92,7 @@ export default function Login({ onDone }) {
     <div className="login">
       <section className="login-side" aria-label={tr("Présentation")}>
         <span className="brand big">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#5B8DEF" strokeWidth="2" aria-hidden="true">
-            <path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5l8-3z" /><path d="M9 12l2 2 4-4" />
-          </svg>
+          <Logo size={48} />
           <span>{tr("Keryx")}</span>
         </span>
         <p className="tagline">{t('Gestion des incidents de sécurité')}</p>
