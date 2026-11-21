@@ -3,10 +3,12 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import { useEffect, useRef } from 'react'
+import { useConfirm } from './Confirm.jsx'
 
 // Éditeur riche (TipTap). Le HTML produit est assaini côté serveur (nh3, liste blanche) avant stockage.
 export default function RichEditor({ value, onChange, label, onImage, templates, minHeight = 120 }) {
   const fileRef = useRef(null)
+  const [ask, dialog] = useConfirm()
   const editor = useEditor({
     injectCSS: false,  // CSP sans style-src 'unsafe-inline' : les styles de l'éditeur sont dans styles.css
     extensions: [
@@ -27,11 +29,18 @@ export default function RichEditor({ value, onChange, label, onImage, templates,
     <button type="button" className={`tool${active ? ' active' : ''}`} aria-label={title} title={title}
       onClick={action}>{name}</button>
   )
-  const setLink = () => {
-    const url = window.prompt(tr('Adresse du lien (https://…)'))
-    if (url === null) return
-    if (!url) editor.chain().focus().unsetLink().run()
-    else if (/^https:\/\//.test(url)) editor.chain().focus().setLink({ href: url }).run()
+  const setLink = async () => {
+    const current = editor.getAttributes('link').href || ''
+    const r = await ask({
+      title: current ? tr('Modifier le lien du texte sélectionné') : tr('Ajouter un lien au texte sélectionné'),
+      fields: [{ name: 'url', label: tr('Adresse du lien (https://…)'), initial: current, required: false, maxLength: 2000, placeholder: 'https://',
+        hint: current ? tr('Laisser vide pour retirer le lien.') : tr('Seules les adresses https:// sont acceptées.'),
+        validate: (v) => (/^https:\/\/\S+$/.test(v) ? '' : tr("L'adresse doit commencer par https:// et ne pas contenir d'espace.")) }],
+      confirm: current ? tr('Mettre à jour le lien') : tr('Ajouter le lien'),
+    })
+    if (!r) { editor.commands.focus(); return }
+    if (!r.values.url) editor.chain().focus().unsetLink().run()
+    else editor.chain().focus().extendMarkRange('link').setLink({ href: r.values.url }).run()
   }
   return (
     <div className="editor">
@@ -65,6 +74,7 @@ export default function RichEditor({ value, onChange, label, onImage, templates,
         )}
       </div>
       <EditorContent editor={editor} />
+      {dialog}
     </div>
   )
 }

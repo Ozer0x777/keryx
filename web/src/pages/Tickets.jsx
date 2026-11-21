@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import { useAuth } from '../App.jsx'
 import { Severity, Status, Tlp } from '../components/Badges.jsx'
+import { useConfirm } from '../components/Confirm.jsx'
 import { t as tr } from '../i18n.js'
 import { formatUtc, MITRE_SOURCE, STATUS } from '../labels.js'
 
@@ -64,13 +65,27 @@ export default function Tickets() {
   ]
   const view = VIEWS.findIndex(([, p]) => (p.assignee || '') === filters.assignee && !!p.overdue === filters.overdue)
 
+  const [ask, dialog] = useConfirm()
   const saveFilter = async () => {
-    const name = window.prompt(tr('Nom du filtre'))
-    if (!name) return
     const p = Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== '' && v !== false))
-    try { await api('/me/filters', { method: 'POST', json: { name, params: p } }); setSaved((await api('/me/filters')).items) } catch (e) { setError(e.message) }
+    const r = await ask({
+      title: tr('Enregistrer les filtres actuels comme filtre personnel'),
+      body: <p>{tr("Le filtre apparaît dans la barre des vues, pour vous seul ; il reprend la recherche, les filtres et le tri affichés.")}</p>,
+      fields: [{ name: 'name', label: tr('Nom du filtre'), maxLength: 80 }],
+      confirm: tr('Enregistrer le filtre'),
+      action: async ({ name }) => { await api('/me/filters', { method: 'POST', json: { name, params: p } }); return (await api('/me/filters')).items },
+    })
+    if (r) { setSaved(r.result); setMsg(tr('Filtre « {name} » enregistré.', { name: r.values.name })) }
   }
-  const dropFilter = async (f) => { await api(`/me/filters/${f.id}`, { method: 'DELETE' }); setSaved(saved.filter((x) => x.id !== f.id)) }
+  const dropFilter = async (f) => {
+    const r = await ask({
+      title: tr('Supprimer le filtre enregistré « {name} » ?', { name: f.name }),
+      body: <p>{tr("Seul le raccourci est supprimé : les tickets ne sont pas modifiés.")}</p>,
+      confirm: tr('Supprimer le filtre'), danger: true,
+      action: () => api(`/me/filters/${f.id}`, { method: 'DELETE' }),
+    })
+    if (r) { setSaved((list) => list.filter((x) => x.id !== f.id)); setMsg(tr('Filtre « {name} » supprimé.', { name: f.name })) }
+  }
 
   const toggle = (ref) => setPicked((s) => { const n = new Set(s); n.has(ref) ? n.delete(ref) : n.add(ref); return n })
   const bulkAssign = async (username) => {
@@ -163,6 +178,7 @@ export default function Tickets() {
 
       {error && <p className="error" role="alert">{error}</p>}
       <p className="live" role="status">{msg}</p>
+      {dialog}
       {items && total > items.length && <p className="muted small" role="status">{tr('{n} tickets affichés sur {total} : affinez avec les filtres.', { n: items.length, total })}</p>}
       {all && !isClient && (all.total ?? 0) > all.items.length && <p className="muted small" role="status">{tr('Synthèse calculée sur les {n} tickets les plus récents (sur {total}).', { n: all.items.length, total: all.total })}</p>}
 

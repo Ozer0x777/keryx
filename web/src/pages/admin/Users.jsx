@@ -1,6 +1,7 @@
 import { t as tr } from '../../i18n.js'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../api.js'
+import { useConfirm } from '../../components/Confirm.jsx'
 import OneTime from '../../components/OneTime.jsx'
 import { formatUtc, ROLES } from '../../labels.js'
 
@@ -20,14 +21,22 @@ export default function Users() {
   }, [])
   useEffect(() => { load() }, [load])
 
+  const [ask, dialog] = useConfirm()
+
   const run = async (fn, ok) => {
     setError(''); setMsg('')
     try { const r = await fn(); setMsg(ok); await load(); return r } catch (e) { setError(e.message); return null }
   }
+  // Suite d'une action confirmée dans un dialogue (son échec s'y est affiché) : message de statut et liste à jour.
+  const done = async (text) => { setError(''); setMsg(text); await load() }
 
-  const grantMsg = (r, base) => r.activation === 'courriel'
-    ? `${base} ${tr("Le code d'activation a été envoyé par courriel au titulaire.")}`
-    : `${base} ${tr("Code d'activation (affiché une seule fois, à transmettre hors bande) : {code}", { code: r.enrollment_code })}`
+  // Code d'activation : envoyé par courriel au titulaire quand c'est possible (l'Admin ne le voit pas) ; sinon affiché
+  // une seule fois, dans l'encart des secrets à usage unique, pour être transmis hors bande.
+  const grant = (r, base) => {
+    if (r.activation === 'courriel') { setSecret(null); return `${base} ${tr("Le code d'activation a été envoyé par courriel au titulaire.")}` }
+    setSecret({ title: tr("Code d'activation de {u}", { u: r.username }), items: [[tr("Code d'activation (valable 72 h, à transmettre hors bande)"), r.enrollment_code]] })
+    return `${base} ${tr("Le code d'activation est affiché ci-dessous, une seule fois.")}`
+  }
 
   const create = async (e) => {
     e.preventDefault()
@@ -39,24 +48,52 @@ export default function Users() {
       role, clients: role === 'admin' ? [] : picked, password: fd.get('password') } }), tr('Compte créé.'))
     if (r) {
       setForm(null)
-      setMsg(grantMsg(r, tr('Compte {u} créé. Transmettez-lui son mot de passe temporaire par un canal sûr : il activera lui-même sa double authentification à sa première connexion.', { u: r.username })))
+      setMsg(grant(r, tr('Compte {u} créé. Transmettez-lui son mot de passe temporaire par un canal sûr : il activera lui-même sa double authentification à sa première connexion.', { u: r.username })))
     }
   }
 
+  const path = (u) => `/admin/users/${encodeURIComponent(u.username)}`
   const reset2fa = async (u) => {
-    if (!window.confirm(tr('Réinitialiser la 2FA de {u} ? Ses sessions seront fermées et il devra réenrôler son application.', { u: u.username }))) return
-    const r = await run(() => api(`/admin/users/${encodeURIComponent(u.username)}/reset-2fa`, { method: 'POST' }), '')
-    if (r) setMsg(grantMsg(r, tr("2FA de {u} réinitialisée : l'utilisateur la réenrôlera à sa prochaine connexion (définissez-lui un mot de passe temporaire si besoin).", { u: u.username })))
+    const r = await ask({
+      title: tr('Réinitialiser la double authentification de {u} ?', { u: u.username }),
+      body: <p>{tr("Ses sessions sont fermées, son application TOTP et ses clés de sécurité sont retirées : il devra réenrôler son application à sa prochaine connexion, avec un nouveau code d'activation.")}</p>,
+      confirm: tr('Réinitialiser la 2FA'), danger: true,
+      action: () => api(`${path(u)}/reset-2fa`, { method: 'POST' }),
+    })
+    if (r) await done(grant(r.result, tr("2FA de {u} réinitialisée : l'utilisateur la réenrôlera à sa prochaine connexion (définissez-lui un mot de passe temporaire si besoin).", { u: u.username })))
   }
   const resetPwd = async (u) => {
-    const password = window.prompt(tr('Nouveau mot de passe pour {u} (12 caractères minimum)', { u: u.username }))
-    if (!password) return
-    const r = await run(() => api(`/admin/users/${encodeURIComponent(u.username)}/reset-password`, { method: 'POST', json: { password } }), tr('Mot de passe réinitialisé.'))
-    if (r && r.activation) setMsg(grantMsg(r, tr('Mot de passe réinitialisé.')))
+    const r = await ask({
+      title: tr('Définir un nouveau mot de passe pour {u}', { u: u.username }),
+      body: <p>{tr("Ses sessions ouvertes sont fermées. Transmettez-lui ce mot de passe temporaire par un canal sûr.")}</p>,
+      fields: [
+        { name: 'password', type: 'password', label: tr('Nouveau mot de passe (12 caractères minimum)'), minLength: 12, maxLength: 256, autoComplete: 'new-password' },
+        { name: 'confirm', type: 'password', label: tr('Confirmer le nouveau mot de passe'), maxLength: 256, autoComplete: 'new-password',
+          validate: (v, all) => (v === all.password ? '' : tr('Les deux mots de passe ne correspondent pas.')) },
+      ],
+      confirm: tr('Changer le mot de passe'),
+      action: ({ password }) => api(`${path(u)}/reset-password`, { method: 'POST', json: { password } }),
+    })
+    if (r) await done(r.result.activation ? grant(r.result, tr('Mot de passe réinitialisé.')) : tr('Mot de passe réinitialisé.'))
   }
-  const toggle = (u) => {
-    if (u.active && !window.confirm(tr('Désactiver {u} ?', { u: u.username }))) return
-    run(() => api(`/admin/users/${encodeURIComponent(u.username)}`, { method: 'PATCH', json: { active: !u.active } }), u.active ? tr('Compte désactivé.') : tr('Compte réactivé.'))
+  const toggle = async (u) => {
+    if (!u.active) { run(() => api(path(u), { method: 'PATCH', json: { active: true } }), tr('Compte réactivé.')); return }
+    const r = await ask({
+      title: tr('Désactiver le compte {u} ?', { u: u.username }),
+      body: <p>{tr("Ses sessions sont fermées et il ne peut plus se connecter. Le compte, ses affectations et son historique sont conservés ; il peut être réactivé.")}</p>,
+      confirm: tr('Désactiver le compte'), danger: true,
+      action: () => api(path(u), { method: 'PATCH', json: { active: false } }),
+    })
+    if (r) await done(tr('Compte désactivé.'))
+  }
+  const unlinkSso = async (u) => {
+    const r = await ask({
+      title: tr("Délier l'identité SSO de {u} ?", { u: u.username }),
+      body: <p>{tr("L'identité fédérée sera liée de nouveau à sa prochaine connexion SSO, si son identifiant et son courriel vérifié correspondent.")}</p>,
+      confirm: tr("Délier l'identité SSO"),
+      action: () => api(`${path(u)}/unlink-sso`, { method: 'POST' }),
+    })
+    if (r) await done(tr('Identité SSO déliée.'))
   }
 
   return (
@@ -68,6 +105,7 @@ export default function Users() {
       {error && <p className="error" role="alert">{error}</p>}
       <p className="live" role="status">{msg}</p>
       {secret && <OneTime {...secret} onClose={() => setSecret(null)} />}
+      {dialog}
       {form && (
         <form className="subform" onSubmit={create}>
           <div className="grid2">
@@ -97,7 +135,7 @@ export default function Users() {
                 <td><div className="row gap wrap">
                   <button type="button" className="small-btn" onClick={() => reset2fa(u)}>{tr("Réinit. 2FA")}</button>
                   <button type="button" className="small-btn" onClick={() => resetPwd(u)}>{tr("Mot de passe")}</button>
-                  {u.sso && <button type="button" className="small-btn" onClick={() => window.confirm(tr("Délier l'identité SSO de {u} ? Elle sera liée de nouveau à sa prochaine connexion SSO.", { u: u.username })) && run(() => api(`/admin/users/${encodeURIComponent(u.username)}/unlink-sso`, { method: 'POST' }), tr('Identité SSO déliée.'))}>{tr("Délier SSO")}</button>}
+                  {u.sso && <button type="button" className="small-btn" onClick={() => unlinkSso(u)}>{tr("Délier SSO")}</button>}
                   <button type="button" className="small-btn danger" onClick={() => toggle(u)}>{u.active ? tr('Désactiver') : tr('Réactiver')}</button>
                 </div></td>
               </tr>

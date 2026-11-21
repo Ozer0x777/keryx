@@ -1,11 +1,11 @@
-import { until } from '../harness.mjs'
+import { answerDialog, until } from '../harness.mjs'
 
 export default async ({ stack, BASE, check, login }) => {
   const m = await login('manager')
   // mode crise
   await m.goto(`${BASE}/tickets/ACME-1`)
-  m.once('dialog', (d) => d.accept('exfiltration suspectée'))
   await m.getByRole('button', { name: 'Ouvrir le mode crise' }).click()
+  await answerDialog(m, { reason: 'exfiltration suspectée' })
   await m.waitForSelector('.banner.danger >> text=MODE CRISE')
   check(true, 'mode crise ouvert, bandeau visible')
   await m.fill('textarea[name=body]', 'Isoler srv-web-01 du réseau <script>alert(1)</script>')

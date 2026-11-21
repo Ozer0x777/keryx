@@ -1,6 +1,9 @@
 import { t as tr } from '../../i18n.js'
 import { useEffect, useState } from 'react'
 import { api } from '../../api.js'
+import { ActionStatus, useActionStatus } from '../../components/ActionStatus.jsx'
+import { useConfirm } from '../../components/Confirm.jsx'
+import { utcClock } from '../../dates.js'
 import { formatUtc } from '../../labels.js'
 
 export default function System() {
@@ -9,17 +12,25 @@ export default function System() {
   const [ret, setRet] = useState(null)
   const [rs, setRs] = useState(null)        // réglage de rétention par défaut : { months, source, minimum, maximum }
   const [months, setMonths] = useState('')
-  const [saved, setSaved] = useState('')
+  const [saved, trackSave] = useActionStatus()     // durée par défaut : retour à côté de « Enregistrer »
+  const [purge, trackPurge] = useActionStatus()    // simulation / purge : retour à côté des deux boutons
+  const [ask, dialog] = useConfirm()
   const load = () => api('/admin/system').then(setS).catch((e) => setError(e.message))
   const loadRs = () => api('/admin/settings/retention').then((r) => { setRs(r); setMonths(String(r.months)) }).catch((e) => setError(e.message))
   useEffect(() => { load(); loadRs() }, [])
-  const saveRs = async (value) => {
-    setError(''); setSaved('')
-    try { const r = await api('/admin/settings/retention', { method: 'PUT', json: { months: value } }); setRs(r); setMonths(String(r.months)); setSaved(tr('Durée de rétention enregistrée.')) } catch (e) { setError(e.message) }
-  }
+  const saveRs = (value) => trackSave(async () => {
+    const r = await api('/admin/settings/retention', { method: 'PUT', json: { months: value } })
+    setRs(r); setMonths(String(r.months))
+  })
   const retention = async (dry) => {
-    if (!dry && !window.confirm(tr('Supprimer définitivement les alertes brutes arrivées en fin de rétention ? Cette opération est tracée.'))) return
-    try { setRet(await api('/admin/retention', { method: 'POST', json: { dry_run: dry } })) } catch (e) { setError(e.message) }
+    const send = () => api('/admin/retention', { method: 'POST', json: { dry_run: dry } })
+    if (dry) { const r = await trackPurge(send, tr('Simulation faite à {h}', { h: utcClock() })); if (r) setRet(r); return }
+    const r = await ask({
+      title: tr('Purger définitivement les alertes brutes arrivées en fin de rétention ?'),
+      body: <p>{tr("Les alertes brutes des tickets clos, plus anciennes que la durée de rétention de leur client, sont supprimées sans retour possible. Les tickets, le registre des actions et les pièces sont conservés. La purge est tracée dans le journal d'audit.")}</p>,
+      confirm: tr('Purger les alertes'), danger: true, action: send,
+    })
+    if (r) { setRet(r.result); trackPurge(async () => {}, tr('Purge effectuée à {h}', { h: utcClock() })) }
   }
   // Les valeurs d'état viennent du serveur, en français : on les compare telles quelles (traduites à l'affichage seulement).
   const tone = (v) => (['ok', 'disponible', 'configuré'].includes(v) ? 'ok' : v === 'non configuré' ? '' : 'danger')
@@ -49,11 +60,13 @@ export default function System() {
           </label>
           <button type="submit">{tr("Enregistrer")}</button>
           <button type="button" onClick={() => saveRs(null)}>{tr("Revenir au minimum")}</button>
+          {saved?.ok && <ActionStatus state={saved} live />}
         </form>
       )}
       {rs && <p className="muted small">{tr("Minimum {min} mois (exigence PDIS), maximum {max}. Origine de la valeur actuelle : {source}.", { min: rs.minimum, max: rs.maximum, source: tr(rs.source === 'reglage' ? 'réglage de l\'administrateur' : rs.source === 'environnement' ? 'variable d\'environnement' : 'minimum par défaut') })}</p>}
-      {saved && <p className="banner ok" role="status">{saved}</p>}
-      <div className="row gap"><button type="button" onClick={() => retention(true)}>{tr("Simuler")}</button><button type="button" className="danger" onClick={() => retention(false)}>{tr("Purger")}</button></div>
+      {saved?.error && <ActionStatus state={saved} />}
+      <div className="row gap wrap retention-actions"><button type="button" onClick={() => retention(true)}>{tr("Simuler")}</button><button type="button" className="danger" onClick={() => retention(false)}>{tr("Purger")}</button><ActionStatus state={purge} live /></div>
+      {dialog}
       {ret && (
         <div role="status">
           <p className="banner ok">{ret.dry_run ? tr('Simulation') : tr('Purge effectuée')} : {ret.total} {tr('alerte(s)')} {ret.dry_run ? tr('concernée(s)') : tr('supprimée(s)')}.</p>

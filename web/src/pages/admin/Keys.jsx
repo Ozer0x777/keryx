@@ -1,6 +1,7 @@
 import { t as tr } from '../../i18n.js'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../api.js'
+import { useConfirm } from '../../components/Confirm.jsx'
 import OneTime from '../../components/OneTime.jsx'
 import { formatUtc } from '../../labels.js'
 
@@ -13,9 +14,28 @@ export default function Keys() {
     try { const [k, c] = await Promise.all([api('/admin/api-keys'), api('/admin/clients')]); setItems(k.items); setClients(c.items) } catch (e) { setError(e.message) }
   }, [])
   useEffect(() => { load() }, [load])
+  const [ask, dialog] = useConfirm()
   const act = async (fn, title) => {
     setError('')
     try { const r = await fn(); if (r?.key) setSecret({ title, items: [[tr("Clé d'API"), r.key]] }); load() } catch (e) { setError(e.message) }
+  }
+  const rotate = async (k) => {
+    const r = await ask({
+      title: tr('Remplacer la clé « {name} » de {client} ?', { name: k.name, client: k.client }),
+      body: <p>{tr("Une nouvelle clé est créée et celle-ci est révoquée aussitôt : le manager Wazuh sera rejeté tant que la nouvelle clé n'y est pas configurée.")}</p>,
+      confirm: tr('Créer la clé de remplacement'), danger: true,
+      action: () => api(`/admin/api-keys/${k.id}/rotate`, { method: 'POST' }),
+    })
+    if (r) act(async () => r.result, tr('Clé de remplacement'))
+  }
+  const revoke = async (k) => {
+    const r = await ask({
+      title: tr('Révoquer la clé « {name} » de {client} ?', { name: k.name, client: k.client }),
+      body: <p>{tr("Le manager Wazuh qui l'utilise sera rejeté et ses alertes ne seront plus reçues. Une clé révoquée ne se rétablit pas.")}</p>,
+      confirm: tr('Révoquer la clé'), danger: true,
+      action: () => api(`/admin/api-keys/${k.id}/revoke`, { method: 'POST' }),
+    })
+    if (r) act(async () => r.result, tr('Révoquée'))
   }
   const create = (e) => {
     e.preventDefault()
@@ -45,13 +65,14 @@ export default function Keys() {
               <td className="mono small">{formatUtc(k.last_used_at)}</td>
               <td>{k.revoked ? <span className="pill">{tr("Révoquée")}</span> : k.silent ? <span className="pill warn">{tr("Muette")}</span> : <span className="pill ok">{tr("Active")}</span>}</td>
               <td>{!k.revoked && <div className="row gap">
-                <button type="button" className="small-btn" onClick={() => window.confirm(tr('Créer une clé de remplacement et révoquer celle-ci ?')) && act(() => api(`/admin/api-keys/${k.id}/rotate`, { method: 'POST' }), tr('Clé de remplacement'))}>{tr("Rotation")}</button>
-                <button type="button" className="small-btn danger" onClick={() => window.confirm(tr('Révoquer cette clé ? Le manager Wazuh sera rejeté.')) && act(() => api(`/admin/api-keys/${k.id}/revoke`, { method: 'POST' }), tr('Révoquée'))}>{tr("Révoquer")}</button>
+                <button type="button" className="small-btn" onClick={() => rotate(k)}>{tr("Rotation")}</button>
+                <button type="button" className="small-btn danger" onClick={() => revoke(k)}>{tr("Révoquer")}</button>
               </div>}</td>
             </tr>
           ))}
         </tbody>
       </table></div>
+      {dialog}
     </section>
   )
 }

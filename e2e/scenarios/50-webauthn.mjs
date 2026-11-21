@@ -1,5 +1,5 @@
 // Clé de sécurité WebAuthn (authentificateur virtuel de Chrome) : enregistrement, connexion sans TOTP, retrait.
-import { PASSWORD, PORT, lastStep, totp } from '../harness.mjs'
+import { PASSWORD, PORT, answerDialog, lastStep, totp } from '../harness.mjs'
 
 export default async ({ browser, stack, check }) => {
   const BASE = `http://localhost:${PORT}`          // l'identifiant de partie de confiance est « localhost »
@@ -42,8 +42,8 @@ export default async ({ browser, stack, check }) => {
   await p.goto(`${BASE}/profil`)
   await p.waitForSelector('.found li >> text=utilisée le')
   check(true, 'dernière utilisation de la clé tracée')
-  p.once('dialog', (d) => d.accept())
   await p.getByRole('button', { name: 'Retirer' }).click()
+  await answerDialog(p)
   await p.waitForSelector('.found', { state: 'detached' })
   check(true, 'clé retirée')
   check(p.errors.length === 0, 'aucune erreur JavaScript')

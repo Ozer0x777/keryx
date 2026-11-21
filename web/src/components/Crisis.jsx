@@ -2,6 +2,7 @@ import { t as tr } from '../i18n.js'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { formatUtc } from '../labels.js'
+import { useConfirm } from './Confirm.jsx'
 
 const KINDS = { decision: tr('Décisions'), action: tr("Plan d'action"), synthese: tr('Synthèse de crise') }
 
@@ -14,10 +15,19 @@ export default function Crisis({ t, enc, isManager, open, onChange }) {
   useEffect(() => { load() }, [load, t.crisis])
 
   const call = async (fn) => { setError(''); try { setC(await fn()); onChange?.(); return true } catch (e) { setError(e.message); return false } }
-  const toggle = (active) => {
-    const reason = window.prompt(active ? tr('Motif de l\'ouverture du mode crise') : tr('Motif de la clôture de la crise'))
-    if (!reason) return
-    call(() => api(`/tickets/${enc}/crisis`, { method: 'POST', json: { active, reason } }))
+  const [ask, dialog] = useConfirm()
+  const toggle = async (active) => {
+    setError('')
+    const r = await ask({
+      title: active ? tr('Ouvrir le mode crise sur {ref} ?', { ref: t.ref }) : tr('Clore la crise sur {ref} ?', { ref: t.ref }),
+      body: <p>{active
+        ? tr("Le ticket est signalé « CRISE » dans la file et sur la fiche ; les décisions, le plan d'action et la synthèse de crise sont consignés dans un registre dédié. L'ouverture et son motif sont tracés.")
+        : tr("Le ticket n'est plus signalé « CRISE » et le registre de crise n'accepte plus d'entrée. La clôture et son motif sont tracés.")}</p>,
+      fields: [{ name: 'reason', label: active ? tr('Motif de l\'ouverture du mode crise') : tr('Motif de la clôture de la crise'), minLength: 3, maxLength: 500 }],
+      confirm: active ? tr('Ouvrir le mode crise') : tr('Clore la crise'), danger: active,
+      action: ({ reason }) => api(`/tickets/${enc}/crisis`, { method: 'POST', json: { active, reason } }),
+    })
+    if (r) { setC(r.result); onChange?.() }
   }
   const add = async (e) => {
     e.preventDefault()
@@ -34,6 +44,7 @@ export default function Crisis({ t, enc, isManager, open, onChange }) {
         <header className="section-head"><h2>{tr("Mode crise")}</h2><button type="button" className="danger" onClick={() => toggle(true)}>{tr("Ouvrir le mode crise")}</button></header>
         <p className="muted small">{tr("Active le registre des décisions, le plan d'action et la synthèse de crise (PRIS VI.5.5.1).")}</p>
         {error && <p className="error" role="alert">{error}</p>}
+        {dialog}
       </section>
     ) : null
   }
@@ -73,6 +84,7 @@ export default function Crisis({ t, enc, isManager, open, onChange }) {
           <div className="row end"><button className="primary">{tr("Ajouter au registre")}</button></div>
         </form>
       )}
+      {dialog}
     </section>
   )
 }

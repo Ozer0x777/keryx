@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { useAuth } from '../App.jsx'
+import { useConfirm } from '../components/Confirm.jsx'
 import OneTime from '../components/OneTime.jsx'
 import { getLang, LANGS, setLang, t, t as tr } from '../i18n.js'
 import { createCredential, webauthnSupported } from '../webauthn.js'
@@ -28,9 +29,15 @@ export default function Profile() {
       form.reset(); setMsg(t('Clé de sécurité enregistrée.')); loadKeys()
     } catch (err) { setError(err.name === 'NotAllowedError' ? t('Clé de sécurité annulée ou non reconnue.') : err.message) }
   }
-  const dropKey = async (id) => {
-    if (!window.confirm(t('Retirer cette clé de sécurité ?'))) return
-    try { await api(`/me/webauthn/${id}`, { method: 'DELETE' }); loadKeys() } catch (err) { setError(err.message) }
+  const [ask, dialog] = useConfirm()
+  const dropKey = async (k) => {
+    const r = await ask({
+      title: t('Retirer la clé de sécurité « {name} » ?', { name: k.name }),
+      body: <p>{t("Elle ne permettra plus de vous connecter. Le code TOTP et vos codes de secours restent utilisables.")}</p>,
+      confirm: t('Retirer la clé'), danger: true,
+      action: () => api(`/me/webauthn/${k.id}`, { method: 'DELETE' }),
+    })
+    if (r) { setError(''); setMsg(t('Clé de sécurité retirée.')); loadKeys() }
   }
   const load = useCallback(() => api('/me/sessions').then((r) => setSessions(r.items)).catch((e) => setError(e.message)), [])
   useEffect(() => { load() }, [load])
@@ -69,6 +76,7 @@ export default function Profile() {
       {error && <p className="error" role="alert">{error}</p>}
       <p className="live" role="status">{msg}</p>
       {secret && <OneTime {...secret} onClose={() => setSecret(null)} />}
+      {dialog}
       <section className="card section" aria-label={t('Langue')}>
         <header className="section-head"><h2>{t('Langue')}</h2></header>
         <select className="narrow-select" aria-label={t('Langue')} value={getLang()} onChange={(e) => setLang(e.target.value)}>{Object.entries(LANGS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
@@ -85,7 +93,7 @@ export default function Profile() {
       <section className="card section" aria-label={t('Clés de sécurité')}>
         <header className="section-head"><h2>{t('Clés de sécurité (WebAuthn)')}</h2></header>
         <p className="muted small">{t("Une clé de sécurité peut remplacer le code TOTP à la connexion. Le TOTP et vos codes de secours restent utilisables si vous perdez la clé.")}</p>
-        {keys.length > 0 && <ul className="found">{keys.map((k) => <li key={k.id}>{k.name} <span className="muted small">· {t('ajoutée le')} {formatUtc(k.created_at)}{k.last_used_at ? ` · ${t('utilisée le')} ${formatUtc(k.last_used_at)}` : ''}</span> <button type="button" className="small-btn danger" onClick={() => dropKey(k.id)}>{t('Retirer')}</button></li>)}</ul>}
+        {keys.length > 0 && <ul className="found">{keys.map((k) => <li key={k.id}>{k.name} <span className="muted small">· {t('ajoutée le')} {formatUtc(k.created_at)}{k.last_used_at ? ` · ${t('utilisée le')} ${formatUtc(k.last_used_at)}` : ''}</span> <button type="button" className="small-btn danger" onClick={() => dropKey(k)}>{t('Retirer')}</button></li>)}</ul>}
         {webauthnSupported() ? (
           <form onSubmit={addKey} className="row gap wrap">
             <label>{t('Nom de la clé')}<input name="name" required maxLength={80} placeholder={tr("YubiKey bureau")} /></label>

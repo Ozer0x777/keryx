@@ -4,3 +4,12 @@
 export const isoDay = (d) => d.toISOString().slice(0, 10)
 
 export const monthStartUtc = (now = new Date()) => isoDay(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)))
+
+// Heure courante « hh:mm UTC » des retours d'action (« Enregistré à 14:02 UTC »), cohérente avec formatUtc().
+export const utcClock = (d = new Date()) => `${d.toISOString().slice(11, 16)} UTC`
+
+// Champs <input type="datetime-local"> : Keryx affiche toutes ses dates en UTC, la saisie l'est donc aussi
+// (le libellé du champ le dit). La valeur « AAAA-MM-JJTHH:MM » est lue et produite en UTC, jamais en heure du poste.
+export const utcInputNow = (d = new Date()) => d.toISOString().slice(0, 16)
+export const isoToUtcInput = (iso) => (iso ? new Date(iso).toISOString().slice(0, 16) : '')
+export const utcInputToIso = (value) => (value ? new Date(`${value.slice(0, 16)}:00Z`).toISOString() : null)

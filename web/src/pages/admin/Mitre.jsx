@@ -1,6 +1,7 @@
 import { t as tr } from '../../i18n.js'
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../api.js'
+import { useConfirm } from '../../components/Confirm.jsx'
 
 export default function Mitre() {
   const [items, setItems] = useState(null)
@@ -33,9 +34,15 @@ export default function Mitre() {
     const form = new FormData(); form.append('file', file)
     try { const r = await api('/mitre/import', { method: 'POST', form }); setMsg(tr('{a} technique(s) ajoutée(s), {u} mise(s) à jour ({total} au total).', { a: r.added, u: r.updated, total: r.total })) } catch (err) { setError(err.message) }
   }
+  const [ask, dialog] = useConfirm()
   const remove = async (m) => {
-    if (!window.confirm(tr('Supprimer la correspondance {t} ?', { t: m.technique }))) return
-    try { await api(`/mitre/mappings/${m.id}`, { method: 'DELETE' }); load() } catch (err) { setError(err.message) }
+    const r = await ask({
+      title: tr('Supprimer la correspondance {t} ?', { t: `${m.rule_id ? tr('règle {id}', { id: m.rule_id }) : tr('groupe {id}', { id: m.rule_group })} → ${m.technique}` }),
+      body: <p>{tr("Les prochaines alertes de cette règle ou de ce groupe ne recevront plus cette technique automatiquement. Les tickets existants ne changent pas.")}</p>,
+      confirm: tr('Supprimer la correspondance'), danger: true,
+      action: () => api(`/mitre/mappings/${m.id}`, { method: 'DELETE' }),
+    })
+    if (r) { setError(''); load() }
   }
   return (
     <section className="card section" aria-label={tr("Table MITRE")}>
@@ -77,6 +84,7 @@ export default function Mitre() {
           ))}
         </tbody>
       </table></div>
+      {dialog}
     </section>
   )
 }

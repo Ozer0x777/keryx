@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, downloadBlob } from '../api.js'
 import { t as tr } from '../i18n.js'
+import { ActionStatus, useActionStatus } from './ActionStatus.jsx'
 
 const AXIS_TITLES = {
   who_why: 'Qui et/ou pourquoi', what: 'Quoi', how: 'Comment', status: 'Statut de l\'incident', vulnerability: 'Vulnérabilité(s) exploitée(s)',
@@ -11,7 +12,7 @@ const AXIS_TITLES = {
 export default function IsiPanel({ t, enc, run, open }) {
   const [dict, setDict] = useState(null)
   const [v, setV] = useState(t.isi || {})
-  const [msg, setMsg] = useState('')
+  const [status, track] = useActionStatus()
   useEffect(() => { api('/isi/dictionary').then(setDict).catch(() => {}) }, [])
   // Le ticket est rechargé après chaque action (nouvel objet à chaque fois) : la saisie en cours n'est remplacée que si
   // la classification enregistrée a réellement changé, pas à chaque rechargement.
@@ -25,11 +26,10 @@ export default function IsiPanel({ t, enc, run, open }) {
     const next = cur.includes(code) ? cur.filter((c) => c !== code) : [...cur, code].slice(0, 3)
     return { ...x, vulnerability: next }
   })
-  const save = () => run(() => api(`/tickets/${enc}/isi`, { method: 'PUT', json: v }), tr('Classification ETSI ISI enregistrée.'))
-  const exportDoc = async () => {
-    setMsg('')
-    try { downloadBlob(new Blob([JSON.stringify(await api(`/tickets/${enc}/isi/iodef`), null, 2)], { type: 'application/json' }), `${t.ref}-etsi-isi.json`) } catch (e) { setMsg(e.message) }
-  }
+  const save = () => track(() => run(() => api(`/tickets/${enc}/isi`, { method: 'PUT', json: v }), tr('Classification ETSI ISI enregistrée.')))
+  const exportDoc = () => track(async () => {
+    downloadBlob(new Blob([JSON.stringify(await api(`/tickets/${enc}/isi/iodef`), null, 2)], { type: 'application/json' }), `${t.ref}-etsi-isi.json`)
+  }, tr('Export téléchargé.'))
   const select = (axis, options) => (
     <label key={axis}>{tr(AXIS_TITLES[axis])}{dict.mandatory.includes(axis) ? ' *' : ''}
       <select value={v[axis] || ''} disabled={!open} onChange={(e) => set(axis, e.target.value || undefined)}>
@@ -66,7 +66,7 @@ export default function IsiPanel({ t, enc, run, open }) {
         {open && <button type="button" className="primary" onClick={save}>{tr('Enregistrer')}</button>}
         <button type="button" onClick={exportDoc}>{tr('Exporter (IODEF 2.0, ETSI ISI)')}</button>
       </div>
-      {msg && <p className="error" role="alert">{msg}</p>}
+      <ActionStatus state={status} />
     </section>
   )
 }

@@ -3,11 +3,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api, downloadBlob } from '../api.js'
 import { useAuth } from '../App.jsx'
+import { ActionStatus, useActionStatus } from '../components/ActionStatus.jsx'
 import { Severity, Status, Tlp } from '../components/Badges.jsx'
+import { useConfirm } from '../components/Confirm.jsx'
 import Crisis from '../components/Crisis.jsx'
 import IsiPanel from '../components/IsiPanel.jsx'
 import Stamps from '../components/Stamps.jsx'
 import RichEditor from '../components/RichEditor.jsx'
+import { utcClock } from '../dates.js'
 import {
   DOMMAGES, formatUtc, IMPORTANCES, LIFECYCLE, MITRE_SOURCE, SCAN, STATUS, TLPS, TRANSITIONS, VERDICTS,
 } from '../labels.js'
@@ -34,6 +37,8 @@ export default function Ticket() {
   const [t, setT] = useState(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [headStatus, trackHead] = useActionStatus()
+  const [ask, dialog] = useConfirm()
   const isClient = me.role === 'client'
   const isTeam = me.role === 'analyst' || me.role === 'manager'
   const enc = encodeURIComponent(ref)
@@ -46,17 +51,15 @@ export default function Ticket() {
   useEffect(() => { if (isTeam) api('/templates').then((r) => setTpls(r.items)).catch(() => {}) }, [isTeam])
   const templates = (kind) => tpls.filter((x) => x.kind === kind)
 
+  // Exécute une action sur le ticket, annonce son succès dans la zone live (lecteurs d'écran) et recharge la fiche.
+  // Un échec est levé à l'appelant : chaque section l'affiche à côté de son bouton (useActionStatus) ou dans son
+  // dialogue, jamais dans un bandeau éloigné du déclencheur.
   const run = async (fn, okMessage) => {
     setNotice('')
-    try {
-      await fn()
-      if (okMessage) setNotice(okMessage)
-      await load()
-      return true
-    } catch (e) {
-      setNotice(tr('Erreur : {m}', { m: e.message }))
-      return false
-    }
+    const out = await fn()
+    if (okMessage) setNotice(okMessage)
+    await load()
+    return out
   }
 
   if (error) return <p className="error" role="alert">{error}</p>
@@ -66,30 +69,42 @@ export default function Ticket() {
   // Image insérée depuis l'éditeur : déposée sans visibilité client (embedded). Le serveur la rend visible au moment où
   // un contenu visible par le client (commentaire visible, description) qui la référence est enregistré.
   const uploadImage = async (file) => {
-    const description = window.prompt(tr("Description de l'image (registre de collecte)"), tr("Capture d'écran"))
-    if (!description) return null
-    const form = new FormData()
-    form.append('file', file)
-    form.append('description', description)
-    form.append('collected_at', new Date().toISOString())
-    form.append('method', isClient ? tr('Capture fournie par le client') : tr("Capture d'écran par l'analyste"))
-    form.append('sensitivity', t.tlp)
-    form.append('embedded', 'true')
-    try {
-      const a = await api(`/tickets/${enc}/attachments`, { method: 'POST', form })
-      await load()
-      return `/api/v1/attachments/${a.id}/content`
-    } catch (e) {
-      setNotice(tr('Erreur : {m}', { m: e.message }))
-      return null
-    }
+    const r = await ask({
+      title: tr("Insérer l'image « {name} » et l'inscrire au registre des preuves", { name: file.name }),
+      body: <p>{tr("L'image est déposée comme pièce du ticket : sa description figure dans le registre de collecte.")}</p>,
+      fields: [{ name: 'description', label: tr("Description de l'image (registre de collecte)"), initial: tr("Capture d'écran"), minLength: 3, maxLength: 500 }],
+      confirm: tr("Insérer l'image"),
+      action: ({ description }) => {
+        const form = new FormData()
+        form.append('file', file)
+        form.append('description', description)
+        form.append('collected_at', new Date().toISOString())
+        form.append('method', isClient ? tr('Capture fournie par le client') : tr("Capture d'écran par l'analyste"))
+        form.append('sensitivity', t.tlp)
+        form.append('embedded', 'true')
+        return api(`/tickets/${enc}/attachments`, { method: 'POST', form })
+      },
+    })
+    if (!r) return null
+    await load()
+    return `/api/v1/attachments/${r.result.id}/content`
   }
 
-  const exportIodef = async () => {
-    try {
-      const doc = await api(`/tickets/${enc}/iodef`)
-      downloadBlob(new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' }), `${t.ref}.iodef.json`)
-    } catch (e) { setNotice(tr('Erreur : {m}', { m: e.message })) }
+  const exportIodef = () => trackHead(async () => {
+    const doc = await api(`/tickets/${enc}/iodef`)
+    downloadBlob(new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' }), `${t.ref}.iodef.json`)
+  }, tr('Export IODEF téléchargé.'))
+
+  const setStatus = (s) => () => run(() => api(`/tickets/${enc}/status`, { method: 'POST', json: { status: s } }), tr('Statut : {s}.', { s: STATUS[s].label }))
+  const transition = async (s) => {
+    if (s !== 'faux_positif') { trackHead(setStatus(s), tr('Statut : {s}.', { s: STATUS[s].label })); return }
+    // État terminal : la conséquence est écrite, l'échec (verdict manquant…) s'affiche dans le dialogue.
+    const r = await ask({
+      title: tr('Clore {ref} comme faux positif ?', { ref: t.ref }),
+      body: <p>{tr("« Faux positif » est un état final : le ticket est clos, il ne pourra plus changer de statut ni être requalifié. Le verdict « Faux positif » doit avoir été enregistré dans la qualification.")}</p>,
+      confirm: tr('Clore comme faux positif'), danger: true, action: setStatus(s),
+    })
+    if (r) trackHead(async () => {}, tr('Statut : {s}.', { s: STATUS[s].label }))
   }
 
   return (
@@ -113,15 +128,17 @@ export default function Ticket() {
             <Link to={`/tickets/${enc}/rapport`} className="btn-link">{tr("Rapport imprimable")}</Link>
             <button type="button" onClick={exportIodef}>{tr("Exporter (IODEF JSON)")}</button>
             {(TRANSITIONS[t.status] || []).map((s) => (
-              <button type="button" key={s} className="primary"
-                onClick={() => run(() => api(`/tickets/${enc}/status`, { method: 'POST', json: { status: s } }), tr('Statut : {s}.', { s: STATUS[s].label }))}>
+              <button type="button" key={s} className="primary" onClick={() => transition(s)}>
                 → {STATUS[s].label}
               </button>
             ))}
           </div>
         )}
       </header>
-      <p className="live" role="status" aria-live="polite">{notice}</p>
+      {isTeam && <div className="head-status"><ActionStatus state={headStatus} /></div>}
+      {/* Zone live conservée pour les lecteurs d'écran ; le retour visible est au bouton de chaque section. */}
+      <p className="sr-only" role="status" aria-live="polite">{notice}</p>
+      {dialog}
       {t.rex_en_attente && <p className="banner warn">{tr("Incident {sev} clôturé : le retour d'expérience est obligatoire (section Synthèse).", { sev: tr(t.gravite || t.criticite_initiale) })}</p>}
 
       {t.crisis && <p className="banner danger" role="status">{tr("MODE CRISE actif sur ce ticket : toute décision et toute action sont consignées dans le registre de crise.")}</p>}
@@ -130,7 +147,7 @@ export default function Ticket() {
           {isTeam && <Crisis t={t} enc={enc} isManager={me.role === 'manager'} open={open} onChange={load} />}
           <Description t={t} enc={enc} canEdit={isTeam && open} run={run} onImage={uploadImage} />
           {isTeam && <AlertBlock t={t} />}
-          <Attachments t={t} enc={enc} me={me} run={run} setNotice={setNotice} />
+          <Attachments t={t} enc={enc} me={me} run={run} />
           {isTeam && <Synthese t={t} enc={enc} run={run} onImage={uploadImage} templates={templates('synthese')} />}
           <Events t={t} />
           <Comments t={t} enc={enc} isClient={isClient} run={run} onImage={uploadImage} templates={templates('commentaire')} />
@@ -173,6 +190,7 @@ function BodyHistory({ enc, current }) {
 }
 
 function Description({ t, enc, canEdit, run, onImage }) {
+  const [status, track] = useActionStatus()
   const [editing, setEditing] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [html, setHtml] = useState(t.body_html)
@@ -188,11 +206,13 @@ function Description({ t, enc, canEdit, run, onImage }) {
           <div className="row gap end">
             <button type="button" onClick={() => setEditing(false)}>{tr("Annuler")}</button>
             <button type="button" className="primary" onClick={async () => {
-              if (await run(() => api(`/tickets/${enc}/body`, { method: 'PUT', json: { body_html: html } }), tr('Description enregistrée (version précédente conservée).'))) setEditing(false)
+              if (await track(() => run(() => api(`/tickets/${enc}/body`, { method: 'PUT', json: { body_html: html } }), tr('Description enregistrée (version précédente conservée).')))) setEditing(false)
             }}>{tr("Enregistrer")}</button>
           </div>
+          {status?.error && <ActionStatus state={status} />}
         </>
       ) : <Html html={t.body_html} />}
+      {!editing && status?.ok && <p className="saved-note"><ActionStatus state={status} /></p>}
     </Section>
   )
 }
@@ -211,34 +231,56 @@ function AlertBlock({ t }) {
   )
 }
 
-function Attachments({ t, enc, me, run, setNotice }) {
+function Attachments({ t, enc, me, run }) {
   const isClient = me.role === 'client'
   const isTeam = !isClient
   const [form, setForm] = useState(null)
   const [ext, setExt] = useState(null)
+  const [status, track] = useActionStatus()          // dépôt et déclaration : à côté du bouton du formulaire
+  const [rowStatus, setRowStatus] = useState(null)   // { id, ok | error } : dans la ligne de la pièce concernée
+  const [ask, dialog] = useConfirm()
 
+  const fetchContent = async (a, params) => {
+    const blob = await api(`/attachments/${a.id}/content`, { params })
+    downloadBlob(blob, a.filename + (a.scan_status === 'quarantaine' ? '.quarantaine.zip' : ''))
+  }
   const download = async (a) => {
-    let params = {}
-    if (a.scan_status === 'quarantaine') {
-      if (!window.confirm(tr("{name} a été détecté comme malveillant. Il sera fourni dans une archive ZIP chiffrée (mot de passe : voir le guide d'exploitation). Le télécharger quand même, pour analyse ?", { name: a.filename }))) return
-      params.confirmer_malveillant = 'true'
+    const quarantined = a.scan_status === 'quarantaine'
+    setRowStatus(null)
+    if (a.kind !== 'fichier' && !quarantined) {   // image insérée dans un texte : pas de motif demandé
+      try { await fetchContent(a, {}) } catch (e) { setRowStatus({ id: a.id, error: e.message }) }
+      return
     }
-    if (a.kind === 'fichier' || a.scan_status === 'quarantaine') {
-      const motif = window.prompt(tr('Motif du téléchargement (chaîne de possession)'))
-      if (!motif || motif.length < 3) return
-      params.motif = motif
-    }
-    try {
-      const blob = await api(`/attachments/${a.id}/content`, { params })
-      downloadBlob(blob, a.filename + (a.scan_status === 'quarantaine' ? '.quarantaine.zip' : ''))
-    } catch (e) { setNotice(tr('Erreur : {m}', { m: e.message })) }
+    await ask({
+      title: quarantined
+        ? tr('Télécharger « {name} », détecté comme malveillant ?', { name: a.filename })
+        : tr('Télécharger « {name} »', { name: a.filename }),
+      body: <>
+        {quarantined && <p>{tr("Le fichier sera fourni dans une archive ZIP chiffrée (mot de passe : voir le guide d'exploitation), pour analyse uniquement.")}</p>}
+        <p>{tr("Le téléchargement et son motif sont inscrits dans la chaîne de possession de la pièce.")}</p>
+      </>,
+      fields: [{ name: 'motif', label: tr('Motif du téléchargement (chaîne de possession)'), minLength: 3, maxLength: 500 }],
+      confirm: tr('Télécharger'), danger: quarantined,
+      action: ({ motif }) => fetchContent(a, quarantined ? { motif, confirmer_malveillant: 'true' } : { motif }),
+    })
   }
 
-  const lifecycle = (a, value) => {
-    const reason = window.prompt(value === 'detruit' ? tr('Motif de la destruction (irréversible)') : tr('Motif de la restitution'))
-    if (!reason || reason.length < 3) return
+  const lifecycle = async (a, value) => {
+    const destroy = value === 'detruit'
+    setRowStatus(null)
     // Une phrase complète par état : pas de mot construit par concaténation (intraduisible).
-    run(() => api(`/attachments/${a.id}/lifecycle`, { method: 'POST', json: { lifecycle: value, reason } }), value === 'detruit' ? tr('Pièce détruite.') : tr('Pièce restituée.'))
+    const r = await ask({
+      title: destroy
+        ? tr('Détruire définitivement la pièce « {name} » ?', { name: a.filename })
+        : tr('Restituer la pièce « {name} » ?', { name: a.filename }),
+      body: <p>{destroy
+        ? tr("Le contenu de la pièce est effacé de Keryx et ne pourra pas être récupéré. Sa ligne, son empreinte et sa chaîne de possession restent au registre.")
+        : tr("La pièce est marquée comme restituée : elle ne pourra plus être téléchargée depuis Keryx. L'opération est inscrite dans la chaîne de possession.")}</p>,
+      fields: [{ name: 'reason', label: destroy ? tr('Motif de la destruction') : tr('Motif de la restitution'), minLength: 3, maxLength: 500 }],
+      confirm: destroy ? tr('Détruire la pièce') : tr('Restituer la pièce'), danger: destroy,
+      action: ({ reason }) => run(() => api(`/attachments/${a.id}/lifecycle`, { method: 'POST', json: { lifecycle: value, reason } }), destroy ? tr('Pièce détruite.') : tr('Pièce restituée.')),
+    })
+    if (r) setRowStatus({ id: a.id, ok: destroy ? tr('Pièce détruite à {h}', { h: utcClock() }) : tr('Pièce restituée à {h}', { h: utcClock() }) })
   }
 
   const submit = async (e) => {
@@ -246,14 +288,14 @@ function Attachments({ t, enc, me, run, setNotice }) {
     const fd = new FormData(e.target)
     fd.set('collected_at', new Date(fd.get('collected_at')).toISOString())
     if (!isClient) fd.set('visible_client', fd.get('visible_client') ? 'true' : 'false')
-    if (await run(() => api(`/tickets/${enc}/attachments`, { method: 'POST', form: fd }), tr('Pièce déposée.'))) setForm(null)
+    if (await track(() => run(() => api(`/tickets/${enc}/attachments`, { method: 'POST', form: fd }), tr('Pièce déposée.')), tr('Pièce déposée à {h}', { h: utcClock() }))) setForm(null)
   }
 
   const submitExt = async (e) => {
     e.preventDefault()
     const fd = Object.fromEntries(new FormData(e.target))
     const json = { ...fd, collected_at: new Date(fd.collected_at).toISOString(), size: Number(fd.size || 0), sha256: fd.sha256.toLowerCase() }
-    if (await run(() => api(`/tickets/${enc}/preuves-externes`, { method: 'POST', json }), tr('Preuve externe déclarée.'))) setExt(null)
+    if (await track(() => run(() => api(`/tickets/${enc}/preuves-externes`, { method: 'POST', json }), tr('Preuve externe déclarée.')), tr('Preuve externe déclarée à {h}', { h: utcClock() }))) setExt(null)
   }
 
   return (
@@ -274,6 +316,7 @@ function Attachments({ t, enc, me, run, setNotice }) {
           {!isClient && <label className="check"><input type="checkbox" name="visible_client" value="true" /> {tr("Visible par le client")}</label>}
           <p className="muted small">{tr("L'archive n'est jamais décompressée par Keryx. Analyse antivirus automatique quand ClamAV est configuré.")}</p>
           <div className="row gap end"><button type="button" onClick={() => setForm(null)}>{tr("Annuler")}</button><button className="primary">{tr("Déposer")}</button></div>
+          {status?.error && <ActionStatus state={status} />}
         </form>
       )}
       {ext && (
@@ -290,8 +333,10 @@ function Attachments({ t, enc, me, run, setNotice }) {
           <label>{tr("Lieu de conservation")}<input name="location" minLength={3} placeholder={tr("ex. coffre hors ligne n°2")} required /></label>
           <label>{tr("Sensibilité")}<select name="sensitivity" defaultValue={t.tlp}>{TLPS.map((x) => <option key={x}>{x}</option>)}</select></label>
           <div className="row gap end"><button type="button" onClick={() => setExt(null)}>{tr("Annuler")}</button><button className="primary">{tr("Déclarer")}</button></div>
+          {status?.error && <ActionStatus state={status} />}
         </form>
       )}
+      {!form && !ext && status?.ok && <p className="saved-note"><ActionStatus state={status} /></p>}
       {t.attachments.length === 0 ? <p className="muted">{tr("Aucune pièce.")}</p> : (
         <div className="table-wrap">
           <table className="grid">
@@ -305,11 +350,14 @@ function Attachments({ t, enc, me, run, setNotice }) {
                     {a.lifecycle === 'conserve' && <Stamps attachmentId={a.id} canStamp={isTeam && !!me.features?.timestamping} />}</td>
                   <td><span className={`pill ${a.scan_status === 'quarantaine' ? 'danger' : a.scan_status === 'sain' ? 'ok' : ''}`}>{SCAN[a.scan_status]}</span></td>
                   <td>{a.kind === 'preuve_externe' ? tr('Hors Keryx') : LIFECYCLE[a.lifecycle]}</td>
-                  <td className="row gap">
-                    {a.kind !== 'preuve_externe' && a.lifecycle === 'conserve' && !(isClient && a.scan_status === 'quarantaine') &&
-                      <button type="button" className="small-btn" onClick={() => download(a)}>{tr("Télécharger")}</button>}
-                    {isTeam && a.lifecycle === 'conserve' && <button type="button" className="small-btn" onClick={() => lifecycle(a, 'restitue')}>{tr("Restituer")}</button>}
-                    {me.role === 'manager' && a.lifecycle !== 'detruit' && <button type="button" className="small-btn danger" onClick={() => lifecycle(a, 'detruit')}>{tr("Détruire")}</button>}
+                  <td>
+                    <div className="row gap wrap">
+                      {a.kind !== 'preuve_externe' && a.lifecycle === 'conserve' && !(isClient && a.scan_status === 'quarantaine') &&
+                        <button type="button" className="small-btn" onClick={() => download(a)}>{tr("Télécharger")}</button>}
+                      {isTeam && a.lifecycle === 'conserve' && <button type="button" className="small-btn" onClick={() => lifecycle(a, 'restitue')}>{tr("Restituer")}</button>}
+                      {me.role === 'manager' && a.lifecycle !== 'detruit' && <button type="button" className="small-btn danger" onClick={() => lifecycle(a, 'detruit')}>{tr("Détruire")}</button>}
+                    </div>
+                    {rowStatus?.id === a.id && <ActionStatus state={rowStatus} />}
                   </td>
                 </tr>
               ))}
@@ -318,6 +366,7 @@ function Attachments({ t, enc, me, run, setNotice }) {
         </div>
       )}
       <p className="muted small">{tr("Chaque dépôt, téléchargement, restitution ou destruction est inscrit dans la chaîne de possession.")}</p>
+      {dialog}
     </Section>
   )
 }
@@ -328,11 +377,12 @@ function Synthese({ t, enc, run, onImage, templates }) {
     compromission_initiale: s.compromission_initiale ? s.compromission_initiale.slice(0, 16) : '',
     chronologie: s.chronologie || '', mode_operatoire: s.mode_operatoire || '', perimetre: s.perimetre || '', rex_html: s.rex_html || '',
   })
+  const [status, track] = useActionStatus()
   const editable = !['faux_positif', 'retour_experience'].includes(t.status)
-  const save = () => run(() => api(`/tickets/${enc}/synthese`, {
+  const save = () => track(() => run(() => api(`/tickets/${enc}/synthese`, {
     method: 'PUT',
     json: { ...v, compromission_initiale: v.compromission_initiale ? new Date(v.compromission_initiale + 'Z').toISOString() : null },
-  }), tr('Synthèse enregistrée.'))
+  }), tr('Synthèse enregistrée.')))
   if (!editable) {
     return (
       <Section title={tr("Synthèse de l'incident et retour d'expérience")}>
@@ -356,7 +406,7 @@ function Synthese({ t, enc, run, onImage, templates }) {
       <RichEditor value={v.perimetre} onChange={(x) => setV({ ...v, perimetre: x })} label={tr("Périmètre")} templates={templates} minHeight={80} />
       <h3>{tr("Retour d'expérience")} {t.rex_required && <span className="pill warn">{tr("obligatoire")}</span>}</h3>
       <RichEditor value={v.rex_html} onChange={(x) => setV({ ...v, rex_html: x })} label={tr("Retour d'expérience")} templates={templates} onImage={onImage} minHeight={80} />
-      <div className="row end"><button type="button" className="primary" onClick={save}>{tr("Enregistrer la synthèse")}</button></div>
+      <div className="row gap end wrap"><ActionStatus state={status} /><button type="button" className="primary" onClick={save}>{tr("Enregistrer la synthèse")}</button></div>
     </Section>
   )
 }
@@ -388,14 +438,21 @@ function Events({ t }) {
 function Comments({ t, enc, isClient, run, onImage, templates }) {
   const [html, setHtml] = useState('')
   const [visible, setVisible] = useState(isClient)
+  const [status, track, setStatus] = useActionStatus()
+  const [ask, dialog] = useConfirm()
   const post = async () => {
-    if (!html.trim()) return
-    if (await run(() => api(`/tickets/${enc}/comments`, { method: 'POST', json: { body_html: html, visible_client: visible } }), tr('Commentaire publié.'))) setHtml('')
+    if (!html.trim()) { setStatus({ error: tr('Le commentaire est vide.') }); return }
+    if (await track(() => run(() => api(`/tickets/${enc}/comments`, { method: 'POST', json: { body_html: html, visible_client: visible } }), tr('Commentaire publié.')), tr('Publié à {h}', { h: utcClock() }))) setHtml('')
   }
   const saveTemplate = async () => {
-    const name = window.prompt(tr('Nom du modèle (propre à ce client)'))
-    if (!name) return
-    run(() => api('/templates', { method: 'POST', json: { kind: 'commentaire', name, body_html: html, client: t.client_key } }), tr('Modèle enregistré.'))
+    const r = await ask({
+      title: tr('Enregistrer ce commentaire comme modèle pour {client}', { client: t.client }),
+      body: <p>{tr("Le modèle sera proposé dans l'éditeur des commentaires de ce client, pour toute l'équipe.")}</p>,
+      fields: [{ name: 'name', label: tr('Nom du modèle (propre à ce client)'), maxLength: 120 }],
+      confirm: tr('Enregistrer le modèle'),
+      action: ({ name }) => run(() => api('/templates', { method: 'POST', json: { kind: 'commentaire', name, body_html: html, client: t.client_key } }), tr('Modèle enregistré.')),
+    })
+    if (r) setStatus({ ok: tr('Modèle enregistré à {h}', { h: utcClock() }) })
   }
   return (
     <Section title={isClient ? tr('Échanges avec le SOC') : tr('Commentaires')}>
@@ -415,6 +472,8 @@ function Comments({ t, enc, isClient, run, onImage, templates }) {
           <button type="button" className="dark" onClick={post}>{tr("Publier")}</button>
         </div>
       </div>
+      <div className="row end"><ActionStatus state={status} /></div>
+      {dialog}
       {!isClient && <p className="muted small">{tr("Mentionnez un collègue avec @identifiant : il recevra une notification.")}</p>}
     </Section>
   )
@@ -423,11 +482,12 @@ function Comments({ t, enc, isClient, run, onImage, templates }) {
 function Qualification({ t, enc, run, open }) {
   const [v, setV] = useState({ verdict: t.verdict || '', dommages: t.dommages || '', importance: t.importance, impact: t.impact || '', risque: t.risque || '', tlp: t.tlp })
   const verdictLocked = !['nouveau', 'en_evaluation'].includes(t.status)
+  const [status, track] = useActionStatus()
   const save = () => {
     const json = { importance: v.importance, impact: v.impact, risque: v.risque, tlp: v.tlp }
     if (v.verdict && !verdictLocked) json.verdict = v.verdict
     if (v.dommages) json.dommages = v.dommages
-    run(() => api(`/tickets/${enc}/qualification`, { method: 'POST', json }), tr('Qualification enregistrée.'))
+    track(() => run(() => api(`/tickets/${enc}/qualification`, { method: 'POST', json }), tr('Qualification enregistrée.')))
   }
   return (
     <section className="card section" aria-label={tr("Qualification")}>
@@ -460,6 +520,7 @@ function Qualification({ t, enc, run, open }) {
       <label>{tr("Risque induit")}<textarea rows="2" value={v.risque} disabled={!open} onChange={(e) => setV({ ...v, risque: e.target.value })} /></label>
       <label>{tr("Marquage")}<select value={v.tlp} disabled={!open} onChange={(e) => setV({ ...v, tlp: e.target.value })}>{TLPS.map((x) => <option key={x}>{x}</option>)}</select></label>
       {open && <button type="button" className="primary wide" onClick={save}>{tr("Enregistrer")}</button>}
+      <ActionStatus state={status} />
     </section>
   )
 }
@@ -468,6 +529,7 @@ function Mitre({ t, enc, run, open }) {
   const [text, setText] = useState(t.mitre.join(', '))
   const [q, setQ] = useState('')
   const [found, setFound] = useState([])
+  const [status, track] = useActionStatus()
   useEffect(() => {
     if (q.trim().length < 2) { setFound([]); return undefined }
     const h = setTimeout(() => api('/mitre/techniques', { params: { q } }).then((r) => setFound(r.items)).catch(() => setFound([])), 250)
@@ -494,9 +556,12 @@ function Mitre({ t, enc, run, open }) {
                 <span className="mono">{f.id}</span> {f.name}</button></li>))}</ul>
           )}
           <label>{tr("Techniques (ex. T1110, T1543.003)")}<input className="mono" value={text} onChange={(e) => setText(e.target.value)} /></label>
-          <button type="button" onClick={() => run(() => api(`/tickets/${enc}/mitre`, {
-            method: 'POST', json: { techniques: text.split(/[\s,;]+/).filter(Boolean).map((x) => x.toUpperCase()) },
-          }), tr('MITRE corrigé (tracé).'))}>{tr("Corriger (tracé)")}</button>
+          <div className="row gap wrap">
+            <button type="button" onClick={() => track(() => run(() => api(`/tickets/${enc}/mitre`, {
+              method: 'POST', json: { techniques: text.split(/[\s,;]+/).filter(Boolean).map((x) => x.toUpperCase()) },
+            }), tr('MITRE corrigé (tracé).')))}>{tr("Corriger (tracé)")}</button>
+            <ActionStatus state={status} />
+          </div>
         </>
       )}
     </section>
@@ -505,6 +570,7 @@ function Mitre({ t, enc, run, open }) {
 
 function Assignment({ t, enc, run, open }) {
   const [people, setPeople] = useState([])
+  const [status, track] = useActionStatus()
   useEffect(() => { api(`/tickets/${enc}/assignables`).then((r) => setPeople(r.items)).catch(() => {}) }, [enc])
   return (
     <section className="card section" aria-label={tr("Affectation")}>
@@ -512,13 +578,14 @@ function Assignment({ t, enc, run, open }) {
       <label>{tr('Assigné à')}
         {/* Valeur fondée sur l'identifiant de l'assigné (unique), pas sur son nom affiché (deux comptes peuvent porter le même). */}
         <select disabled={!open} value={t.assignee_username || ''}
-          onChange={(e) => run(() => api(`/tickets/${enc}/assign`, { method: 'POST', json: { username: e.target.value || null } }), tr('Affectation enregistrée.'))}>
+          onChange={(e) => { const username = e.target.value || null; track(() => run(() => api(`/tickets/${enc}/assign`, { method: 'POST', json: { username } }), tr('Affectation enregistrée.'))) }}>
           <option value="">{tr("Personne")}</option>
           {t.assignee_username && !people.some((p) => p.username === t.assignee_username) &&
             <option value={t.assignee_username} disabled>{t.assignee}{t.assignee_active === false ? ` ${tr('(inactif)')}` : ''}</option>}
           {people.map((p) => <option key={p.username} value={p.username}>{p.display_name}</option>)}
         </select>
       </label>
+      <ActionStatus state={status} />
     </section>
   )
 }
@@ -537,11 +604,21 @@ function Links({ t, enc, run, open }) {
     try { setItems((await api(`/tickets/${enc}/links`, { method: 'POST', json: { ref: ref.trim().toUpperCase(), kind } })).items); setRef('') } catch (x) { setErr(x.message) }
   }
   const drop = async (id) => { try { setItems((await api(`/tickets/${enc}/links/${id}`, { method: 'DELETE' })).items) } catch (x) { setErr(x.message) } }
+  const [ask, dialog] = useConfirm()
+  const [status, setStatus] = useState(null)
   const merge = async () => {
-    const into = window.prompt(tr('Référence du ticket à conserver (ex. ACME-1). Ce ticket sera clos comme doublon.'))
-    if (!into) return
-    const reason = window.prompt(tr('Motif de la fusion')) || ''
-    run(() => api(`/tickets/${enc}/merge`, { method: 'POST', json: { into: into.trim().toUpperCase(), reason } }), tr('Ticket fusionné.'))
+    const r = await ask({
+      title: tr('Fusionner {ref} dans un autre ticket et le clore comme doublon ?', { ref: t.ref }),
+      body: <p>{tr("Les alertes brutes et les commentaires de {ref} sont rattachés au ticket conservé. {ref} est clos en faux positif (doublon) : l'opération ne s'annule pas.", { ref: t.ref })}</p>,
+      fields: [
+        { name: 'into', label: tr('Référence du ticket à conserver'), placeholder: tr('ACME-1'), mono: true, maxLength: 32,
+          validate: (v) => (v.toUpperCase() === t.ref.toUpperCase() ? tr('Indiquer un autre ticket que celui-ci.') : '') },
+        { name: 'reason', label: tr('Motif de la fusion'), minLength: 3, maxLength: 500 },
+      ],
+      confirm: tr('Fusionner et clore'), danger: true,
+      action: ({ into, reason }) => run(() => api(`/tickets/${enc}/merge`, { method: 'POST', json: { into: into.toUpperCase(), reason } }), tr('Ticket fusionné.')),
+    })
+    if (r) setStatus({ ok: tr('Ticket fusionné dans {ref} à {h}', { ref: r.values.into.toUpperCase(), h: utcClock() }) })
   }
   return (
     <section className="card section" aria-label={tr("Tickets liés")}>
@@ -561,6 +638,8 @@ function Links({ t, enc, run, open }) {
         <button>{tr("Lier")}</button>
       </form>
       {open && <button type="button" className="small-btn danger" onClick={merge}>{tr("Fusionner dans un autre ticket…")}</button>}
+      <ActionStatus state={status} />
+      {dialog}
     </section>
   )
 }

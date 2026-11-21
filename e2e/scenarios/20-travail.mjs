@@ -1,4 +1,4 @@
-import { until } from '../harness.mjs'
+import { answerDialog, until } from '../harness.mjs'
 
 export default async ({ stack, BASE, check, login }) => {
   const send = (alert) => fetch(`${BASE}/api/v1/ingest/wazuh`, { method: 'POST', headers: { Authorization: `Bearer ${stack.seeds.apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify(alert) }).then((r) => r.json())
@@ -33,10 +33,24 @@ export default async ({ stack, BASE, check, login }) => {
   check(true, 'lien créé depuis la fiche')
   // modèle enregistré depuis un commentaire
   await m.locator('.rich-content').last().click(); await m.keyboard.type('Accusé de réception, analyse en cours.')
-  m.once('dialog', (d) => d.accept('Accusé'))
   await m.getByRole('button', { name: 'Enregistrer comme modèle' }).click()
+  await answerDialog(m, { name: 'Accusé' })
   await m.waitForSelector('text=Modèle enregistré.')
-  check(true, 'modèle enregistré')
+  check(true, 'modèle enregistré (nom saisi dans le dialogue)')
+  // dialogue de fusion : deux champs, validation en ligne, Échap ferme et rend le focus au déclencheur
+  const fusion = m.getByRole('button', { name: 'Fusionner dans un autre ticket…' })
+  await fusion.click()
+  const d = await answerDialog(m, { into: 'ACME-2', reason: 'x' }, { stays: true })
+  check(await d.locator('.field-error').count() === 1 && (await d.locator('.field-error').innerText()).includes('au moins 3'), 'fusion : motif trop court signalé sous le champ, dialogue resté ouvert')
+  check(await d.locator('[name=reason]').getAttribute('aria-invalid') === 'true' && await d.locator('[name=reason]').evaluate((e) => e === document.activeElement), 'fusion : le champ en erreur est marqué et reçoit le focus')
+  check((await d.locator('h2').innerText()).includes('ACME-1') && (await d.locator('button[type=submit]').innerText()) === 'Fusionner et clore', 'fusion : titre avec l\'objet et la conséquence, bouton nommé par le verbe')
+  await d.locator('[name=reason]').focus()
+  for (let i = 0; i < 6; i++) await m.keyboard.press('Tab')
+  check(await m.evaluate(() => !!document.activeElement.closest('dialog[open]') || document.activeElement === document.body), 'fusion : le focus reste dans le dialogue (tabulation)')
+  await m.keyboard.press('Escape')
+  await d.waitFor({ state: 'detached' })
+  check(await fusion.evaluate((e) => e === document.activeElement), 'fusion : Échap ferme le dialogue et rend le focus au bouton')
+  check((await m.locator('.ticket-head .status').innerText()).includes('Nouveau'), 'fusion annulée : le ticket n\'a pas changé de statut')
   await m.context().close()
 
   // l'analyste reçoit la notification d'affectation (cloche) et filtre « Mes tickets »

@@ -95,6 +95,17 @@ export async function login(browser, stack, name) {
   return page
 }
 
+// Dialogue de confirmation ou de saisie de l'interface (<dialog> natif, plus de window.prompt / confirm) :
+// remplit les champs par leur attribut name, puis valide avec le bouton d'action (ou annule).
+export async function answerDialog(page, values = {}, { cancel = false, stays = false } = {}) {
+  const d = page.locator('dialog[open]')
+  await d.waitFor()
+  for (const [name, value] of Object.entries(values)) await d.locator(`[name="${name}"]`).fill(value)
+  await d.locator(cancel ? 'button[data-cancel]' : 'button[type=submit]').click()
+  if (!stays) await d.waitFor({ state: 'detached' })
+  return d
+}
+
 export function check(cond, label) {
   if (!cond) { console.error(`✗ ${label}`); process.exitCode = 1 } else console.log(`✓ ${label}`)
 }

@@ -24,7 +24,7 @@ a { color: var(--accent); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .error { color: var(--danger); background: #FDECEE; border: 1px solid #F5C2CA; padding: 10px 14px; border-radius: var(--radius); }
 .loading { color: var(--muted); padding: 24px; }
-.live { min-height: 1.5em; margin: 4px 0; color: var(--muted); }
+.live { min-height: 1.5em; margin: 4px 0; color: var(--text); }
 
 .row { display: flex; align-items: center; }
 .wrap { flex-wrap: wrap; }
@@ -46,6 +46,8 @@ button.primary:hover { background: var(--accent-dark); }
 button.dark { background: var(--side); border-color: var(--side); color: #fff; }
 button.danger, .small-btn.danger { color: var(--danger); border-color: #F0B9C2; }
 button.link { border: 0; background: none; color: var(--accent); padding: 0; min-height: 0; text-decoration: underline; }
+button.danger-solid { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
+button.danger-solid:hover { background: #870E22; border-color: #870E22; }
 button.wide { width: 100%; min-height: 44px; }
 .small-btn { min-height: 30px; padding: 3px 10px; font-size: 12px; }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 10px; }
@@ -337,3 +339,35 @@ main:focus { outline: none; }
 .ProseMirror-hideselection *::selection { background: transparent; }
 .ProseMirror img.ProseMirror-separator { display: inline !important; border: none !important; margin: 0 !important; }
 .ProseMirror p.is-editor-empty:first-child::before { content: attr(data-placeholder); float: left; color: var(--muted); pointer-events: none; height: 0; }
+
+/* Dialogue de confirmation / de saisie (<dialog> natif, components/Confirm.jsx) */
+dialog.dialog { width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; padding: 0; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 18px 48px rgba(16, 21, 28, .28), 0 2px 6px rgba(16, 21, 28, .12); }
+dialog.dialog::backdrop { background: rgba(16, 21, 28, .55); }
+.dialog form { margin: 0; padding: 20px 22px; }
+.dialog h2 { font-size: 17px; line-height: 1.35; margin: 0 0 8px; text-wrap: balance; }
+.dialog-body { margin: 0 0 14px; }
+.dialog-body p { margin: 0 0 8px; }
+.dialog .field { margin: 0 0 12px; }
+.dialog .field label { margin-bottom: 4px; }
+.dialog .field input, .dialog .field textarea, .dialog .field select { width: 100%; }
+.dialog .error { margin: 0 0 4px; }
+.dialog-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.field-hint { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+.field-error { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: var(--danger); }
+input[aria-invalid=true], textarea[aria-invalid=true], select[aria-invalid=true] { border-color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); }
+@media (prefers-reduced-motion: no-preference) {
+  dialog.dialog[open] { animation: dialog-in .18s cubic-bezier(.16, 1, .3, 1); }
+  dialog.dialog[open]::backdrop { animation: backdrop-in .18s ease-out; }
+}
+@keyframes dialog-in { from { opacity: 0; transform: translateY(8px); } }
+@keyframes backdrop-in { from { opacity: 0; } }
+@media (pointer: coarse) { .dialog-actions button { min-height: 44px; } }
+
+/* Retour d'action au plus près du bouton (components/ActionStatus.jsx) */
+.head-status { display: flex; justify-content: flex-end; min-height: 0; }
+.head-status:empty { display: none; }
+.saved-note { margin: 8px 0 0; text-align: right; }
+form.row > .action-status.ok, .retention-actions > .action-status.ok { align-self: flex-end; line-height: 36px; }
+.action-status.ok { color: var(--ok); font-size: 12px; font-weight: 600; }
+.error.action-status { margin: 8px 0 0; padding: 6px 10px; font-size: 13px; }
+.row > .error.action-status { margin: 0; }
