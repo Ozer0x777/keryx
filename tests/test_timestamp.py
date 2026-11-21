@@ -252,3 +252,41 @@ def test_telechargement_et_verification_de_jeton_traces(stamped_app, db, world, 
     assert dl.actor == "analyst_acme" and dl.object_id == tid and dl.tenant_id == world["tenants"]["ACME"].id
     assert dl.details["object_id"] == att["id"] and rows["attachment.timestamp_verify"].details["valid"] is True
     assert rows["audit.timestamp_download"].tenant_id is None
+
+
+def test_client_http_ferme_apres_la_demande(stamped_app, db, world, alert, monkeypatch):
+    made, real = [], ts.make_client
+    monkeypatch.setattr(ts, "make_client", lambda s: made.append(real(s)) or made[-1])
+    a, att = attachment(stamped_app, db, world, alert)
+    assert a.post(f"/api/v1/attachments/{att['id']}/timestamp").status_code == 201
+    assert len(made) == 1 and made[0].is_closed
+
+
+def test_heure_a_fractions_de_seconde_et_serie_decimale(monkeypatch, tmp_path):
+    """Chemin de secours OpenSSL : une heure attestée avec fractions de seconde est acceptée, et le numéro de série est
+    rendu en décimal comme par le décodeur strict (OpenSSL l'affiche en hexadécimal)."""
+    import datetime as dt
+    import subprocess as sp
+    text = ("Status info:\nStatus: Granted.\nTST info:\nVersion: 1\nPolicy OID: 1.2.3.4.1\nHash Algorithm: sha256\n"
+            "Serial number: 0x04D2\nTime stamp: Nov 21 10:11:12.345 2026 GMT\nAccuracy: 0x01 seconds\n")
+
+    def fake(*args):
+        return sp.CompletedProcess(args, 0, stdout="Verification: OK\n" if "-verify" in args else text, stderr="")
+
+    monkeypatch.setattr(ts, "_openssl", fake)
+    v = ts._openssl_verify(b"jeton", b"message", None, str(tmp_path / "ca.pem"), "1.2.3.4.1")
+    assert v["gen_time"] == dt.datetime(2026, 11, 21, 10, 11, 12, tzinfo=dt.timezone.utc)
+    assert v["serial"] == "1234" and v["policy"] == "1.2.3.4.1"
+    assert ts._decimal_serial("Serial number: 4660\n") == "4660" and ts._decimal_serial("rien") == "?"
+
+
+def test_serie_identique_par_les_deux_chemins(authority):
+    """La même réponse donne le même numéro de série, que le décodeur strict ou OpenSSL l'ait lue."""
+    srv, ca = authority
+    msg = ts.message_for("attachment", "x", "ab" * 32)
+    r = ts.stamp(srv.url, msg, ca)
+    assert r["serial"].isdigit()
+    assert ts._openssl_verify(r["token"], msg, None, ca, None)["serial"] == r["serial"]
+    # Réponse réelle à encodage non canonique (chemin de secours seul) : série décimale aussi
+    certum = ts._openssl_verify((CERTUM / "resp.tsr").read_bytes(), (CERTUM / "msg.txt").read_bytes(), None, str(CERTUM / "ctnca.pem"), None)
+    assert certum["serial"].isdigit()

@@ -61,7 +61,21 @@ def _verifier(request, roots, intermediates, policy_oid: str | None = None):
 # Certaines autorités (dont Certum, autorité de l'UE essayée) produisent des réponses dont l'ensemble de certificats n'est
 # pas dans l'ordre DER canonique : le décodeur strict de rfc3161-client les refuse, OpenSSL les valide. Dans ce cas, la
 # vérification passe par `openssl ts -verify` (l'outil doit être installé), à la date attestée (-attime).
-_TIME = re.compile(r"Time stamp:\s+(\w{3})\s+(\d+)\s+(\d\d:\d\d:\d\d)\s+(\d{4})")
+# L'heure peut porter des fractions de seconde (« 12:34:56.789 ») : elles sont acceptées et ignorées (seconde entière).
+_TIME = re.compile(r"Time stamp:\s+(\w{3})\s+(\d+)\s+(\d\d:\d\d:\d\d)(?:\.\d+)?\s+(\d{4})")
+_SERIAL = re.compile(r"Serial number:\s+(\S+)")
+
+
+def _decimal_serial(text: str) -> str:
+    """Numéro de série en décimal, comme sur le chemin du décodeur strict (OpenSSL l'affiche en hexadécimal, « 0x… »)."""
+    m = _SERIAL.search(text)
+    if not m:
+        return "?"
+    raw = m.group(1)
+    try:
+        return str(int(raw, 16)) if raw.lower().startswith("0x") else str(int(raw))
+    except ValueError:
+        return raw
 
 
 def _openssl(*args: str) -> subprocess.CompletedProcess:
@@ -80,7 +94,7 @@ def _openssl_verify(token: bytes, message: bytes | None, request: bytes | None, 
         if text.returncode != 0 or not m:
             raise TimestampError("Réponse de l'autorité d'horodatage illisible.")
         when = dt.datetime.strptime(" ".join(m.groups()), "%b %d %H:%M:%S %Y").replace(tzinfo=dt.timezone.utc)
-        serial = (re.search(r"Serial number:\s+(\S+)", text.stdout) or [None, "?"])[1]
+        serial = _decimal_serial(text.stdout)
         policy_found = (re.search(r"Policy OID:\s+(\S+)", text.stdout) or [None, ""])[1]
         args = ["ts", "-verify", "-in", tok, "-CAfile", ca_file, "-attime", str(int(when.timestamp()))]
         if request is not None:
@@ -127,6 +141,9 @@ def stamp(tsa_url: str, message: bytes, ca_file: str | None, http: httpx.Client 
         r = client.post(tsa_url, content=request.as_bytes(), headers={"Content-Type": "application/timestamp-query"})
     except httpx.HTTPError as exc:
         raise TimestampError("L'autorité d'horodatage est injoignable.") from exc
+    finally:
+        if http is None:  # client créé ici : fermé ici ; un client fourni est fermé par l'appelant
+            client.close()
     if r.status_code in (401, 403):
         raise TimestampError("L'autorité d'horodatage refuse l'authentification (vérifier KERYX_TSA_USER / _PASSWORD / _BEARER / certificat client).")
     if r.status_code != 200:

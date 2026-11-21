@@ -30,8 +30,8 @@ def register(app, ctx) -> None:
     def issue(db: DbSession, user: User, object_type: str, object_id: str, digest: str, tenant_id: str | None) -> Timestamp:
         message = ts.message_for(object_type, object_id, digest)
         try:
-            r = ts.stamp(settings.tsa_url, message, settings.tsa_ca_file, http=ts.make_client(settings),
-                         policy_oid=settings.tsa_policy_oid)
+            with ts.make_client(settings) as http:  # client fermé après usage (pas de connexion ni de descripteur en attente)
+                r = ts.stamp(settings.tsa_url, message, settings.tsa_ca_file, http=http, policy_oid=settings.tsa_policy_oid)
         except ts.TimestampError as exc:
             raise HTTPException(502, str(exc))
         row = Timestamp(object_type=object_type, object_id=object_id, tenant_id=tenant_id, message=message.decode(),

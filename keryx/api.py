@@ -216,6 +216,10 @@ class LifecycleIn(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
 
 
+# Cycle de vie d'une pièce : états atteignables depuis chaque état [PRIS VI.2.4].
+LIFECYCLE_NEXT = {"conserve": ("restitue", "detruit"), "restitue": ("detruit",)}
+
+
 # ---------------------------------------------------------------- application
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
@@ -1135,8 +1139,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         a, t = load_attachment(db, user, attachment_id)
         if body.lifecycle not in LIFECYCLE or body.lifecycle == "conserve":
             raise HTTPException(422, "Cycle de vie attendu : restitue ou detruit.")
-        if a.lifecycle != "conserve":
-            raise HTTPException(409, "Cette pièce n'est plus conservée.")
+        # conservée → restituée ou détruite ; restituée → détruite (son contenu, resté sur le stockage, doit pouvoir être
+        # supprimé) ; une pièce détruite ne change plus d'état.
+        if body.lifecycle not in LIFECYCLE_NEXT.get(a.lifecycle, ()):
+            raise HTTPException(409, "Cette pièce est déjà détruite." if a.lifecycle == "detruit"
+                                else "Cette pièce est déjà restituée : seule sa destruction reste possible.")
         if body.lifecycle == "detruit":
             require_role(user, "manager")
         a.lifecycle = body.lifecycle

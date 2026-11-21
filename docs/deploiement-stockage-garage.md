@@ -21,4 +21,5 @@ Keryx chiffre chaque pièce (AES-256-GCM, clé dérivée de `KERYX_SECRET_KEY`) 
 ## Migrer des pièces déjà déposées sur disque
 1. Configurer `KERYX_STORAGE=s3` et `KERYX_S3_*` dans l'environnement.
 2. `keryx migrate-attachments --dry-run` (simulation), puis `keryx migrate-attachments` : chaque pièce est copiée, relue et comparée au fichier d'origine. La commande est rejouable et **ne supprime rien** : garder le dossier d'origine jusqu'à validation (téléchargement de quelques pièces, restauration d'essai).
-3. Les pièces mises en quarantaine sont migrées telles quelles (archive chiffrée).
+3. Les pièces mises en quarantaine sont migrées telles quelles (archive chiffrée). Les pièces restituées, dont le contenu est encore conservé, sont migrées aussi (leur destruction devra le retrouver dans le stockage objet).
+4. Lire le bilan : « copiée(s) », « déjà migrée(s) » (absente du disque, **présente** dans le stockage objet), « manquante(s) » (ni sur le disque, ni dans le stockage objet : contenu perdu, listé sur la sortie d'erreur) et « en échec ». Le code de sortie est différent de 0 dès qu'une pièce est manquante ou en échec. Chaque exécution est inscrite au journal d'audit (`attachments.migrate`).

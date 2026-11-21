@@ -240,6 +240,28 @@ def test_sauvegarde_et_restauration_tracees(app, db, world, alert, settings, tmp
     assert "journal d'audit" in capsys.readouterr().err and not absent.exists()
 
 
+# ---------------------------------------------------------------- F2 : une pièce restituée peut être détruite
+def test_piece_restituee_puis_detruite(app, db, world, alert, settings):
+    ingest(app, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE))
+    a, m = login(app, db, "analyst_acme"), login(app, db, "manager")
+    piece = deposit(a, data=zip_bytes(), name="journaux.zip")
+    url = f"/api/v1/attachments/{piece['id']}/lifecycle"
+    db.rollback()
+    path = att._path(settings, db.get(Attachment, piece["id"]).storage_name, False)
+    db.rollback()
+    assert a.post(url, json={"lifecycle": "restitue", "reason": "remise au client"}).json()["lifecycle"] == "restitue"
+    assert att.os.path.exists(path)                                          # le contenu est encore là
+    assert a.post(url, json={"lifecycle": "restitue", "reason": "encore une fois"}).status_code == 409
+    assert a.post(url, json={"lifecycle": "detruit", "reason": "fin de prestation"}).status_code == 403   # manager seulement
+    r = m.post(url, json={"lifecycle": "detruit", "reason": "fin de prestation"})
+    assert r.status_code == 200 and r.json()["lifecycle"] == "detruit"
+    assert not att.os.path.exists(path)                                      # contenu supprimé du stockage
+    assert m.post(url, json={"lifecycle": "detruit", "reason": "une seconde fois"}).status_code == 409
+    assert m.post(url, json={"lifecycle": "restitue", "reason": "retour en arrière"}).status_code == 409
+    db.rollback()
+    assert [e.action for e in db.scalars(select(CustodyEvent).order_by(CustodyEvent.ts))] == ["depot", "restitue", "detruit"]
+
+
 # ---------------------------------------------------------------- F5 : bornes de dates du journal d'audit
 def test_bornes_de_dates_du_journal_incluent_minuit(app, db, world, monkeypatch):
     adm = login(app, db, "admin")

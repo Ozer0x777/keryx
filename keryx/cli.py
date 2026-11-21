@@ -237,28 +237,43 @@ def _main(argv: list[str] | None = None) -> int:
             print("Configurer d'abord KERYX_STORAGE=s3 et KERYX_S3_* (destination).", file=sys.stderr)
             return 2
         objects = att.object_store(settings)
-        done = skipped = failed = 0
-        for a in db.scalars(_select(Attachment).where(Attachment.storage_name.is_not(None), Attachment.lifecycle == "conserve")):
+        done = already = missing = failed = 0
+        # Tout contenu encore présent est migré : pièces conservées ET restituées (une pièce restituée garde son contenu
+        # jusqu'à sa destruction, qui doit le retrouver dans le stockage objet). Seules les pièces détruites sont écartées.
+        rows = db.scalars(_select(Attachment).where(Attachment.storage_name.is_not(None), Attachment.lifecycle != "detruit")).all()
+        db.commit()  # fin de la transaction de lecture : la copie ne bloque pas les écritures de l'application (SQLite)
+        for a in rows:
             quarantined = a.scan_status == "quarantaine"
             path = att._path(settings, a.storage_name, quarantined)
-            if not os.path.exists(path):
-                skipped += 1  # déjà dans le stockage objet, ou fichier absent du disque
-                continue
-            with open(path, "rb") as f:
-                content = f.read()
             key = att._object_key(objects, a.storage_name, quarantined)
             try:
+                try:
+                    with open(path, "rb") as f:
+                        content = f.read()
+                except FileNotFoundError:
+                    # Absent du disque : « déjà migré » seulement si l'objet existe vraiment ; sinon le contenu est perdu.
+                    if objects.exists(key):
+                        already += 1
+                    else:
+                        missing += 1
+                        print(f"MANQUANT {a.id} ({a.filename}) : ni sur le disque ni dans le stockage objet", file=sys.stderr)
+                    continue
                 if not args.dry_run:
                     objects.put(key, content)
                     if objects.get(key) != content:      # relecture : l'objet déchiffré doit être identique au fichier
                         raise StorageError("relecture différente")
                 done += 1
-            except StorageError as exc:
+            except (StorageError, OSError) as exc:        # OSError : fichier illisible, ou objet introuvable à la relecture
                 failed += 1
                 print(f"ÉCHEC {a.id} ({a.filename}) : {exc}", file=sys.stderr)
-        print(f"{done} pièce(s) copiée(s){' (simulation)' if args.dry_run else ' et relue(s)'}, {skipped} ignorée(s), {failed} en échec. "
+        audit.record(db, actor, "attachments.migrate", None, None, None,
+                     {"copiees": done, "deja_migrees": already, "manquantes": missing, "echecs": failed,
+                      "simulation": bool(args.dry_run)})
+        db.commit()
+        print(f"{done} pièce(s) copiée(s){' (simulation)' if args.dry_run else ' et relue(s)'}, {already} déjà migrée(s), "
+              f"{missing} manquante(s), {failed} en échec. "
               "Les fichiers du disque ne sont PAS supprimés : les garder jusqu'à validation.")
-        return 1 if failed else 0
+        return 1 if failed or missing else 0
 
     if args.cmd == "tsa-check":
         from . import timestamping as ts
@@ -267,7 +282,8 @@ def _main(argv: list[str] | None = None) -> int:
             return 2
         msg = ts.message_for("essai", "tsa-check", "00" * 32)
         try:
-            r = ts.stamp(settings.tsa_url, msg, settings.tsa_ca_file, http=ts.make_client(settings), policy_oid=settings.tsa_policy_oid)
+            with ts.make_client(settings) as http:
+                r = ts.stamp(settings.tsa_url, msg, settings.tsa_ca_file, http=http, policy_oid=settings.tsa_policy_oid)
             when = ts.verify(r["token"], msg, settings.tsa_ca_file, settings.tsa_policy_oid)
         except ts.TimestampError as exc:
             print(f"ÉCHEC : {exc}", file=sys.stderr)

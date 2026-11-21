@@ -22,7 +22,7 @@ Les références d'exigence sont reprises du plan de projet. Les normes ISO éta
 | PRIS VI.5.3.d | Registre des actions du ticket | `api.event`, `models.TicketEvent` | `test_workflow_audit.py` |
 | PRIS VI.5.3.e | Synthèse évolutive et REX obligatoire (Élevée/Critique) | `api.set_synthese`, `workflow.py` | `test_workflow_audit.py`, `test_fixes_revue2.py` |
 | PRIS VI.5.5.1 | Registre de crise | `routes_ops.py`, `Crisis.jsx` | `test_ops.py`, `40-conformite.mjs` |
-| PRIS VI.2.4 | Conservation, restitution, destruction des pièces | `api.lifecycle` | `test_attachments.py`, `test_fixes_revue2.py` |
+| PRIS VI.2.4 | Conservation, restitution, destruction des pièces | `api.lifecycle` | `test_attachments.py`, `test_fixes_revue2.py`, `test_revue3_correctifs.py` (restituée puis détruite) |
 | PRIS IV.3.q | Quarantaine des codes malveillants, ré-archivée avec mot de passe | `attachments.py` | `test_attachments.py` |
 | Plan : stockage objet ; PDIS IV.3.3 | Pièces dans un stockage S3 de l'UE, chiffrées avant envoi | `s3store.py`, `attachments.py` | `test_s3.py` |
 | ISO/IEC 27035-1 | Cycle de vie des incidents, liens et fusion, mesure des délais | `workflow.py`, `routes_work.py`, `routes_reports.py` | `test_workflow_audit.py`, `test_work.py`, `test_reports.py` |

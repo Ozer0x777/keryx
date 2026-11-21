@@ -98,6 +98,15 @@ class S3Store:
         except Exception as exc:  # InvalidTag : objet altéré ou déplacé
             raise StorageError("Objet corrompu ou déplacé : déchiffrement impossible.") from exc
 
+    def exists(self, key: str) -> bool:
+        """Présence de l'objet (HEAD), sans le lire ni le déchiffrer."""
+        r = self._request("HEAD", key)
+        if r.status_code == 404:
+            return False
+        if r.status_code != 200:
+            raise StorageError(f"Consultation refusée par le stockage objet ({r.status_code}).")
+        return True
+
     def delete(self, key: str) -> None:
         r = self._request("DELETE", key)
         if r.status_code not in (200, 204, 404):

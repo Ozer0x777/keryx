@@ -308,7 +308,7 @@ function Attachments({ t, enc, me, run, setNotice }) {
                     {a.kind !== 'preuve_externe' && a.lifecycle === 'conserve' && !(isClient && a.scan_status === 'quarantaine') &&
                       <button type="button" className="small-btn" onClick={() => download(a)}>{tr("Télécharger")}</button>}
                     {isTeam && a.lifecycle === 'conserve' && <button type="button" className="small-btn" onClick={() => lifecycle(a, 'restitue')}>{tr("Restituer")}</button>}
-                    {me.role === 'manager' && a.lifecycle === 'conserve' && <button type="button" className="small-btn danger" onClick={() => lifecycle(a, 'detruit')}>{tr("Détruire")}</button>}
+                    {me.role === 'manager' && a.lifecycle !== 'detruit' && <button type="button" className="small-btn danger" onClick={() => lifecycle(a, 'detruit')}>{tr("Détruire")}</button>}
                   </td>
                 </tr>
               ))}
