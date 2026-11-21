@@ -186,3 +186,74 @@ def test_limiteur_en_base_ne_se_bloque_pas_lui_meme(settings, app, db, world, al
     codes = [TestClient(shared).post("/api/v1/auth/login", json={"username": "manager", "password": "faux"}).status_code
              for _ in range(4)]
     assert codes == [401, 401, 429, 429]
+
+
+# ---------------------------------------------------------------- M7 : traçabilité
+def test_modification_du_courriel_et_du_nom_tracee(app, db, world):
+    adm = login(app, db, "admin")
+    assert adm.patch("/api/v1/admin/users/analyst_acme", json={"email": "a@acme.example", "display_name": "A. Nouveau"}).status_code == 200
+    assert adm.patch("/api/v1/admin/users/analyst_acme", json={"email": "b@acme.example"}).status_code == 200
+    details = [e.details for e in actions(db, "user.update")]
+    assert details == [{"email": [None, "a@acme.example"], "display_name": ["analyst_acme", "A. Nouveau"]},
+                       {"email": ["a@acme.example", "b@acme.example"]}]
+
+
+def test_lectures_sensibles_tracees(app, db, world, alert):
+    ingest(app, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE))
+    a = login(app, db, "analyst_acme")
+    piece = deposit(a, data=zip_bytes(), name="journaux.zip")
+    assert a.get("/api/v1/tickets/ACME-1/crisis").json()["active"] is False
+    assert actions(db, "ticket.crisis_read") == []                           # rien à lire : pas d'entrée superflue
+    assert a.get(f"/api/v1/attachments/{piece['id']}/custody").status_code == 200
+    assert a.put("/api/v1/tickets/ACME-1/body", json={"body_html": "<p>v2</p>"}).status_code == 200
+    assert a.get("/api/v1/tickets/ACME-1/body-history").status_code == 200
+    assert a.post("/api/v1/tickets/ACME-1/crisis", json={"active": True, "reason": "exfiltration en cours"}).status_code == 200
+    assert a.get("/api/v1/tickets/ACME-1/crisis").json()["active"] is True
+    custody = actions(db, "attachment.custody_read")
+    assert len(custody) == 1 and custody[0].object_id == piece["id"] and custody[0].tenant_id == world["tenants"]["ACME"].id
+    assert [e.details for e in actions(db, "ticket.body_history")] == [{"versions": 1}]
+    assert [e.object_id for e in actions(db, "ticket.crisis_read")] == ["ACME-1"]
+    # L'Admin voit que ces lectures ont eu lieu, pas leur détail
+    seen = {i["action"]: i["details"] for i in login(app, db, "admin").get("/api/v1/audit/entries", params={"limit": 200}).json()["items"]}
+    assert seen["attachment.custody_read"] == seen["ticket.body_history"] == seen["ticket.crisis_read"] == {"masque": True}
+
+
+def test_sauvegarde_et_restauration_tracees(app, db, world, alert, settings, tmp_path, monkeypatch, capsys):
+    if not settings.database_url.startswith("sqlite"):
+        pytest.skip("commandes de sauvegarde essayées ici sur SQLite")
+    ingest(app, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE))
+    monkeypatch.setenv("KERYX_DATABASE_URL", settings.database_url)
+    monkeypatch.setenv("KERYX_SECRET_KEY", SECRET_KEY)
+    monkeypatch.setenv("KERYX_ATTACHMENTS_DIR", settings.attachments_dir)
+    out = str(tmp_path / "s.kxb")
+    db.rollback()
+    assert cli_main(["backup", out]) == 0
+    assert cli_main(["restore", out, "--to", str(tmp_path / "rest")]) == 0
+    made, restored = actions(db, "backup.create"), actions(db, "backup.restore")
+    assert len(made) == 1 and made[0].actor.startswith("cli:") and made[0].details["fichier"] == "s.kxb"
+    assert len(restored) == 1 and restored[0].details["chaine_audit_integre"] is True
+    # Reprise après sinistre : pas de base sur cette machine. La restauration réussit, le dit, et ne crée pas de base vide.
+    absent = tmp_path / "absente.db"
+    monkeypatch.setenv("KERYX_DATABASE_URL", f"sqlite:///{absent}")
+    capsys.readouterr()
+    assert cli_main(["restore", out, "--to", str(tmp_path / "rest2")]) == 0
+    assert "journal d'audit" in capsys.readouterr().err and not absent.exists()
+
+
+# ---------------------------------------------------------------- F5 : bornes de dates du journal d'audit
+def test_bornes_de_dates_du_journal_incluent_minuit(app, db, world, monkeypatch):
+    adm = login(app, db, "admin")
+    for when in (datetime(2026, 11, 20, 0, 0, 0, tzinfo=timezone.utc),
+                 datetime(2026, 11, 20, 23, 59, 59, 999000, tzinfo=timezone.utc)):
+        with monkeypatch.context() as mp:
+            mp.setattr("keryx.audit.utcnow", lambda when=when: when)
+            assert TestClient(app).post("/api/v1/auth/login", json={"username": "fantome", "password": "faux"}).status_code == 401
+
+    def found(**params):
+        items = adm.get("/api/v1/audit/entries", params={"actor": "fantome", **params}).json()["items"]
+        return sorted(i["ts"] for i in items)
+
+    both = ["2026-11-20T00:00:00.000Z", "2026-11-20T23:59:59.999Z"]
+    assert found(**{"from": "2026-11-20", "to": "2026-11-20"}) == both
+    assert found(**{"from": "2026-11-20"}) == both and found(to="2026-11-20") == both
+    assert found(**{"from": "2026-11-21"}) == [] and found(to="2026-11-19") == []

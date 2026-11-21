@@ -34,6 +34,23 @@ def _session(settings: Settings):
     return make_session_factory(engine)()
 
 
+def _trace(db, settings: Settings, actor: str, action: str, details: dict) -> None:
+    """Inscrit une opération d'exploitation (sauvegarde, restauration) au journal d'audit de l'instance courante.
+    Une restauration peut être lancée sur une machine sans base Keryx (reprise après sinistre) : dans ce cas l'opération
+    réussit quand même, et l'absence de trace est signalée au lieu de créer une base vide."""
+    from sqlalchemy.exc import SQLAlchemyError
+    url = settings.database_url
+    try:
+        if url.startswith("sqlite:///") and not os.path.isfile(url[len("sqlite:///"):]):
+            raise FileNotFoundError(url)
+        audit.record(db, actor, action, None, None, None, details)
+        db.commit()
+    except (SQLAlchemyError, OSError):
+        db.rollback()
+        print(f"Avertissement : « {action} » n'a pas pu être inscrite au journal d'audit (base de l'instance courante "
+              "absente ou injoignable).", file=sys.stderr)
+
+
 _OPEN: list = []   # sessions ouvertes par une commande, fermées à sa fin (utile quand main() est appelée dans un processus qui continue)
 
 
@@ -178,6 +195,8 @@ def _main(argv: list[str] | None = None) -> int:
         except backup.BackupError as exc:
             print(str(exc), file=sys.stderr)
             return 2
+        # Tracée après coup : la sauvegarde elle-même ne contient donc pas cette entrée.
+        _trace(db, settings, actor, "backup.create", {"fichier": os.path.basename(args.out), "fichiers": info["files"]})
         print(f"Sauvegarde chiffrée écrite dans {args.out} ({info['files']} fichiers). Conserver KERYX_SECRET_KEY à part.")
         if settings.storage_backend == "s3":
             print("Les pièces sont dans le stockage objet : à sauvegarder avec les outils du serveur d'objets (réplication, versions).")
@@ -190,14 +209,21 @@ def _main(argv: list[str] | None = None) -> int:
         except backup.BackupError as exc:
             print(str(exc), file=sys.stderr)
             return 2
+        # Tracée dans le journal de l'instance courante (KERYX_DATABASE_URL), jamais dans la base restaurée, qui reste
+        # identique à la sauvegarde.
+        details = {"fichier": os.path.basename(args.file), "fichiers": info["files"], "postgres": bool(info["postgres"])}
         if info["postgres"] and not args.pg_url:
+            _trace(db, settings, actor, "backup.restore", {**details, "base_restauree": False})
             print(f"Sauvegarde PostgreSQL extraite dans {args.to}. Restaurer avec : pg_restore --no-owner -d <base vide> "
                   f"{args.to}/keryx.pgdump (ou relancer avec --pg-url).")
             return 0
         restored = Settings(database_url=args.pg_url if info["postgres"] else f"sqlite:///{args.to}/keryx.db",
                             secret_key=settings.secret_key)
         rdb = _session(restored)
+        _OPEN.append(rdb)
         ok, bad = audit.verify_chain(rdb)
+        rdb.rollback()
+        _trace(db, settings, actor, "backup.restore", {**details, "base_restauree": True, "chaine_audit_integre": ok})
         print(f"Restauration dans {args.to} : {info['files']} fichiers, empreintes vérifiées. "
               + ("Chaîne d'audit intègre." if ok else f"CHAÎNE D'AUDIT ROMPUE à l'entrée {bad}."))
         return 0 if ok else 1

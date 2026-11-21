@@ -81,6 +81,8 @@ def register(app, ctx) -> None:
 
     @app.get("/api/v1/tickets/{ref}/links")
     def links_list(ref: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        # Pas d'entrée d'audit propre : cette liste (référence, titre, statut de tickets du même client) est chargée avec
+        # chaque affichage du ticket, déjà tracé par « ticket.read » ; un refus d'accès reste tracé par load_ticket.
         staff(user)
         return {"items": link_views(db, load_ticket(db, user, ref))}
 
@@ -152,10 +154,14 @@ def register(app, ctx) -> None:
         t = load_ticket(db, user, ref)
         rows = db.scalars(select(TicketEvent).where(TicketEvent.ticket_id == t.id, TicketEvent.action == "description")
                           .order_by(TicketEvent.ts)).all()
-        return {"current": t.body_html, "versions": [
+        out = {"current": t.body_html, "versions": [
             {"ts": rfc3339(e.ts), "actor": e.actor, "html": (e.details or {}).get("version_precedente", ""),
              "truncated": bool((e.details or {}).get("tronquee")), "length": (e.details or {}).get("version_precedente_longueur"),
              "sha256": (e.details or {}).get("version_precedente_sha256")} for e in rows]}
+        # Les versions antérieures sont du contenu que la lecture du ticket ne montre pas : leur consultation est tracée.
+        audit.record(db, user.username, "ticket.body_history", "ticket", t.ref, t.tenant_id, {"versions": len(rows)})
+        commit(db)
+        return out
 
     # ---------------------------------------------------------------- affectation en masse
     @app.post("/api/v1/tickets/bulk-assign")

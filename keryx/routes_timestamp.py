@@ -75,9 +75,17 @@ def register(app, ctx) -> None:
             raise HTTPException(404, "Jeton introuvable.")
         return row
 
+    def trace(db: DbSession, user: User, row: Timestamp, what: str, extra: dict | None = None) -> None:
+        """Téléchargement ou vérification d'un jeton : entrée d'audit sobre (ni contenu, ni jeton)."""
+        prefix = "audit" if row.object_type == "audit" else "attachment"
+        audit.record(db, user.username, f"{prefix}.timestamp_{what}", "timestamp", row.id, row.tenant_id,
+                     {"object_id": row.object_id, "serial": row.serial, **(extra or {})})
+        commit(db)
+
     @app.get("/api/v1/timestamps/{tid}/token")
     def download(tid: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         row = readable(db, user, tid)
+        trace(db, user, row, "download")
         return Response(row.token, media_type="application/timestamp-reply",
                         headers={"Content-Disposition": f'attachment; filename="keryx-{row.object_type}-{row.serial}.tsr"',
                                  "Cache-Control": "no-store"})
@@ -89,7 +97,9 @@ def register(app, ctx) -> None:
         try:
             when = ts.verify(row.token, row.message.encode(), settings.tsa_ca_file, settings.tsa_policy_oid)
         except ts.TimestampError as exc:
+            trace(db, user, row, "verify", {"valid": False})
             return {"valid": False, "error": str(exc)}
+        trace(db, user, row, "verify", {"valid": True})
         return {"valid": True, "gen_time": rfc3339(when)}
 
     # ---------------------------------------------------------------- point de contrôle du journal d'audit

@@ -1117,10 +1117,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/v1/attachments/{attachment_id}/custody")
     def custody(attachment_id: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         require_role(user, "analyst", "manager")
-        a, _t = load_attachment(db, user, attachment_id)
-        rows = db.scalars(select(CustodyEvent).where(CustodyEvent.attachment_id == a.id).order_by(CustodyEvent.ts))
-        return {"items": [{"ts": rfc3339(c.ts), "actor": c.actor, "action": c.action, "reason": c.reason}
-                          for c in rows]}
+        a, t = load_attachment(db, user, attachment_id)
+        rows = db.scalars(select(CustodyEvent).where(CustodyEvent.attachment_id == a.id).order_by(CustodyEvent.ts)).all()
+        out = {"items": [{"ts": rfc3339(c.ts), "actor": c.actor, "action": c.action, "reason": c.reason}
+                         for c in rows]}
+        # La consultation de la chaîne de possession (qui a touché la pièce, quand, pourquoi) est elle-même tracée.
+        audit.record(db, user.username, "attachment.custody_read", "attachment", a.id, a.tenant_id,
+                     {"ticket": t.ref, "count": len(rows)})
+        commit(db)
+        return out
 
     @app.post("/api/v1/attachments/{attachment_id}/lifecycle")
     def lifecycle(attachment_id: str, body: LifecycleIn, user: User = Depends(current_user),

@@ -199,9 +199,12 @@ def register(app, ctx) -> None:
         if u.id == user.id and (role != u.role or body.active is False):
             raise HTTPException(409, "Vous ne pouvez pas modifier votre propre rôle ni vous désactiver.")
         changes = {}
-        if "display_name" in sent and body.display_name:
+        # Nom et courriel : tracés [ancien, nouveau] (le courriel sert à lier l'identité SSO et à remettre le code d'activation).
+        if "display_name" in sent and body.display_name and body.display_name != u.display_name:
+            changes["display_name"] = [u.display_name, body.display_name]
             u.display_name = body.display_name
-        if "email" in sent:
+        if "email" in sent and body.email != u.email:
+            changes["email"] = [u.email, body.email]
             u.email = body.email
         if role != u.role:
             changes["role"] = [u.role, role]

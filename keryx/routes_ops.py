@@ -61,7 +61,14 @@ def register(app, ctx) -> None:
     @app.get("/api/v1/tickets/{ref}/crisis")
     def crisis_get(ref: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         staff(user)
-        return crisis_view(db, load_ticket(db, user, ref))
+        t = load_ticket(db, user, ref)
+        out = crisis_view(db, t)
+        if t.crisis or out["items"]:
+            # Lecture du registre de crise (décisions, plan d'action) : tracée dès qu'il y a un registre à lire. Hors
+            # crise et sans entrée, la réponse est vide et l'affichage du ticket est déjà tracé par « ticket.read ».
+            audit.record(db, user.username, "ticket.crisis_read", "ticket", t.ref, t.tenant_id, {"count": len(out["items"])})
+            commit(db)
+        return out
 
     @app.post("/api/v1/tickets/{ref}/crisis")
     def crisis_toggle(ref: str, body: CrisisToggleIn, user: User = Depends(current_user),
@@ -142,11 +149,16 @@ def register(app, ctx) -> None:
             q = q.where(AuditEntry.action.like(action.replace("%", "").replace("_", r"\_") + "%", escape="\\"))
         if object_id:
             q = q.where(AuditEntry.object_id == object_id)
+        # Les dates du journal sont du texte RFC 3339 avec millisecondes (figé dans le sceau) : les bornes doivent avoir
+        # exactement le même format, sinon la comparaison de texte écarte ou garde à tort les entrées de minuit.
         if start:
-            q = q.where(AuditEntry.ts >= datetime.combine(start, time.min, tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"))
+            q = q.where(AuditEntry.ts >= rfc3339(datetime.combine(start, time.min, tzinfo=timezone.utc)))
         if to:
-            q = q.where(AuditEntry.ts < datetime.combine(to + timedelta(days=1), time.min, tzinfo=timezone.utc)
-                        .isoformat().replace("+00:00", "Z"))
+            try:
+                end = to + timedelta(days=1)
+            except OverflowError:
+                raise HTTPException(422, "Date de fin hors limites.")
+            q = q.where(AuditEntry.ts < rfc3339(datetime.combine(end, time.min, tzinfo=timezone.utc)))
         if before_seq:
             q = q.where(AuditEntry.seq < before_seq)
         rows = db.scalars(q.limit(limit + 1)).all()

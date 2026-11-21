@@ -234,3 +234,21 @@ def test_jeton_d_une_piece_interne_invisible_pour_le_client(stamped_app, db, wor
     assert c.get(f"/api/v1/attachments/{interne['id']}/timestamps").status_code == 404
     assert c.get(f"/api/v1/timestamps/{t_visible}/token").status_code == 200
     assert c.post(f"/api/v1/timestamps/{t_visible}/verify").json()["valid"] is True
+
+
+def test_telechargement_et_verification_de_jeton_traces(stamped_app, db, world, alert):
+    from keryx.models import AuditEntry
+    a, att = attachment(stamped_app, db, world, alert)
+    tid = a.post(f"/api/v1/attachments/{att['id']}/timestamp").json()["id"]
+    assert a.get(f"/api/v1/timestamps/{tid}/token").status_code == 200
+    assert a.post(f"/api/v1/timestamps/{tid}/verify").json()["valid"] is True
+    adm = login(stamped_app, db, "admin")
+    cp = adm.post("/api/v1/audit/checkpoint/timestamp").json()["id"]
+    assert adm.get(f"/api/v1/timestamps/{cp}/token").status_code == 200
+    db.rollback()
+    rows = {e.action: e for e in db.scalars(select(AuditEntry).where(AuditEntry.object_type == "timestamp"))}
+    assert set(rows) == {"attachment.timestamp_download", "attachment.timestamp_verify", "audit.timestamp_download"}
+    dl = rows["attachment.timestamp_download"]
+    assert dl.actor == "analyst_acme" and dl.object_id == tid and dl.tenant_id == world["tenants"]["ACME"].id
+    assert dl.details["object_id"] == att["id"] and rows["attachment.timestamp_verify"].details["valid"] is True
+    assert rows["audit.timestamp_download"].tenant_id is None
