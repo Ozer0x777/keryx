@@ -81,7 +81,8 @@ def clean(data: dict) -> dict:
         raise IsiError("Classification attendue sous forme d'objet.")
     out: dict = {}
     cat = data.get("category")
-    if cat not in (None, "") and cat not in CATEGORIES:
+    # Toute valeur doit être un texte : un objet ou une liste (non hachables) est refusé proprement, pas par une erreur 500.
+    if cat not in (None, "") and (not isinstance(cat, str) or cat not in CATEGORIES):
         raise IsiError(f"Catégorie attendue parmi : {', '.join(CATEGORIES)}.")
     if cat:
         out["category"] = cat
@@ -94,14 +95,15 @@ def clean(data: dict) -> dict:
             raise IsiError(f"Un seul choix est possible pour « {axis} ».")
         if len(values) > MULTI.get(axis, 1):
             raise IsiError(f"« {axis} » accepte au plus {MULTI.get(axis, 1)} choix.")
-        bad = [v for v in values if v not in choices]
+        bad = [v for v in values if not isinstance(v, str) or v not in choices]
         if bad:
-            raise IsiError(f"Valeur inconnue pour « {axis} » : {bad[0]}. Attendu : {', '.join(choices)}.")
+            shown = bad[0] if isinstance(bad[0], str) else type(bad[0]).__name__
+            raise IsiError(f"Valeur inconnue pour « {axis} » : {shown[:60]}. Attendu : {', '.join(choices)}.")
         out[axis] = list(dict.fromkeys(values)) if axis in MULTI else values[0]
     how = data.get(HOW_AXIS)
     if how not in (None, ""):
-        if how not in AXES["what"]:
-            raise IsiError(f"Valeur inconnue pour « how » : {how}. Attendu : les catégories de « what ».")
+        if not isinstance(how, str) or how not in AXES["what"]:
+            raise IsiError("Valeur inconnue pour « how ». Attendu : les catégories de « what ».")
         out[HOW_AXIS] = how
     detail = data.get("detail")
     if detail not in (None, ""):

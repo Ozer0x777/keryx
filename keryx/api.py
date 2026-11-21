@@ -57,6 +57,7 @@ CSRF_COOKIE = "keryx_csrf"
 PROBLEM = "application/problem+json"
 IDLE_MINUTES = 30
 GENERIC_LOGIN_ERROR = "Identifiant ou mot de passe incorrect, ou compte temporairement verrouillé."
+SSO_ONLY_ERROR = "La connexion par mot de passe est désactivée : utilisez l'authentification unique (SSO)."
 log = logging.getLogger("keryx")
 
 
@@ -81,7 +82,7 @@ class RateLimiter:
         self.limit, self.window = limit, window_s
         self.hits: dict[str, deque] = defaultdict(deque)
 
-    def allow(self, key: str) -> bool:
+    def allow(self, key: str, db: DbSession | None = None) -> bool:  # db : ignoré (même signature que DbRateLimiter)
         now = time.monotonic()
         if len(self.hits) > 5000:  # purge des clés expirées (identifiants choisis par l'appelant)
             for k in [k for k, v in self.hits.items() if not v or now - v[-1] > self.window]:
@@ -97,16 +98,23 @@ class RateLimiter:
 
 class DbRateLimiter:
     """Même contrat que RateLimiter, mais le compte vit en base : plusieurs processus partagent la même limite.
-    Approximatif sous forte concurrence (deux requêtes simultanées peuvent dépasser la limite d'une unité)."""
+    Approximatif sous forte concurrence (deux requêtes simultanées peuvent dépasser la limite d'une unité).
+
+    Les routes passent la session de la requête (`db`) : le compte est écrit et validé dans cette session. Sur SQLite,
+    elle tient déjà le verrou d'écriture dès sa première lecture (BEGIN IMMEDIATE) ; une seconde session attendrait ce
+    verrou 15 s puis échouerait (erreur 500). Sans `db`, le limiteur ouvre sa propre session : à n'utiliser que si
+    l'appelant n'a aucune transaction en cours."""
 
     def __init__(self, session_factory, name: str, limit: int, window_s: int):
         self.sf, self.name, self.limit, self.window = session_factory, name, limit, window_s
         self.calls = 0
 
-    def allow(self, key: str) -> bool:
+    def allow(self, key: str, db: DbSession | None = None) -> bool:
         k = f"{self.name}:{key}"[:200]
         now = utcnow()
-        db = self.sf()
+        own = db is None
+        if own:
+            db = self.sf()
         try:
             db.execute(delete(RateHit).where(RateHit.key == k, RateHit.ts < now - timedelta(seconds=self.window)))
             n = db.scalar(select(func.count()).select_from(RateHit).where(RateHit.key == k)) or 0
@@ -116,10 +124,11 @@ class DbRateLimiter:
             self.calls += 1
             if self.calls % 500 == 0:  # ménage global : plus rien de plus vieux qu'une heure
                 db.execute(delete(RateHit).where(RateHit.ts < now - timedelta(hours=1)))
-            db.commit()
+            db.commit()  # validé tout de suite : le passage compte même si la requête échoue ensuite
             return ok
         finally:
-            db.close()
+            if own:
+                db.close()
 
 
 def _reject_constant(name: str):
@@ -365,6 +374,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         user.locked_until = utcnow() + timedelta(minutes=settings.lockout_minutes)
         user.failed_attempts = 0
 
+    def sso_only(user: User) -> bool:
+        """SSO obligatoire (KERYX_OIDC_ENFORCE) : seul l'Admin garde une authentification locale [ADR-0017]."""
+        return bool(settings.oidc_enforce and oidc_providers and user.role != "admin")
+
     # ---------------------------------------------------------------- santé
     @app.get("/healthz")
     def healthz():
@@ -374,7 +387,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/v1/auth/login")
     def login(body: LoginIn, request: Request, response: Response, db: DbSession = Depends(get_db)):
         ip = client_ip(request)
-        if not login_ip_limiter.allow(ip) or not login_user_limiter.allow(body.username.lower()):
+        if not login_ip_limiter.allow(ip, db) or not login_user_limiter.allow(body.username.lower(), db):
             raise HTTPException(429, "Trop de tentatives, réessayez plus tard.")
         now = utcnow()
         db.execute(delete(Session).where(Session.expires_at < now))  # ménage des sessions expirées
@@ -389,18 +402,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                          {"ip": ip, "locked": locked})
             commit(db)
             raise HTTPException(401, GENERIC_LOGIN_ERROR)
+        if sso_only(user):
+            # SSO obligatoire (seul l'Admin garde le mot de passe local, accès de secours) : annoncé après la vérification
+            # du mot de passe pour ne pas révéler l'existence des comptes. Aucune session intermédiaire n'est ouverte,
+            # que le compte soit enrôlé ou non : l'enrôlement local donnerait sinon une session complète sans SSO.
+            audit.record(db, user.username, "auth.local_login_refused", "user", user.id, None, {"ip": ip})
+            commit(db)
+            raise HTTPException(403, SSO_ONLY_ERROR)
         token = security.new_token()
         db.add(Session(token_hash=security.sha256(token), user_id=user.id, stage="password",
                        csrf_token=security.new_token(), expires_at=now + timedelta(minutes=5)))
         audit.record(db, user.username, "auth.password_ok", "user", user.id, None, {"ip": ip})
         commit(db)
         _set_cookie(response, SESSION_COOKIE, token, settings, http_only=True, max_age=300)
-        if settings.oidc_enforce and user.role != "admin" and user.enrolled and oidc_providers:
-            # SSO obligatoire (seul l'Admin garde le mot de passe local, accès de secours) : annoncé après la vérification
-            # du mot de passe pour ne pas révéler l'existence des comptes.
-            audit.record(db, user.username, "auth.local_login_refused", "user", user.id, None, {"ip": ip})
-            commit(db)
-            raise HTTPException(403, "La connexion par mot de passe est désactivée : utilisez l'authentification unique (SSO).")
         has_key = bool(db.scalars(select(WebAuthnCredential.id).where(WebAuthnCredential.user_id == user.id).limit(1)).first())
         return {"next": "totp" if user.enrolled else "enroll", "webauthn": has_key and user.enrolled}
 
@@ -449,7 +463,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         user = db.get(User, s.user_id)
         if user is None or not user.active or user.enrolled:
             raise HTTPException(409, "Aucun enrôlement en attente pour ce compte.")
-        if not login_ip_limiter.allow(ip) or not login_user_limiter.allow(user.username.lower()):
+        if sso_only(user):
+            # SSO obligatoire : pas d'enrôlement local pour un compte non Admin (il ouvrirait une session complète).
+            db.delete(s)
+            audit.record(db, user.username, "auth.local_login_refused", "user", user.id, None, {"ip": ip, "etape": "enrolement"})
+            commit(db)
+            raise HTTPException(403, SSO_ONLY_ERROR)
+        if not login_ip_limiter.allow(ip, db) or not login_user_limiter.allow(user.username.lower(), db):
             raise HTTPException(429, "Trop de tentatives, réessayez plus tard.")
         return s, user, ip
 
@@ -497,10 +517,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if s is None or s.stage != "password":
             raise HTTPException(401, "Étape mot de passe requise.")
         user = db.get(User, s.user_id)
-        if not login_ip_limiter.allow(ip) or not login_user_limiter.allow(user.username.lower()):
+        if not login_ip_limiter.allow(ip, db) or not login_user_limiter.allow(user.username.lower(), db):
             raise HTTPException(429, "Trop de tentatives, réessayez plus tard.")
         if not user.enrolled:
             raise HTTPException(401, "Enrôlement de la double authentification requis.")
+        if sso_only(user):  # SSO imposé pendant qu'une session intermédiaire existait encore
+            db.delete(s)
+            audit.record(db, user.username, "auth.local_login_refused", "user", user.id, None, {"ip": ip, "etape": "totp"})
+            commit(db)
+            raise HTTPException(403, SSO_ONLY_ERROR)
         if user.locked_until and as_utc(user.locked_until) > utcnow():
             # Verrouillé : aucune session intermédiaire ne doit permettre de continuer.
             db.execute(delete(Session).where(Session.user_id == user.id, Session.stage == "password"))
@@ -558,12 +583,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     ApiKey.key_hash == security.sha256(authorization[7:].strip()))).first()
             if key is None or key.revoked:
                 # Limite AVANT d'écrire dans l'audit : un inconnu ne peut pas remplir le journal.
-                if ingest_fail_limiter.allow(ip):
+                if ingest_fail_limiter.allow(ip, db):
                     audit.record(db, "anonyme", "ingest.rejected_key", None, None, None, {"ip": ip})
                     commit(db)
                     raise HTTPException(401, "Clé d'API invalide.")
                 raise HTTPException(429, "Trop de tentatives, réessayez plus tard.")
-            if not ingest_limiter.allow(key.id):
+            if not ingest_limiter.allow(key.id, db):
                 raise HTTPException(429, "Débit d'ingestion dépassé.")
             key.last_used_at = utcnow()
             db.commit()
@@ -1161,7 +1186,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         require_role=require_role, require_open=require_open, commit=commit, load_ticket=load_ticket,
         visible_tenant_ids=visible_tenant_ids, event=event, session_from_cookie=_session_from_cookie,
         client_ip=client_ip, assign_ticket=assign_ticket, ticket_summary=ticket_summary, promote=promote,
-        login_ip_limiter=login_ip_limiter, login_user_limiter=login_user_limiter,
+        login_ip_limiter=login_ip_limiter, login_user_limiter=login_user_limiter, sso_only=sso_only,
         count_second_factor_failure=count_second_factor_failure, open_session=open_session,
         set_cookie=_set_cookie, load_attachment=load_attachment, SESSION_COOKIE=SESSION_COOKIE, CSRF_COOKIE=CSRF_COOKIE, oidc_providers=oidc_providers)
     routes_admin.register(app, ctx)
@@ -1177,6 +1202,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     dist = settings.web_dist
     if os.path.isdir(os.path.join(dist, "assets")):
         app.mount("/assets", StaticFiles(directory=os.path.join(dist, "assets")), name="assets")
+
+    @app.get("/favicon.svg", include_in_schema=False)
+    def favicon():
+        # Seul fichier statique servi à la racine : le reste des chemins à extension reçoit un 404 (voir ci-dessous).
+        path = os.path.join(dist, "favicon.svg")
+        if not os.path.isfile(path):
+            raise HTTPException(404, "Ressource introuvable.")
+        return FileResponse(path, media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=86400"})
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa(full_path: str):

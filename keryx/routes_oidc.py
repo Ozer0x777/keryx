@@ -54,7 +54,7 @@ def register(app, ctx) -> None:
         if name not in providers:
             raise HTTPException(404, "Fournisseur d'identité inconnu.")
         ip = ctx.client_ip(request)
-        if not ctx.login_ip_limiter.allow(ip):
+        if not ctx.login_ip_limiter.allow(ip, db):
             raise HTTPException(429, "Trop de tentatives, réessayez plus tard.")
         state, nonce = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
         verifier, challenge = pkce_pair()
@@ -75,7 +75,7 @@ def register(app, ctx) -> None:
         if name not in providers:
             raise HTTPException(404, "Fournisseur d'identité inconnu.")
         ip = ctx.client_ip(request)
-        if not ctx.login_ip_limiter.allow(ip):
+        if not ctx.login_ip_limiter.allow(ip, db):
             raise HTTPException(429, "Trop de tentatives, réessayez plus tard.")
         if error or not code or not state:
             return fail(db, error or "paramètres manquants", "refuse", name, ip)

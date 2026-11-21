@@ -110,8 +110,11 @@ def register(app, ctx) -> None:
         user = db.get(User, s.user_id)
         if user is None or not user.active or not user.enrolled:
             raise HTTPException(401, "Étape mot de passe requise.")
+        if ctx.sso_only(user):  # SSO obligatoire : pas de second facteur local pour un compte non Admin
+            raise HTTPException(403, "La connexion par mot de passe est désactivée : utilisez l'authentification unique (SSO).")
         ip = ctx.client_ip(request)
-        if not ctx.login_ip_limiter.allow(ip) or not ctx.login_user_limiter.allow(user.username.lower()):
+        # La session de la requête est passée au limiteur : elle tient déjà le verrou SQLite (voir DbRateLimiter).
+        if not ctx.login_ip_limiter.allow(ip, db) or not ctx.login_user_limiter.allow(user.username.lower(), db):
             raise HTTPException(429, "Trop de tentatives, réessayez plus tard.")
         return s, user
 
