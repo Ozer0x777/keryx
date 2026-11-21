@@ -74,6 +74,7 @@ export async function login(browser, stack, name) {
   const page = await ctx.newPage()
   page.errors = []
   page.on('pageerror', (e) => page.errors.push(e.message))
+  page.on('console', (m) => { if (/Content Security Policy|Refused to/i.test(m.text())) page.errors.push(`CSP : ${m.text().slice(0, 160)}`) })   // une violation de CSP est une erreur
   await page.goto(`${BASE}/`)
   await page.locator('input').first().fill(name)
   await page.locator('input[type=password]').fill(PASSWORD)

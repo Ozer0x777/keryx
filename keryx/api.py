@@ -257,7 +257,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # setdefault : une route peut imposer une politique plus stricte (pièces servies en ligne).
         response.headers.setdefault(
             "Content-Security-Policy",
-            "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; "
+            "default-src 'self'; img-src 'self' data:; style-src 'self'; style-src-attr 'unsafe-inline'; object-src 'none'; "
             "frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
         )
         if request.url.path.startswith("/api/"):
@@ -1152,6 +1152,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa(full_path: str):
         if full_path.startswith("api/"):
+            raise HTTPException(404, "Ressource introuvable.")
+        # Aucune route de l'interface ne commence par un point ni ne se termine par une extension de fichier : ces
+        # chemins (/.git, /.env, /x.php, /backup.zip…) reçoivent un vrai 404, pas la page d'accueil avec un statut 200.
+        last = full_path.rsplit("/", 1)[-1]
+        if any(seg.startswith(".") for seg in full_path.split("/")) or re.search(r"\.[A-Za-z0-9]{1,8}$", last):
             raise HTTPException(404, "Ressource introuvable.")
         index = os.path.join(dist, "index.html")
         if not os.path.isfile(index):

@@ -8,6 +8,7 @@ import { useEffect, useRef } from 'react'
 export default function RichEditor({ value, onChange, label, onImage, templates, minHeight = 120 }) {
   const fileRef = useRef(null)
   const editor = useEditor({
+    injectCSS: false,  // CSP sans style-src 'unsafe-inline' : les styles de l'éditeur sont dans styles.css
     extensions: [
       StarterKit.configure({ heading: { levels: [2, 3] }, link: { openOnClick: false, protocols: ['https', 'mailto'] } }),
       Image.configure({ inline: false }),

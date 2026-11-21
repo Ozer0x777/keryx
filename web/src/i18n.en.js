@@ -434,4 +434,6 @@ export default {
   "injoignable": "unreachable",
   "ok": "ok",
   "erreur": "error",
+  "Aller au contenu": "Skip to content",
+  "Ticket": "Ticket",
 }

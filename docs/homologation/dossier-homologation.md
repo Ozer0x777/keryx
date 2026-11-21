@@ -27,6 +27,7 @@ Voir `docs/matrice-tracabilite.md` (exigence → fonction → code → test) et 
 ## 4. Ce qui a été vérifié (reproductible)
 - **Tests automatisés** : `python -m pytest` (201 réussis, 8 ignorés faute d'environnement) ; `python scripts/pg_tests.py` sous PostgreSQL 16.2 (201 réussis). Dont `tests/test_security_surface.py` : toutes les routes découvertes automatiquement (96) exigent une authentification sauf une liste justifiée, toutes celles qui modifient exigent le jeton CSRF, aucune route d'administration n'est atteignable par un autre rôle, en-têtes de sécurité et cookies contrôlés, pas d'énumération de comptes.
 - **Parcours navigateur** (Chrome sans tête, base temporaire) : `cd e2e && E2E_KEYCLOAK=http://localhost:8180 node run.mjs` (plus de 100 contrôles : parcours de chaque rôle, mise en page, traduction, accessibilité axe-core sur 19 écrans).
+- **Analyse dynamique OWASP ZAP** (authentifiée, 5 min d'analyse active) : voir `dast-zap.md` ; un constat réel corrigé (CSP), un défaut de forme corrigé (chemins de fichiers), un faux positif démontré et verrouillé par test.
 - **Essais contre de vrais composants** : Keycloak 26.4 (SSO complet, déconnexion unique), PostgreSQL 16.2, Garage 1.0.1 (serveur S3 qui vérifie les signatures), FreeTSA (autorité d'horodatage publique, jeton revérifié par `openssl ts -verify`). Non testé : un vrai ClamAV, un vrai manager Wazuh, une clé WebAuthn physique, une autorité d'horodatage qualifiée eIDAS, un déploiement HTTPS réel derrière proxy.
 
 ## 5. Risques résiduels et limites connues

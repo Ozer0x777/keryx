@@ -26,6 +26,7 @@ export default function Login({ onDone }) {
   const [newPwd, setNewPwd] = useState('')
   const [newPwd2, setNewPwd2] = useState('')
   const [codes, setCodes] = useState(null)
+  useEffect(() => { document.title = `${t('Connexion')} — Keryx` }, [])
   const [providers, setProviders] = useState({ items: [], local_login_enabled: true })
   const ssoError = new URLSearchParams(window.location.search).get('sso_error')
   useEffect(() => { api('/auth/providers').then(setProviders).catch(() => {}) }, [])

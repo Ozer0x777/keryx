@@ -75,7 +75,7 @@ Le conteneur applique `alembic upgrade head` puis démarre. Dépendances install
 python -m pytest -q
 ```
 
-201 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
+209 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
 régressions des revues, migrations, notifications (SMTP simulé, relances), pièces jointes (clamd simulé, EICAR),
 administration, confort de travail, pilotage, conformité, sauvegarde, script d'intégration Wazuh.
 
@@ -123,7 +123,7 @@ Matrice complète : `docs/matrice-tracabilite.md` · exploitation : `docs/exploi
 
 - Limites de débit en mémoire, par processus : un seul processus uvicorn tant qu'elles ne sont pas partagées (ADR-0010).
 - Quarantaine : archive ZIP chiffrée (mot de passe « infected ») ; les pièces mises en quarantaine avant cette version restent stockées telles quelles (ADR-0019).
-- PostgreSQL 16 : la suite complète passe (201 tests, dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore). Non testé : haute disponibilité, réplication, très gros volumes.
+- PostgreSQL 16 : la suite complète passe (209 tests, dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore). Non testé : haute disponibilité, réplication, très gros volumes.
 - Jamais testé contre un vrai manager Wazuh (le script d'intégration est testé avec un serveur simulé).
 - Interface testée dans Chrome sans tête (parcours de chaque rôle) et contrôlée avec axe-core (WCAG 2.1 A/AA) ; pas d'audit RGAA complet ni de test d'intrusion.
 - Restent en français par construction, même en mode anglais : le corps de ticket généré par le serveur à partir de l'alerte Wazuh (libellés « Règle », « Décodeur »…), les lignes techniques du registre des actions (codes d'action et clés de détail) et les noms de langues.

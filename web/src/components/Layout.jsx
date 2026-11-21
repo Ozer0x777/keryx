@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { useEffect } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../App.jsx'
 import { t, t as tr } from '../i18n.js'
 import { ROLES } from '../labels.js'
@@ -14,7 +15,20 @@ function Shield() {
   )
 }
 
+// Titre de page propre à chaque écran (RGAA 8.5) : « Écran — Keryx ».
+const TITLES = [
+  [/^\/tickets\/[^/]+\/rapport/, "Rapport d'incident"], [/^\/tickets\/[^/]+/, 'Ticket'], [/^\/tickets/, 'Tickets'], [/^\/kanban/, 'Kanban'],
+  [/^\/pilotage/, 'Pilotage'], [/^\/rapports/, 'Rapports'], [/^\/mitre/, 'Table MITRE'], [/^\/audit/, "Journal d'audit"], [/^\/profil/, 'Mon profil'],
+  [/^\/admin\/comptes/, 'Comptes'], [/^\/admin\/clients/, 'Clients'], [/^\/admin\/cles/, "Clés d'API"], [/^\/admin\/mitre/, 'MITRE'],
+  [/^\/admin\/revue/, 'Revue des comptes'], [/^\/admin\/audit/, "Journal d'audit"], [/^\/admin\/systeme/, 'État du système'], [/^\/admin/, 'Administration'],
+]
+
 export default function Layout() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    const hit = TITLES.find(([re]) => re.test(pathname))
+    document.title = hit ? `${t(hit[1])} — Keryx` : 'Keryx'
+  }, [pathname])
   const { me, logout } = useAuth()
   const initials = me.display_name.split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase()
   const links = me.role === 'admin'
@@ -24,6 +38,7 @@ export default function Layout() {
       : [['/tickets', t('Tickets')], ['/kanban', t('Kanban')], ['/pilotage', t('Pilotage')], ['/rapports', t('Rapports')], ...(me.role === 'manager' ? [['/mitre', t('Table MITRE')], ['/audit', t("Journal d'audit")]] : [])]
   return (
     <div className="shell">
+      <a className="skip" href="#contenu">{t('Aller au contenu')}</a>
       <nav className="sidebar" aria-label={t('Navigation principale')}>
         <div className="brand"><Shield /><span>{tr("Keryx")}</span></div>
         <div className="nav-section">{{ client: t('Portail client'), admin: t('Administration') }[me.role] || t('Détection')}</div>
@@ -41,7 +56,7 @@ export default function Layout() {
         </div>
         <button type="button" className="nav-logout" onClick={logout}>{t('Se déconnecter')}</button>
       </nav>
-      <main className="content">
+      <main className="content" id="contenu" tabIndex={-1}>
         <Outlet />
       </main>
     </div>
