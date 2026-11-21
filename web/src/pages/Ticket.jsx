@@ -63,9 +63,10 @@ export default function Ticket() {
   if (!t) return <p className="loading">{tr("Chargement…")}</p>
   const open = ['nouveau', 'en_evaluation', 'en_reponse'].includes(t.status)
 
-  // visible : l'image n'est montrée au client que si le contenu qui l'embarque l'est aussi.
-  const uploadImage = async (file, visible = false) => {
-    const description = window.prompt("Description de l'image (registre de collecte)", tr("Capture d'écran"))
+  // Image insérée depuis l'éditeur : déposée sans visibilité client (embedded). Le serveur la rend visible au moment où
+  // un contenu visible par le client (commentaire visible, description) qui la référence est enregistré.
+  const uploadImage = async (file) => {
+    const description = window.prompt(tr("Description de l'image (registre de collecte)"), tr("Capture d'écran"))
     if (!description) return null
     const form = new FormData()
     form.append('file', file)
@@ -73,7 +74,7 @@ export default function Ticket() {
     form.append('collected_at', new Date().toISOString())
     form.append('method', isClient ? tr('Capture fournie par le client') : tr("Capture d'écran par l'analyste"))
     form.append('sensitivity', t.tlp)
-    form.append('visible_client', visible || isClient ? 'true' : 'false')
+    form.append('embedded', 'true')
     try {
       const a = await api(`/tickets/${enc}/attachments`, { method: 'POST', form })
       await load()
@@ -127,10 +128,10 @@ export default function Ticket() {
       <div className="ticket-layout">
         <div className="ticket-main">
           {isTeam && <Crisis t={t} enc={enc} isManager={me.role === 'manager'} open={open} onChange={load} />}
-          <Description t={t} enc={enc} canEdit={isTeam && open} run={run} onImage={(f) => uploadImage(f, true)} />
+          <Description t={t} enc={enc} canEdit={isTeam && open} run={run} onImage={uploadImage} />
           {isTeam && <AlertBlock t={t} />}
           <Attachments t={t} enc={enc} me={me} run={run} setNotice={setNotice} />
-          {isTeam && <Synthese t={t} enc={enc} run={run} onImage={(f) => uploadImage(f, false)} templates={templates('synthese')} />}
+          {isTeam && <Synthese t={t} enc={enc} run={run} onImage={uploadImage} templates={templates('synthese')} />}
           <Events t={t} />
           <Comments t={t} enc={enc} isClient={isClient} run={run} onImage={uploadImage} templates={templates('commentaire')} />
         </div>
@@ -405,7 +406,7 @@ function Comments({ t, enc, isClient, run, onImage, templates }) {
         </div>
       ))}
       <h3>{isClient ? tr('Votre réponse') : tr('Nouveau commentaire')}</h3>
-      <RichEditor value={html} onChange={setHtml} label={tr("Nouveau commentaire")} templates={templates} onImage={(f) => onImage(f, isClient || visible)} />
+      <RichEditor value={html} onChange={setHtml} label={tr("Nouveau commentaire")} templates={templates} onImage={onImage} />
       <div className="row gap between">
         {!isClient ? <label className="check"><input type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)} /> {tr("Visible par le client")}</label> : <span />}
         <div className="row gap">

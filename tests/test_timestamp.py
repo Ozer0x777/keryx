@@ -218,3 +218,19 @@ def test_autorite_reelle_de_l_ue_certum_si_reseau():
     ca = str(CERTUM / "ctnca.pem")
     r = ts.stamp("http://time.certum.pl", msg, ca, policy_oid="1.2.616.1.113527.2.5.1.11")
     assert ts.verify(r["token"], msg, ca) == r["gen_time"]
+
+
+def test_jeton_d_une_piece_interne_invisible_pour_le_client(stamped_app, db, world, alert):
+    """Les droits sur un jeton sont ceux de la pièce : le client du même client ne lit ni ne vérifie le jeton d'une pièce
+    interne, seulement celui d'une pièce qui lui est visible."""
+    a, interne = attachment(stamped_app, db, world, alert)               # pièce interne (non visible par le client)
+    visible = a.post("/api/v1/tickets/ACME-1/attachments", data={**REGISTRY, "visible_client": "true"},
+                     files={"file": ("v.zip", zip_bytes("v.log"), "application/zip")}).json()
+    t_interne = a.post(f"/api/v1/attachments/{interne['id']}/timestamp").json()["id"]
+    t_visible = a.post(f"/api/v1/attachments/{visible['id']}/timestamp").json()["id"]
+    c = login(stamped_app, db, "client_acme")
+    assert c.get(f"/api/v1/timestamps/{t_interne}/token").status_code == 404
+    assert c.post(f"/api/v1/timestamps/{t_interne}/verify").status_code == 404
+    assert c.get(f"/api/v1/attachments/{interne['id']}/timestamps").status_code == 404
+    assert c.get(f"/api/v1/timestamps/{t_visible}/token").status_code == 200
+    assert c.post(f"/api/v1/timestamps/{t_visible}/verify").json()["valid"] is True

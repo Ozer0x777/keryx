@@ -69,6 +69,8 @@ def problem(status: int, title: str, detail: str | None = None) -> JSONResponse:
 
 
 MAX_VERSION_CHARS = 20_000
+# Adresse d'une pièce citée dans un contenu riche (image insérée depuis l'éditeur).
+EMBEDDED_ATTACHMENT = re.compile(r"/api/v1/attachments/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/content")
 
 
 class RateLimiter:
@@ -812,6 +814,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"items": [{"username": u.username, "display_name": u.display_name}
                           for u in users if tenant in u.tenants]}
 
+    def reveal_embedded_images(db: DbSession, t: Ticket, user: User, html: str, origine: str) -> None:
+        """Images insérées depuis l'éditeur : déposées sans visibilité client, elles ne deviennent visibles qu'ici, quand
+        un contenu montré au client (commentaire visible, description) les référence. La visibilité est donc décidée par
+        le serveur à l'enregistrement du contenu, jamais par l'état d'une case au moment du dépôt. Un client ne peut pas
+        rendre visible une pièce interne en citant son adresse ; une pièce d'un autre ticket n'est jamais concernée."""
+        if user.role not in ("analyst", "manager"):
+            return
+        ids = set(EMBEDDED_ATTACHMENT.findall(html or ""))
+        if not ids:
+            return
+        rows = db.scalars(select(Attachment).where(
+            Attachment.id.in_(ids), Attachment.ticket_id == t.id, Attachment.kind == "image",
+            Attachment.visible_client.is_(False), Attachment.scan_status != "quarantaine")).all()
+        for a in rows:
+            a.visible_client = True
+            db.add(CustodyEvent(attachment_id=a.id, actor=user.username, action="visible_client", reason=origine))
+            event(db, t, user, "piece_jointe_visible", {"id": a.id, "sha256": a.sha256, "origine": origine},
+                  visible_client=True)
+
     def notify_comment(db: DbSession, t: Ticket, author: User, html: str, visible: bool) -> None:
         """Mentions @identifiant (agents du SOC affectés au client) et réponse d'un client à l'équipe."""
         plain = re.sub(r"<[^>]+>", " ", html)
@@ -839,6 +860,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(422, "Commentaire vide.")
         db.add(Comment(ticket_id=t.id, author_id=user.id, body_html=clean, visible_client=visible))
         audit.record(db, user.username, "ticket.comment", "ticket", t.ref, t.tenant_id, {"visible_client": visible})
+        if visible:  # un commentaire interne ne rend jamais visibles les images qu'il contient
+            reveal_embedded_images(db, t, user, clean, "commentaire visible par le client")
         notify_comment(db, t, user, clean, visible)
         commit(db)
         return {"ref": t.ref, "visible_client": visible, "body_html": clean}
@@ -861,6 +884,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "version_precedente_longueur": len(previous or ""),
             "tronquee": len(previous or "") > MAX_VERSION_CHARS,
         })
+        reveal_embedded_images(db, t, user, t.body_html, "description du ticket")  # la description est lue par le client
         commit(db)
         return {"ref": t.ref, "body_html": t.body_html}
 
@@ -954,9 +978,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                           description: str = Form(min_length=3, max_length=5000),
                           collected_at: datetime = Form(...), method: str = Form(min_length=3, max_length=500),
                           sensitivity: str = Form("TLP:AMBER"), visible_client: bool = Form(False),
+                          embedded: bool = Form(False),
                           user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         t = load_ticket(db, user, ref)
         require_open(t)  # chaîne de possession figée sur un ticket clos [ISO/IEC 27037]
+        if embedded:
+            # Image insérée depuis l'éditeur : jamais visible au dépôt ; elle le devient à l'enregistrement d'un contenu
+            # visible qui la référence (voir reveal_embedded_images). Le dépôt d'un client reste visible par le client.
+            visible_client = False
         if sensitivity not in TLP:
             raise HTTPException(422, f"Sensibilité attendue parmi : {', '.join(TLP)}.")
         declared = request.headers.get("content-length")

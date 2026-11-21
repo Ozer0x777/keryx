@@ -65,6 +65,12 @@ def register(app, ctx) -> None:
             raise HTTPException(404, "Jeton introuvable.")
         if row.object_type == "audit":
             require_role(user, "admin")
+        elif row.object_type == "attachment":
+            # Les droits sont ceux de la pièce (client du même client : pièces visibles seulement ; Admin : aucune).
+            try:
+                ctx.load_attachment(db, user, row.object_id)
+            except HTTPException:
+                raise HTTPException(404, "Jeton introuvable.") from None
         elif row.tenant_id not in ctx.visible_tenant_ids(user):
             raise HTTPException(404, "Jeton introuvable.")
         return row

@@ -48,7 +48,7 @@ export default function Mitre() {
           <h3 style={{ marginTop: 0 }}>{tr("Propositions")}</h3>
           <p className="muted small">{tr("Ces techniques ont été ajoutées à la main sur plusieurs tickets de la même règle. Les ajouter à la table évite de les saisir à chaque fois.")}</p>
           <ul className="found">{sugg.map((s) => (
-            <li key={s.rule_id + s.technique}>{tr("règle")} <span className="mono">{s.rule_id}</span> ({s.rule_description}) → <span className="mono">{s.technique}</span> {s.name} · {s.count} correction(s)
+            <li key={s.rule_id + s.technique}>{tr("règle")} <span className="mono">{s.rule_id}</span>{s.rule_description ? ` (${s.rule_description})` : ''} → <span className="mono">{s.technique}</span> {s.name} · {tr('{n} correction(s)', { n: s.count })}
               {' '}<button type="button" className="small-btn" onClick={() => accept(s)}>{tr("Ajouter à la table")}</button></li>))}</ul>
         </div>
       )}
