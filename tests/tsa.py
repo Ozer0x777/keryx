@@ -53,7 +53,7 @@ class Tsa:
     """Serveur HTTP local qui répond aux demandes RFC 3161 avec « openssl ts -reply »."""
 
     def __init__(self, d: str):
-        self.d, self.mode, self.calls = str(d), "ok", 0
+        self.d, self.mode, self.calls, self.auth = str(d), "ok", 0, None   # auth : « identifiant:mot de passe » exigé en Basic
         outer = self
 
         class H(BaseHTTPRequestHandler):
@@ -62,6 +62,10 @@ class Tsa:
 
             def do_POST(self):
                 outer.calls += 1
+                if outer.auth:
+                    import base64
+                    if self.headers.get("Authorization") != "Basic " + base64.b64encode(outer.auth.encode()).decode():
+                        self.send_response(401); self.end_headers(); return
                 body = self.rfile.read(int(self.headers["Content-Length"]))
                 if outer.mode == "500":
                     self.send_response(500); self.end_headers(); return

@@ -30,7 +30,8 @@ def register(app, ctx) -> None:
     def issue(db: DbSession, user: User, object_type: str, object_id: str, digest: str, tenant_id: str | None) -> Timestamp:
         message = ts.message_for(object_type, object_id, digest)
         try:
-            r = ts.stamp(settings.tsa_url, message, settings.tsa_ca_file)
+            r = ts.stamp(settings.tsa_url, message, settings.tsa_ca_file, http=ts.make_client(settings),
+                         policy_oid=settings.tsa_policy_oid)
         except ts.TimestampError as exc:
             raise HTTPException(502, str(exc))
         row = Timestamp(object_type=object_type, object_id=object_id, tenant_id=tenant_id, message=message.decode(),
@@ -80,7 +81,7 @@ def register(app, ctx) -> None:
         """Revérifie le jeton conservé : signature, chaîne jusqu'aux certificats configurés, message."""
         row = readable(db, user, tid)
         try:
-            when = ts.verify(row.token, row.message.encode(), settings.tsa_ca_file)
+            when = ts.verify(row.token, row.message.encode(), settings.tsa_ca_file, settings.tsa_policy_oid)
         except ts.TimestampError as exc:
             return {"valid": False, "error": str(exc)}
         return {"valid": True, "gen_time": rfc3339(when)}

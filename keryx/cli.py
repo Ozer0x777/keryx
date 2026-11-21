@@ -34,7 +34,18 @@ def _session(settings: Settings):
     return make_session_factory(engine)()
 
 
+_OPEN: list = []   # sessions ouvertes par une commande, fermées à sa fin (utile quand main() est appelée dans un processus qui continue)
+
+
 def main(argv: list[str] | None = None) -> int:
+    try:
+        return _main(argv)
+    finally:
+        while _OPEN:
+            _OPEN.pop().close()
+
+
+def _main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="keryx")
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("init-db")
@@ -45,6 +56,9 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("restore", help="Restaure une sauvegarde dans un dossier vide et vérifie l'audit")
     r.add_argument("file"); r.add_argument("--to", required=True)
     r.add_argument("--pg-url", help="PostgreSQL : URL d'une base VIDE où restaurer (sauvegarde PostgreSQL)")
+    sub.add_parser("migrate-attachments", help="Copie les pièces du disque vers le stockage objet (KERYX_STORAGE=s3 à configurer), avec vérification").add_argument(
+        "--dry-run", action="store_true")
+    sub.add_parser("tsa-check", help="Essaie l'autorité d'horodatage configurée (demande, vérification, politique, certificat)")
     sub.add_parser("import-mitre", help="Importe le référentiel ATT&CK (fichier STIX 2.1)").add_argument("file")
     u = sub.add_parser("add-user")
     u.add_argument("username"); u.add_argument("display_name"); u.add_argument("role", choices=ROLES)
@@ -68,6 +82,7 @@ def main(argv: list[str] | None = None) -> int:
     box = security.SecretBox(settings.secret_key)
     audit.configure(settings.secret_key)
     db = _session(settings)
+    _OPEN.append(db)
     actor = f"cli:{os.environ.get('USER', 'admin')}"
 
     if args.cmd == "init-db":
@@ -186,6 +201,59 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Restauration dans {args.to} : {info['files']} fichiers, empreintes vérifiées. "
               + ("Chaîne d'audit intègre." if ok else f"CHAÎNE D'AUDIT ROMPUE à l'entrée {bad}."))
         return 0 if ok else 1
+
+    if args.cmd == "migrate-attachments":
+        from sqlalchemy import select as _select
+        from . import attachments as att
+        from .models import Attachment
+        from .s3store import StorageError
+        if settings.storage_backend != "s3":
+            print("Configurer d'abord KERYX_STORAGE=s3 et KERYX_S3_* (destination).", file=sys.stderr)
+            return 2
+        objects = att.object_store(settings)
+        done = skipped = failed = 0
+        for a in db.scalars(_select(Attachment).where(Attachment.storage_name.is_not(None), Attachment.lifecycle == "conserve")):
+            quarantined = a.scan_status == "quarantaine"
+            path = att._path(settings, a.storage_name, quarantined)
+            if not os.path.exists(path):
+                skipped += 1  # déjà dans le stockage objet, ou fichier absent du disque
+                continue
+            with open(path, "rb") as f:
+                content = f.read()
+            key = att._object_key(objects, a.storage_name, quarantined)
+            try:
+                if not args.dry_run:
+                    objects.put(key, content)
+                    if objects.get(key) != content:      # relecture : l'objet déchiffré doit être identique au fichier
+                        raise StorageError("relecture différente")
+                done += 1
+            except StorageError as exc:
+                failed += 1
+                print(f"ÉCHEC {a.id} ({a.filename}) : {exc}", file=sys.stderr)
+        print(f"{done} pièce(s) copiée(s){' (simulation)' if args.dry_run else ' et relue(s)'}, {skipped} ignorée(s), {failed} en échec. "
+              "Les fichiers du disque ne sont PAS supprimés : les garder jusqu'à validation.")
+        return 1 if failed else 0
+
+    if args.cmd == "tsa-check":
+        from . import timestamping as ts
+        if not settings.tsa_url:
+            print("KERYX_TSA_URL non défini.", file=sys.stderr)
+            return 2
+        msg = ts.message_for("essai", "tsa-check", "00" * 32)
+        try:
+            r = ts.stamp(settings.tsa_url, msg, settings.tsa_ca_file, http=ts.make_client(settings), policy_oid=settings.tsa_policy_oid)
+            when = ts.verify(r["token"], msg, settings.tsa_ca_file, settings.tsa_policy_oid)
+        except ts.TimestampError as exc:
+            print(f"ÉCHEC : {exc}", file=sys.stderr)
+            return 1
+        from rfc3161_client import decode_timestamp_response
+        info = decode_timestamp_response(r["token"]).tst_info
+        print(f"OK : horodatage obtenu et vérifié (chaîne jusqu'aux certificats de KERYX_TSA_CA_FILE).\n"
+              f"  Heure attestée : {when.isoformat()}\n  Série          : {r['serial']}\n  Politique (OID): {info.policy}\n"
+              f"  Autorité       : {settings.tsa_url}\n  Taille du jeton: {len(r['token'])} octets")
+        if not settings.tsa_policy_oid:
+            print("  Conseil : fixer KERYX_TSA_POLICY_OID à l'OID ci-dessus (celui que le prestataire annonce pour son service qualifié).")
+        return 0
 
     if args.cmd == "purge":
         from . import retention

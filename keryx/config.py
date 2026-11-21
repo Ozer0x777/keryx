@@ -98,6 +98,14 @@ class Settings:
     # certificats d'autorité (racine, et intermédiaires éventuels). Désactivé si l'URL est vide.
     tsa_url: str | None = field(default_factory=lambda: os.environ.get("KERYX_TSA_URL") or None)
     tsa_ca_file: str | None = field(default_factory=lambda: os.environ.get("KERYX_TSA_CA_FILE") or None)
+    # Authentification auprès de l'autorité (les prestataires qualifiés l'exigent presque toujours) : identifiant et mot de
+    # passe (HTTP Basic), OU jeton (Bearer), OU certificat client (TLS mutuel) ; et politique d'horodatage attendue (OID).
+    tsa_user: str | None = field(default_factory=lambda: os.environ.get("KERYX_TSA_USER") or None)
+    tsa_password: str | None = field(default_factory=lambda: os.environ.get("KERYX_TSA_PASSWORD") or None)
+    tsa_bearer: str | None = field(default_factory=lambda: os.environ.get("KERYX_TSA_BEARER") or None)
+    tsa_client_cert: str | None = field(default_factory=lambda: os.environ.get("KERYX_TSA_CLIENT_CERT") or None)
+    tsa_client_key: str | None = field(default_factory=lambda: os.environ.get("KERYX_TSA_CLIENT_KEY") or None)
+    tsa_policy_oid: str | None = field(default_factory=lambda: os.environ.get("KERYX_TSA_POLICY_OID") or None)
 
     # Interface web (fichiers construits par Vite)
     web_dist: str = field(default_factory=lambda: os.environ.get(

@@ -55,7 +55,7 @@ Le conteneur applique `alembic upgrade head` puis démarre. Dépendances install
 | `KERYX_DATABASE_URL` | SQLite (tests) ou PostgreSQL, ex. `postgresql+psycopg://u:p@hôte/base` (production) | `sqlite:///./keryx.db` |
 | `KERYX_OIDC_PROVIDERS`, `KERYX_OIDC_ENFORCE`, `KERYX_OIDC_REQUIRED_ACR`, `KERYX_OIDC_ALLOW_HTTP` | SSO OpenID Connect (Keycloak), voir `docs/exploitation.md` et ADR-0017 | désactivé |
 | `KERYX_STORAGE`, `KERYX_S3_*`, `KERYX_QUARANTINE_PASSWORD` | Stockage objet S3 chiffré avant envoi ; mot de passe de l'archive de quarantaine, voir ADR-0019 | disque ; « infected » |
-| `KERYX_TSA_URL`, `KERYX_TSA_CA_FILE` | Horodatage de confiance RFC 3161 (autorité à choisir dans l'UE), voir ADR-0018 | désactivé |
+| `KERYX_TSA_URL`, `KERYX_TSA_CA_FILE`, `KERYX_TSA_USER`/`_PASSWORD`/`_BEARER`/`_CLIENT_CERT`/`_CLIENT_KEY`, `KERYX_TSA_POLICY_OID` | Horodatage de confiance RFC 3161 (autorité à choisir dans l'UE), voir ADR-0018 | désactivé |
 | `KERYX_LOGIN_USER_LIMIT` | Tentatives de connexion par identifiant et par 5 minutes | 10 |
 | `KERYX_LOGIN_IP_LIMIT` | Tentatives de connexion par adresse IP et par 5 minutes | 30 |
 | `KERYX_RATE_LIMIT_BACKEND` | `memory` (par processus) ou `db` (partagée entre processus) | `db` si PostgreSQL |
@@ -75,7 +75,7 @@ Le conteneur applique `alembic upgrade head` puis démarre. Dépendances install
 python -m pytest -q
 ```
 
-209 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
+215 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
 régressions des revues, migrations, notifications (SMTP simulé, relances), pièces jointes (clamd simulé, EICAR),
 administration, confort de travail, pilotage, conformité, sauvegarde, script d'intégration Wazuh.
 
@@ -123,7 +123,7 @@ Matrice complète : `docs/matrice-tracabilite.md` · exploitation : `docs/exploi
 
 - Limites de débit en mémoire, par processus : un seul processus uvicorn tant qu'elles ne sont pas partagées (ADR-0010).
 - Quarantaine : archive ZIP chiffrée (mot de passe « infected ») ; les pièces mises en quarantaine avant cette version restent stockées telles quelles (ADR-0019).
-- PostgreSQL 16 : la suite complète passe (209 tests, dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore). Non testé : haute disponibilité, réplication, très gros volumes.
+- PostgreSQL 16 : la suite complète passe (215 tests, dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore). Non testé : haute disponibilité, réplication, très gros volumes.
 - Jamais testé contre un vrai manager Wazuh (le script d'intégration est testé avec un serveur simulé).
 - Interface testée dans Chrome sans tête (parcours de chaque rôle) et contrôlée avec axe-core (WCAG 2.1 A/AA) ; pas d'audit RGAA complet ni de test d'intrusion.
 - Restent en français par construction, même en mode anglais : le corps de ticket généré par le serveur à partir de l'alerte Wazuh (libellés « Règle », « Décodeur »…), les lignes techniques du registre des actions (codes d'action et clés de détail) et les noms de langues.

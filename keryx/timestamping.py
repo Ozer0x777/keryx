@@ -41,8 +41,10 @@ def load_authorities(pem_path: str | None) -> tuple[list[x509.Certificate], list
     return roots, [c for c in certs if c.issuer != c.subject]
 
 
-def _verifier(request, roots, intermediates):
+def _verifier(request, roots, intermediates, policy_oid: str | None = None):
     b = VerifierBuilder.from_request(request) if request is not None else VerifierBuilder()
+    if policy_oid:
+        b = b.policy_id(x509.ObjectIdentifier(policy_oid))   # la réponse doit porter la politique attendue
     for r in roots:
         b = b.add_root_certificate(r)
     for i in intermediates:
@@ -50,7 +52,20 @@ def _verifier(request, roots, intermediates):
     return b.build()
 
 
-def stamp(tsa_url: str, message: bytes, ca_file: str | None, http: httpx.Client | None = None) -> dict:
+def make_client(settings) -> httpx.Client:
+    """Client HTTP vers l'autorité, avec l'authentification configurée (Basic, Bearer ou certificat client)."""
+    kwargs: dict = {"timeout": HTTP_TIMEOUT, "follow_redirects": False}
+    if settings.tsa_user and settings.tsa_password:
+        kwargs["auth"] = httpx.BasicAuth(settings.tsa_user, settings.tsa_password)
+    elif settings.tsa_bearer:
+        kwargs["headers"] = {"Authorization": f"Bearer {settings.tsa_bearer}"}
+    if settings.tsa_client_cert:
+        kwargs["cert"] = (settings.tsa_client_cert, settings.tsa_client_key) if settings.tsa_client_key else settings.tsa_client_cert
+    return httpx.Client(**kwargs)
+
+
+def stamp(tsa_url: str, message: bytes, ca_file: str | None, http: httpx.Client | None = None,
+          policy_oid: str | None = None) -> dict:
     roots, inter = load_authorities(ca_file)
     request = (TimestampRequestBuilder().data(message).hash_algorithm(HashAlgorithm.SHA256)
                .nonce(nonce=True).cert_request(cert_request=True).build())
@@ -59,6 +74,8 @@ def stamp(tsa_url: str, message: bytes, ca_file: str | None, http: httpx.Client 
         r = client.post(tsa_url, content=request.as_bytes(), headers={"Content-Type": "application/timestamp-query"})
     except httpx.HTTPError as exc:
         raise TimestampError("L'autorité d'horodatage est injoignable.") from exc
+    if r.status_code in (401, 403):
+        raise TimestampError("L'autorité d'horodatage refuse l'authentification (vérifier KERYX_TSA_USER / _PASSWORD / _BEARER / certificat client).")
     if r.status_code != 200:
         raise TimestampError(f"L'autorité d'horodatage a répondu {r.status_code}.")
     try:
@@ -68,7 +85,7 @@ def stamp(tsa_url: str, message: bytes, ca_file: str | None, http: httpx.Client 
     if response.status not in (PKIStatus.GRANTED, PKIStatus.GRANTED_WITH_MODS):
         raise TimestampError("L'autorité d'horodatage a refusé la demande.")
     try:
-        _verifier(request, roots, inter).verify_message(response, message)
+        _verifier(request, roots, inter, policy_oid).verify_message(response, message)
     except (VerificationError, ValueError) as exc:
         raise TimestampError(f"Réponse de l'autorité d'horodatage non valide : {exc}") from exc
     info = response.tst_info
@@ -76,12 +93,12 @@ def stamp(tsa_url: str, message: bytes, ca_file: str | None, http: httpx.Client 
     return {"token": response.as_bytes(), "gen_time": gen, "serial": str(info.serial_number)}
 
 
-def verify(token: bytes, message: bytes, ca_file: str | None) -> dt.datetime:
+def verify(token: bytes, message: bytes, ca_file: str | None, policy_oid: str | None = None) -> dt.datetime:
     """Revérifie un jeton conservé (signature et chaîne) et renvoie l'heure attestée. Lève TimestampError sinon."""
     roots, inter = load_authorities(ca_file)
     try:
         response = decode_timestamp_response(token)
-        _verifier(None, roots, inter).verify_message(response, message)
+        _verifier(None, roots, inter, policy_oid).verify_message(response, message)
     except (VerificationError, ValueError) as exc:
         raise TimestampError(f"Jeton d'horodatage non valide : {exc}") from exc
     t = response.tst_info.gen_time

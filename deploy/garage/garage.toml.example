@@ -1,0 +1,20 @@
+# Garage (stockage objet compatible S3, auto-hébergé) pour les pièces de Keryx. Exemple d'un seul nœud.
+# Garage est un logiciel libre développé par l'association Deuxfleurs (France) : https://garagehq.deuxfleurs.fr
+# Production : au moins 3 nœuds sur 3 sites (replication_factor = 3) pour tolérer la perte d'un nœud.
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "lmdb"
+replication_factor = 1               # 3 en production
+
+rpc_bind_addr = "127.0.0.1:3901"
+rpc_public_addr = "127.0.0.1:3901"
+rpc_secret = "REMPLACER_PAR_openssl_rand_-hex_32"
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "127.0.0.1:3900"     # à exposer en HTTPS par un proxy TLS : Keryx exige HTTPS pour l'adresse du stockage
+root_domain = ".s3.garage.interne"
+
+[admin]
+api_bind_addr = "127.0.0.1:3903"
+admin_token = "REMPLACER_PAR_openssl_rand_-base64_32"

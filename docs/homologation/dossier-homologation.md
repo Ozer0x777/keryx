@@ -40,7 +40,7 @@ Voir `docs/matrice-tracabilite.md` (exigence → fonction → code → test) et 
 - Les alertes d'un manager Wazuh muet ne sont signalées qu'à l'administrateur (bandeau), pas notifiées.
 
 ## 6. À décider ou fournir par l'organisation
-Durées de conservation (DPO) ; autorité d'horodatage (qualifiée eIDAS, dans l'UE) ; hébergeur et proxy TLS (TLS 1.2 minimum) ; politique de mots de passe et de rotation des clés d'API ; configuration MFA du realm Keycloak ; stratégie de sauvegarde (fréquence, lieu, test de restauration) ; supervision de Keryx lui-même ; niveau de sécurité visé (PRIS substantiel, compatible élevé) et commission d'homologation.
+Durées de conservation (DPO) ; autorité d'horodatage : **prestataire qualifié eIDAS de l'UE retenu**, à désigner dans la liste de confiance (guide : `docs/horodatage-qualifie.md`) ; stockage des pièces : **Garage auto-hébergé retenu** (guide : `docs/deploiement-stockage-garage.md`) ; hébergeur et proxy TLS (TLS 1.2 minimum) ; politique de mots de passe et de rotation des clés d'API ; configuration MFA du realm Keycloak ; stratégie de sauvegarde (fréquence, lieu, test de restauration) ; supervision de Keryx lui-même ; niveau de sécurité visé (PRIS substantiel, compatible élevé) et commission d'homologation.
 
 ## 7. Prestations externes à commander
 1. **Audit d'accessibilité RGAA** : voir `rgaa.md`.

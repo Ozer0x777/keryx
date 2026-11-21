@@ -134,3 +134,48 @@ def test_autorite_reelle(tmp_path):
         out = subprocess.run(["openssl", "ts", "-verify", "-in", str(tmp_path / "t.tsr"), "-data", str(tmp_path / "m.txt"), "-CAfile", ca],
                              capture_output=True, text=True)
         assert "Verification: OK" in out.stdout + out.stderr
+
+
+def test_autorite_exigeant_une_authentification(settings, authority):
+    srv, ca = authority
+    srv.auth = "keryx:mot-de-passe-tsa"
+    msg = ts.message_for("attachment", "x", "ab" * 32)
+    with pytest.raises(ts.TimestampError, match="refuse l'authentification"):
+        ts.stamp(srv.url, msg, ca)                                      # sans identifiants
+    settings.tsa_user, settings.tsa_password = "keryx", "faux"
+    with pytest.raises(ts.TimestampError, match="authentification"):
+        ts.stamp(srv.url, msg, ca, http=ts.make_client(settings))
+    settings.tsa_password = "mot-de-passe-tsa"
+    assert ts.stamp(srv.url, msg, ca, http=ts.make_client(settings))["serial"]
+    # Jeton « Bearer » : en-tête envoyé tel quel (l'autorité de test n'accepte que Basic : refus attendu)
+    settings.tsa_user = settings.tsa_password = None
+    settings.tsa_bearer = "jeton"
+    with pytest.raises(ts.TimestampError, match="authentification"):
+        ts.stamp(srv.url, msg, ca, http=ts.make_client(settings))
+
+
+def test_politique_d_horodatage_attendue(authority):
+    srv, ca = authority
+    msg = ts.message_for("attachment", "x", "ab" * 32)
+    r = ts.stamp(srv.url, msg, ca, policy_oid="1.2.3.4.1")            # la politique de l'autorité de test
+    assert ts.verify(r["token"], msg, ca, "1.2.3.4.1") == r["gen_time"]
+    with pytest.raises(ts.TimestampError):
+        ts.stamp(srv.url, msg, ca, policy_oid="1.2.3.9.9")            # autre politique : réponse refusée
+    with pytest.raises(ts.TimestampError):
+        ts.verify(r["token"], msg, ca, "1.2.3.9.9")
+
+
+def test_chaine_complete_via_l_application_avec_authentification(settings, authority, db, world, alert):
+    srv, ca = authority
+    srv.auth = "keryx:secret"
+    settings.tsa_url, settings.tsa_ca_file = srv.url, ca
+    settings.tsa_user, settings.tsa_password, settings.tsa_policy_oid = "keryx", "secret", "1.2.3.4.1"
+    app = create_app(settings)
+    a, att = attachment(app, db, world, alert)
+    r = a.post(f"/api/v1/attachments/{att['id']}/timestamp")
+    assert r.status_code == 201, r.text
+    assert a.post(f"/api/v1/timestamps/{r.json()['id']}/verify").json()["valid"] is True
+    settings.tsa_password = "faux"
+    app2 = create_app(settings)
+    bad = login(app2, db, "analyst_acme").post(f"/api/v1/attachments/{att['id']}/timestamp")
+    assert bad.status_code == 502 and "authentification" in bad.json()["detail"]
