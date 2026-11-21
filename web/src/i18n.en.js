@@ -627,4 +627,15 @@ export default {
   "Délier l'identité SSO de {u} ?": "Unlink the SSO identity of {u}?",
   "L'identité fédérée sera liée de nouveau à sa prochaine connexion SSO, si son identifiant et son courriel vérifié correspondent.": "The federated identity will be linked again at their next SSO sign-in, if their username and verified e-mail match.",
   "Délier l'identité SSO": "Unlink SSO identity",
+  // File de triage
+  "Synthèse : filtres rapides": "Summary: quick filters",
+  "filtre actif": "filter on",
+  "Gravité qualifiée ou, à défaut, criticité initiale": "Qualified severity or, failing that, initial criticality",
+  "Toutes": "All",
+  "{n} ticket(s)": "{n} ticket(s)",
+  "Mis à jour à {h}": "Updated at {h}",
+  "Relevé automatique toutes les 45 s quand cet onglet est affiché": "Refreshed automatically every 45 s while this tab is visible",
+  "Sélectionner tous les tickets affichés": "Select all tickets shown",
+  "Détecté (UTC)": "Detected (UTC)",
+  "Retirer tous les filtres": "Clear all filters",
 }

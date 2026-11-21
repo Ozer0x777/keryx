@@ -1,22 +1,40 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js'
 import { useAuth } from '../App.jsx'
 import { Severity, Status, Tlp } from '../components/Badges.jsx'
 import { useConfirm } from '../components/Confirm.jsx'
+import { utcClock } from '../dates.js'
 import { t as tr } from '../i18n.js'
-import { formatUtc, MITRE_SOURCE, STATUS } from '../labels.js'
+import { MITRE_SOURCE, STATUS } from '../labels.js'
+import {
+  cardActive, cardPatch, DEFAULTS, filtersFromSearch, filtersToSearch, OPEN_STATUSES, rememberQueue, SEVERITIES, TO_QUALIFY,
+} from '../queue.js'
 
-const EMPTY = { status: '', client: '', rex_en_attente: false, q: '', assignee: '', overdue: false, sort: 'created', order: 'desc' }
+const REFRESH_MS = 45000
 // Libellés sources (français) : traduits à l'affichage par tr(label).
-const VIEWS = [['Tous', {}], ['Mes tickets', { assignee: 'me' }], ['Non assignés', { assignee: 'none' }], ['En retard', { overdue: true }]]
+const VIEWS = [['Tous', ''], ['Mes tickets', 'me'], ['Non assignés', 'none']]
+const CLOSED = ['cloture', 'faux_positif', 'retour_experience']
+// Cartes de chiffres : chacune est un filtre rapide (voir queue.js) et compte les tickets qu'elle afficherait.
+const CARDS = [
+  { label: 'À qualifier', hint: 'nouveaux ou en évaluation', patch: { status: TO_QUALIFY }, match: (t) => ['nouveau', 'en_evaluation'].includes(t.status) },
+  { label: 'En réponse', hint: 'confinement / éradication', patch: { status: 'en_reponse' }, match: (t) => t.status === 'en_reponse' },
+  { label: 'Critiques ouverts', hint: 'gravité ou criticité', patch: { status: OPEN_STATUSES, severity: 'Critique' }, match: (t) => (t.gravite || t.criticite_initiale) === 'Critique' && !CLOSED.includes(t.status) },
+  { label: 'En retard', hint: 'échéance dépassée', patch: { overdue: true }, match: (t) => t.overdue },
+  { label: 'REX en attente', hint: 'obligatoire si Élevée ou Critique', patch: { rex_en_attente: true }, match: (t) => t.rex_en_attente },
+]
 
-function SortHeader({ label, col, filters, set }) {
+// Date de détection sans le suffixe « UTC » (il est dans l'en-tête de colonne) : la colonne reste étroite.
+const utcShort = (iso) => (iso ? iso.replace('T', ' ').slice(0, 16) : '—')
+
+function SortHeader({ label, col, filters, set, className }) {
   const on = filters.sort === col
   const next = on && filters.order === 'desc' ? 'asc' : 'desc'
   return (
-    <th scope="col" aria-sort={on ? (filters.order === 'asc' ? 'ascending' : 'descending') : 'none'}>
-      <button type="button" className="th-btn" onClick={() => set({ sort: col, order: next })}>{tr(label)}{on ? (filters.order === 'asc' ? ' ▲' : ' ▼') : ''}</button>
+    <th scope="col" className={className} aria-sort={on ? (filters.order === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <button type="button" className={`th-btn${on ? ' on' : ''}`} onClick={() => set({ sort: col, order: next })}>
+        {label}<span className="sort-mark" aria-hidden="true">{on ? (filters.order === 'asc' ? '▲' : '▼') : ''}</span>
+      </button>
     </th>
   )
 }
@@ -24,7 +42,8 @@ function SortHeader({ label, col, filters, set }) {
 export default function Tickets() {
   const { me } = useAuth()
   const isClient = me.role === 'client'
-  const [filters, setFilters] = useState(EMPTY)
+  const [search, setSearch] = useSearchParams()
+  const filters = useMemo(() => filtersFromSearch(search), [search])
   const [items, setItems] = useState(null)
   const [all, setAll] = useState(null) // synthèse : tous les statuts, indépendante des filtres
   const [total, setTotal] = useState(0)
@@ -33,14 +52,55 @@ export default function Tickets() {
   const [picked, setPicked] = useState(new Set())
   const [people, setPeople] = useState([])
   const [msg, setMsg] = useState('')
-  const [draftQ, setDraftQ] = useState('')
+  const [draftQ, setDraftQ] = useState(filters.q)
+  const [updatedAt, setUpdatedAt] = useState(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [ask, dialog] = useConfirm()
+  const selectAll = useRef(null)
+  const request = useRef(0)
+  const lastLoad = useRef(0)
 
-  const params = useMemo(() => ({ ...filters, rex_en_attente: filters.rex_en_attente || undefined, overdue: filters.overdue || undefined, limit: 200 }), [filters])
-  const reload = useCallback(() => {
-    setError('')
-    return api('/tickets', { params }).then((r) => { setItems(r.items); setTotal(r.total ?? r.items.length) }).catch((e) => setError(e.message))
+  // L'URL est la source de vérité : au retour d'un ticket (bouton Précédent ou fil d'Ariane), la file retrouve ses
+  // filtres, son tri et sa vue. Le champ de recherche suit l'URL (sinon il garderait l'ancienne saisie).
+  useEffect(() => { setDraftQ(filters.q) }, [filters.q])
+  useEffect(() => { rememberQueue(search.toString()) }, [search])
+
+  const key = search.toString()
+  const params = useMemo(() => {
+    const f = filtersFromSearch(key)
+    return { ...f, rex_en_attente: f.rex_en_attente || undefined, overdue: f.overdue || undefined, limit: 200 }
+  }, [key])
+
+  // Relevé de la liste (premier affichage, changement de filtre, bouton, minuterie). La liste affichée reste en place
+  // pendant le relevé et la sélection est conservée ; une réponse dépassée par une plus récente est ignorée.
+  const reload = useCallback(async () => {
+    const n = ++request.current
+    setRefreshing(true)
+    try {
+      const r = await api('/tickets', { params })
+      if (n !== request.current) return
+      setItems(r.items); setTotal(r.total ?? r.items.length); setError('')
+      setUpdatedAt(new Date()); lastLoad.current = Date.now()
+      // Une ligne sortie de la liste (affectée ailleurs, close…) quitte aussi la sélection.
+      const still = new Set(r.items.map((t) => t.ref))
+      setPicked((s) => ([...s].every((ref) => still.has(ref)) ? s : new Set([...s].filter((ref) => still.has(ref)))))
+    } catch (e) {
+      if (n === request.current) setError(e.message)
+    } finally {
+      if (n === request.current) setRefreshing(false)
+    }
   }, [params])
   useEffect(() => { reload() }, [reload])
+
+  // Rafraîchissement automatique toutes les 45 s, seulement quand l'onglet est visible ; au retour sur l'onglet,
+  // relevé immédiat si le dernier date de plus de 45 s.
+  useEffect(() => {
+    const visible = () => document.visibilityState === 'visible'
+    const id = setInterval(() => { if (visible()) reload() }, REFRESH_MS)
+    const onVisible = () => { if (visible() && Date.now() - lastLoad.current >= REFRESH_MS) reload() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisible) }
+  }, [reload])
 
   useEffect(() => {
     if (isClient) return undefined
@@ -54,18 +114,9 @@ export default function Tickets() {
     api('/me/filters').then((r) => setSaved(r.items)).catch(() => {})
   }, [isClient])
 
-  const set = (patch) => { setPicked(new Set()); setFilters((f) => ({ ...f, ...patch })) }
-  const count = (fn) => (all?.items || []).filter(fn).length
-  const stats = isClient ? [] : [
-    [tr('À qualifier'), count((t) => ['nouveau', 'en_evaluation'].includes(t.status)), tr('nouveaux ou en évaluation')],
-    [tr('En réponse'), count((t) => t.status === 'en_reponse'), tr('confinement / éradication')],
-    [tr('Critiques ouverts'), count((t) => (t.gravite || t.criticite_initiale) === 'Critique' && !['cloture', 'faux_positif', 'retour_experience'].includes(t.status)), tr('gravité ou criticité')],
-    [tr('En retard'), count((t) => t.overdue), tr('échéance dépassée')],
-    [tr('REX en attente'), count((t) => t.rex_en_attente), tr('obligatoire si Élevée ou Critique')],
-  ]
-  const view = VIEWS.findIndex(([, p]) => (p.assignee || '') === filters.assignee && !!p.overdue === filters.overdue)
+  const apply = (next) => { setPicked(new Set()); setMsg(''); setSearch(filtersToSearch(next), { replace: true }) }
+  const set = (patch) => apply({ ...filters, ...patch })
 
-  const [ask, dialog] = useConfirm()
   const saveFilter = async () => {
     const p = Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== '' && v !== false))
     const r = await ask({
@@ -88,6 +139,12 @@ export default function Tickets() {
   }
 
   const toggle = (ref) => setPicked((s) => { const n = new Set(s); n.has(ref) ? n.delete(ref) : n.add(ref); return n })
+  const pageRefs = (items || []).map((t) => t.ref)
+  const allPicked = pageRefs.length > 0 && pageRefs.every((ref) => picked.has(ref))
+  const somePicked = pageRefs.some((ref) => picked.has(ref))
+  useEffect(() => { if (selectAll.current) selectAll.current.indeterminate = somePicked && !allPicked }, [somePicked, allPicked])
+  const toggleAll = () => setPicked(allPicked ? new Set() : new Set(pageRefs))
+
   const bulkAssign = async (username) => {
     try {
       const r = await api('/tickets/bulk-assign', { method: 'POST', json: { refs: [...picked], username: username || null } })
@@ -99,7 +156,12 @@ export default function Tickets() {
   }
   useEffect(() => { if (picked.size && !people.length) api('/tickets/' + encodeURIComponent([...picked][0]) + '/assignables').then((r) => setPeople(r.items)).catch(() => {}) }, [picked, people.length])
 
-  const cols = isClient ? 9 : 11
+  const statusChoices = [
+    ['', tr('Tous')], [OPEN_STATUSES, tr('Ouverts')], [TO_QUALIFY, tr('À qualifier')],
+    ...Object.entries(STATUS).map(([k, v]) => [k, v.label]),
+  ]
+  const multi = me.clients.length > 1
+  const cols = (isClient ? 9 : 11) + (multi ? 1 : 0)
   return (
     <>
       <header className="page-head">
@@ -118,26 +180,31 @@ export default function Tickets() {
       </header>
 
       {!isClient && (
-        <section className="stats" aria-label={tr('Synthèse')}>
-          {stats.map(([label, value, hint]) => (
-            <div className="card stat" key={label}>
-              <span className="muted">{label}</span><strong>{all ? value : '…'}</strong><span className="muted small">{hint}</span>
-            </div>
-          ))}
+        <section className="stats" aria-label={tr('Synthèse : filtres rapides')}>
+          {CARDS.map((c) => {
+            const on = cardActive(filters, c.patch)
+            return (
+              <button type="button" className={`card stat stat-filter${on ? ' on' : ''}`} key={c.label} aria-pressed={on}
+                onClick={() => set(cardPatch(on ? {} : c.patch))}>
+                <span className="stat-label">{tr(c.label)}</span>
+                <strong>{all ? all.items.filter(c.match).length : '…'}</strong>
+                <span className="stat-hint small">{on ? tr('filtre actif') : tr(c.hint)}</span>
+              </button>
+            )
+          })}
         </section>
       )}
 
       {!isClient && (
         <div className="row wrap gap views" role="group" aria-label={tr('Vues')}>
-          {VIEWS.map(([label, p], i) => (
-            <button type="button" key={label} className={`vchip${view === i ? ' on' : ''}`} aria-pressed={view === i}
-              onClick={() => set({ assignee: p.assignee || '', overdue: !!p.overdue })}>{tr(label)}</button>
+          {VIEWS.map(([label, assignee]) => (
+            <button type="button" key={label} className={`vchip${filters.assignee === assignee ? ' on' : ''}`} aria-pressed={filters.assignee === assignee}
+              onClick={() => set({ assignee })}>{tr(label)}</button>
           ))}
           {saved.length > 0 && <span className="muted small">{tr('Filtres :')}</span>}
           {saved.map((f) => (
             <span key={f.id} className="vchip saved">
-              {/* Le champ de recherche suit le filtre appliqué (sinon il garde l'ancienne saisie et la renvoie au prochain Entrée). */}
-              <button type="button" className="link" onClick={() => { setDraftQ(f.params?.q || ''); set({ ...EMPTY, ...f.params }) }}>{f.name}</button>
+              <button type="button" className="link" onClick={() => apply({ ...DEFAULTS, ...f.params })}>{f.name}</button>
               <button type="button" className="x" aria-label={tr('Supprimer le filtre {name}', { name: f.name })} onClick={() => dropFilter(f)}>×</button>
             </span>
           ))}
@@ -145,18 +212,24 @@ export default function Tickets() {
       )}
 
       <section className="filters" aria-label={tr('Filtres')}>
-        <form className="filter grow" role="search" onSubmit={(e) => { e.preventDefault(); set({ q: draftQ }) }}>
+        <form className="filter grow" role="search" onSubmit={(e) => { e.preventDefault(); set({ q: draftQ.trim() }) }}>
           <label>{tr('Recherche')}
             <input type="search" value={draftQ} onChange={(e) => setDraftQ(e.target.value)} placeholder={tr('Titre, règle, agent, IP, commentaire…')} />
           </label>
         </form>
         <label className="filter">{tr('Statut')}
           <select value={filters.status} onChange={(e) => set({ status: e.target.value })}>
-            <option value="">{tr('Tous')}</option>
-            {Object.entries(STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            {statusChoices.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+            {!statusChoices.some(([k]) => k === filters.status) && <option value={filters.status}>{filters.status}</option>}
           </select>
         </label>
-        {me.clients.length > 1 && (
+        <label className="filter">{tr('Gravité')}
+          <select value={filters.severity} onChange={(e) => set({ severity: e.target.value })} title={tr('Gravité qualifiée ou, à défaut, criticité initiale')}>
+            <option value="">{tr('Toutes')}</option>
+            {SEVERITIES.map((s) => <option key={s} value={s}>{tr(s)}</option>)}
+          </select>
+        </label>
+        {multi && (
           <label className="filter">{tr('Client')}
             <select value={filters.client} onChange={(e) => set({ client: e.target.value })}>
               <option value="">{tr("Tous")}</option>
@@ -164,22 +237,25 @@ export default function Tickets() {
             </select>
           </label>
         )}
-        {!isClient && (
-          <label className="filter check">
-            <input type="checkbox" checked={filters.rex_en_attente} onChange={(e) => set({ rex_en_attente: e.target.checked })} />
-            {tr('REX en attente')}
-          </label>
-        )}
         <div className="row gap">
-          <button type="button" onClick={() => { setDraftQ(''); set(EMPTY) }}>{tr('Réinitialiser')}</button>
+          <button type="button" onClick={() => apply(DEFAULTS)}>{tr('Réinitialiser')}</button>
           {!isClient && <button type="button" onClick={saveFilter}>{tr('Enregistrer ce filtre')}</button>}
         </div>
       </section>
 
       {error && <p className="error" role="alert">{error}</p>}
-      <p className="live" role="status">{msg}</p>
       {dialog}
-      {items && total > items.length && <p className="muted small" role="status">{tr('{n} tickets affichés sur {total} : affinez avec les filtres.', { n: items.length, total })}</p>}
+
+      <div className="row wrap gap between list-bar">
+        <p className="list-count" role="status">{items === null ? tr('Chargement…') : total > items.length
+          ? tr('{n} tickets affichés sur {total} : affinez avec les filtres.', { n: items.length, total })
+          : tr('{n} ticket(s)', { n: items.length })}</p>
+        <div className="row gap refresh">
+          <span className="muted small">{updatedAt ? tr('Mis à jour à {h}', { h: utcClock(updatedAt) }) : ''}</span>
+          <button type="button" className="small-btn" onClick={reload} disabled={refreshing} title={tr('Relevé automatique toutes les 45 s quand cet onglet est affiché')}>{tr('Actualiser')}</button>
+        </div>
+      </div>
+      <p className="live" role="status">{msg}</p>
       {all && !isClient && (all.total ?? 0) > all.items.length && <p className="muted small" role="status">{tr('Synthèse calculée sur les {n} tickets les plus récents (sur {total}).', { n: all.items.length, total: all.total })}</p>}
 
       {picked.size > 0 && (
@@ -197,34 +273,36 @@ export default function Tickets() {
       )}
 
       <div className="table-wrap card">
-        <table className="grid">
+        <table className="grid queue">
           <thead>
             <tr>
-              {!isClient && <th scope="col"><span className="sr-only">{tr("Sélection")}</span></th>}
+              {!isClient && <th scope="col" className="pick"><input ref={selectAll} type="checkbox" aria-label={tr('Sélectionner tous les tickets affichés')} checked={allPicked} disabled={pageRefs.length === 0} onChange={toggleAll} /></th>}
               <SortHeader label={tr('Réf.')} col="ref" filters={filters} set={set} /><th scope="col">{tr('Titre')}</th>
-              {me.clients.length > 1 && <th scope="col">{tr('Client')}</th>}
-              <th scope="col">{tr('Criticité')}</th><th scope="col">{tr('Gravité')}</th><SortHeader label={tr('Statut')} col="status" filters={filters} set={set} />
-              <th scope="col">MITRE ATT&amp;CK</th>
+              {multi && <th scope="col">{tr('Client')}</th>}
+              <SortHeader label={tr('Criticité')} col="criticite" filters={filters} set={set} />
+              <SortHeader label={tr('Gravité')} col="gravite" filters={filters} set={set} />
+              <SortHeader label={tr('Statut')} col="status" filters={filters} set={set} />
+              <th scope="col">{tr('MITRE')}</th>
               {!isClient && <th scope="col">{tr('Assigné')}</th>}
-              <SortHeader label={tr('Détecté')} col="detected" filters={filters} set={set} /><th scope="col">{tr("TLP")}</th>
-              <SortHeader label={tr('Occur.')} col="occurrences" filters={filters} set={set} />
+              <SortHeader label={tr('Détecté (UTC)')} col="detected" filters={filters} set={set} /><th scope="col">{tr("TLP")}</th>
+              <SortHeader label={tr('Occur.')} col="occurrences" filters={filters} set={set} className="num" />
             </tr>
           </thead>
           <tbody>
-            {items === null && <tr><td colSpan={cols + 1} className="muted">{tr('Chargement…')}</td></tr>}
-            {items?.length === 0 && <tr><td colSpan={cols + 1} className="muted">{tr('Aucun ticket ne correspond.')}</td></tr>}
+            {items === null && <tr><td colSpan={cols} className="muted">{tr('Chargement…')}</td></tr>}
+            {items?.length === 0 && <tr><td colSpan={cols} className="muted">{tr('Aucun ticket ne correspond.')} <button type="button" className="link" onClick={() => apply(DEFAULTS)}>{tr('Retirer tous les filtres')}</button></td></tr>}
             {items?.map((t) => (
               <tr key={t.ref} className={t.overdue ? 'overdue' : ''}>
-                {!isClient && <td><input type="checkbox" aria-label={tr('Sélectionner {ref}', { ref: t.ref })} checked={picked.has(t.ref)} onChange={() => toggle(t.ref)} /></td>}
+                {!isClient && <td className="pick"><input type="checkbox" aria-label={tr('Sélectionner {ref}', { ref: t.ref })} checked={picked.has(t.ref)} onChange={() => toggle(t.ref)} /></td>}
                 <td className="mono"><Link to={`/tickets/${encodeURIComponent(t.ref)}`}>{t.ref}</Link></td>
                 <td className="strong title-cell">{t.title}{t.overdue && <span className="pill danger" style={{ marginLeft: 8 }}>{tr('En retard')}</span>}{t.crisis && <span className="pill danger" style={{ marginLeft: 8 }}>{tr("CRISE")}</span>}</td>
-                {me.clients.length > 1 && <td className="mono small" title={t.client}>{t.client_key}</td>}
+                {multi && <td className="mono small" title={t.client}>{t.client_key}</td>}
                 <td><Severity value={t.criticite_initiale} /></td>
                 <td><Severity value={t.gravite} /></td>
                 <td><Status value={t.status} />{t.rex_en_attente && <span className="pill warn">{tr("REX")}</span>}</td>
                 <td title={`${tr('Source')} : ${MITRE_SOURCE[t.mitre_source]}`}><span className="mono">{t.mitre.join(', ') || '—'}</span></td>
                 {!isClient && <td>{t.assignee || '—'}</td>}
-                <td className="mono small">{formatUtc(t.detected_at)}</td>
+                <td className="mono small">{utcShort(t.detected_at)}</td>
                 <td><Tlp value={t.tlp} /></td>
                 <td className="num mono">{t.occurrences}</td>
               </tr>

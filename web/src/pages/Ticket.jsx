@@ -11,6 +11,7 @@ import IsiPanel from '../components/IsiPanel.jsx'
 import Stamps from '../components/Stamps.jsx'
 import RichEditor from '../components/RichEditor.jsx'
 import { utcClock } from '../dates.js'
+import { queuePath } from '../queue.js'
 import {
   DOMMAGES, formatUtc, IMPORTANCES, LIFECYCLE, MITRE_SOURCE, SCAN, STATUS, TLPS, TRANSITIONS, VERDICTS,
 } from '../labels.js'
@@ -110,7 +111,8 @@ export default function Ticket() {
   return (
     <>
       <nav className="breadcrumb" aria-label={tr("Fil d'Ariane")}>
-        <Link to="/tickets">{isClient ? tr('Mes incidents') : tr('Tickets')}</Link> / {t.client} / <span className="mono">{t.ref}</span>
+        {/* Retour à la file telle qu'on l'a quittée : filtres, tri et vue (voir queue.js). */}
+        <Link to={queuePath()}>{isClient ? tr('Mes incidents') : tr('Tickets')}</Link> / {t.client} / <span className="mono">{t.ref}</span>
       </nav>
       <header className="ticket-head">
         <div className="grow">

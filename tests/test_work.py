@@ -169,3 +169,36 @@ def test_revue3_correctifs(app, db, world, alert):
     # Le badge relève aussi les échéances
     a = login(app, db, "analyst_acme")
     assert a.get("/api/v1/notifications/count").status_code == 200
+
+
+def test_file_de_triage_tri_et_filtres_par_gravite(app, db, world, alert):
+    """Non-régression : la file se trie par criticité et par gravité dans l'ordre métier (Critique > Élevée > Moyenne >
+    Faible, pas l'ordre alphabétique), se filtre par gravité effective (gravité qualifiée, sinon criticité initiale) et
+    par plusieurs statuts à la fois (« à qualifier » = nouveau + en évaluation)."""
+    ingest(app, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE))   # ACME-1, niveau 10 : Moyenne
+    ingest(app, world["keys"]["ACME"], alert(ALERT_NO_MITRE))         # ACME-2, niveau 8 : Faible
+    ingest(app, world["keys"]["ACME"], alert(ALERT_CRITICAL))         # ACME-3, niveau 15 : Critique
+    a = login(app, db, "analyst_acme")
+    refs = lambda **p: [t["ref"] for t in a.get("/api/v1/tickets", params=p).json()["items"]]
+    assert refs(sort="criticite", order="desc") == ["ACME-3", "ACME-1", "ACME-2"]
+    assert refs(sort="criticite", order="asc") == ["ACME-2", "ACME-1", "ACME-3"]
+    # Gravité : rien n'est qualifié, puis ACME-2 (criticité Faible) est qualifié Critique.
+    assert a.post("/api/v1/tickets/ACME-2/status", json={"status": "en_evaluation"}).status_code == 200
+    q = a.post("/api/v1/tickets/ACME-2/qualification",
+               json={"verdict": "vrai_positif_avere", "dommages": "graves", "importance": "vital"})
+    assert q.status_code == 200 and q.json()["gravite"] == "Critique"
+    assert refs(sort="gravite", order="desc")[0] == "ACME-2"           # les tickets sans gravité viennent après
+    assert refs(sort="gravite", order="asc")[-1] == "ACME-2"
+    # Filtre par gravité effective : la gravité qualifiée prime sur la criticité initiale.
+    assert set(refs(severity="Critique")) == {"ACME-2", "ACME-3"}
+    assert refs(severity="Faible") == [] and refs(severity="Moyenne") == ["ACME-1"]
+    assert a.get("/api/v1/tickets", params={"severity": "Grave"}).status_code == 422
+    # Plusieurs statuts ; un seul statut reste accepté comme avant.
+    assert set(refs(status="nouveau,en_evaluation")) == {"ACME-1", "ACME-2", "ACME-3"}
+    assert refs(status="en_evaluation") == ["ACME-2"] and refs(status="en_reponse,cloture") == []
+    assert set(refs(status="nouveau,en_evaluation,en_reponse", severity="Critique")) == {"ACME-2", "ACME-3"}
+    # Un filtre enregistré conserve le critère de gravité.
+    f = a.post("/api/v1/me/filters", json={"name": "Critiques", "params": {"severity": "Critique", "sort": "gravite"}})
+    assert f.status_code == 201 and f.json()["params"] == {"severity": "Critique", "sort": "gravite"}
+    # Le cloisonnement ne change pas : l'analyste d'un autre client ne voit rien de tout cela.
+    assert login(app, db, "analyst_delta").get("/api/v1/tickets", params={"severity": "Critique"}).json()["items"] == []

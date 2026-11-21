@@ -27,7 +27,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import delete, false, func, or_, select, update
+from sqlalchemy import case, delete, false, func, or_, select, update
 from sqlalchemy.orm import Session as DbSession
 from starlette.background import BackgroundTask
 
@@ -41,8 +41,8 @@ from .iodef import validate as iodef_validate
 from .ingest import AlertRejected, ingest_alert
 from .mitre import valid_technique
 from .models import (
-    LIFECYCLE, TLP, VERDICTS, ApiKey, Attachment, AuditEntry, Comment, CustodyEvent, MitreTechnique, RateHit, RawAlert,
-    Session, WebAuthnCredential, Tenant, Ticket, TicketEvent, User,
+    LIFECYCLE, SEVERITIES, TLP, VERDICTS, ApiKey, Attachment, AuditEntry, Comment, CustodyEvent, MitreTechnique, RateHit,
+    RawAlert, Session, WebAuthnCredential, Tenant, Ticket, TicketEvent, User,
 )
 from .notify import retry_failed, send_pending
 from .s3store import StorageError
@@ -665,11 +665,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         }
 
     @app.get("/api/v1/tickets")
-    def list_tickets(status: str | None = None, client: str | None = None, rex_en_attente: bool = False,
+    def list_tickets(status: str | None = Query(default=None, max_length=200), client: str | None = None,
+                     rex_en_attente: bool = False,
                      q: str | None = Query(default=None, max_length=200), assignee: str | None = None,
-                     overdue: bool = False, crisis: bool = False, sort: str = "created", order: str = "desc",
+                     overdue: bool = False, crisis: bool = False, severity: str | None = Query(default=None, max_length=20),
+                     sort: str = "created", order: str = "desc",
                      limit: int = 100, offset: int = 0,
                      user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        """File des tickets. `status` accepte plusieurs statuts séparés par des virgules (« à qualifier » = nouveau et
+        en évaluation) ; `severity` filtre sur la gravité qualifiée ou, à défaut, sur la criticité initiale ; les tris
+        `criticite` et `gravite` suivent l'ordre métier Critique > Élevée > Moyenne > Faible, pas l'ordre alphabétique."""
         limit, offset = max(1, min(limit, 500)), max(0, offset)
         if user.role == "admin":
             raise HTTPException(403, "Le rôle Admin n'a pas accès au contenu des tickets.")
@@ -677,15 +682,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ids = list(tenants)
         if client:
             ids = [i for i, t in tenants.items() if t.key == client.upper()]
+        # Rang d'une gravité : Faible = 1 … Critique = 4 ; 0 quand elle n'est pas encore fixée (gravité avant qualification).
+        rank = lambda col: case({s: i for i, s in enumerate(SEVERITIES, start=1)}, value=col, else_=0)  # noqa: E731
         sort_cols = {"created": Ticket.created_at, "updated": Ticket.updated_at, "detected": Ticket.detected_at,
-                     "ref": Ticket.seq, "status": Ticket.status, "occurrences": Ticket.occurrences}
+                     "ref": Ticket.seq, "status": Ticket.status, "occurrences": Ticket.occurrences,
+                     "criticite": rank(Ticket.criticite_initiale), "gravite": rank(Ticket.gravite)}
         if sort not in sort_cols or order not in ("asc", "desc"):
             raise HTTPException(422, f"Tri attendu parmi : {', '.join(sort_cols)} ; ordre asc ou desc.")
+        if severity and severity not in SEVERITIES:
+            raise HTTPException(422, f"Gravité attendue parmi : {', '.join(SEVERITIES)}.")
         col = sort_cols[sort]
         query = select(Ticket).where(Ticket.tenant_id.in_(ids)).order_by(col.asc() if order == "asc" else col.desc(),
                                                                        Ticket.id.desc())
-        if status:
-            query = query.where(Ticket.status == status)
+        statuses = [s.strip() for s in (status or "").split(",") if s.strip()]
+        if statuses:
+            query = query.where(Ticket.status.in_(statuses))
+        if severity:
+            query = query.where(func.coalesce(Ticket.gravite, Ticket.criticite_initiale) == severity)
         if rex_en_attente:
             query = query.where(Ticket.status == "cloture", Ticket.rex_required.is_(True))
         if crisis:

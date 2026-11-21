@@ -55,7 +55,7 @@ class PrefsIn(BaseModel):
     prefs: dict[str, bool]
 
 
-FILTER_KEYS = {"status", "client", "rex_en_attente", "q", "assignee", "overdue", "sort", "order"}
+FILTER_KEYS = {"status", "client", "rex_en_attente", "q", "assignee", "overdue", "severity", "sort", "order"}
 
 
 def register(app, ctx) -> None:
