@@ -37,16 +37,25 @@ curl -X POST http://localhost:8000/api/v1/ingest/wazuh \
 
 Brancher un vrai Wazuh : voir `integrations/wazuh/README.md` (script d'intégration avec file d'attente locale si Keryx est injoignable).
 
-## Conteneur
+## Déployer avec Docker
 
 ```bash
-docker build -t keryx:0.7 .
-docker run -p 8000:8000 -v keryx-data:/data \
-  -e KERYX_SECRET_KEY=... -e KERYX_DATABASE_URL=sqlite:////data/keryx.db keryx:0.7
+cd deploy/docker && ./install.sh
 ```
 
-Le conteneur applique `alembic upgrade head` puis démarre. Dépendances installées depuis `requirements.lock`
-(versions et empreintes figées, `--require-hashes`). Toujours placer Keryx derrière un proxy TLS.
+Le script demande le mode HTTPS (certificat automatique ACME, certificat fourni, ou essai local), le nom de domaine et
+les profils facultatifs (`antivirus`, `sso`, `objets`, `sauvegarde`), écrit `deploy/docker/.env` (clé maîtresse et mots
+de passe aléatoires, **à sauvegarder**), construit, démarre Keryx, PostgreSQL et le reverse proxy Caddy, crée le premier
+compte Admin (mot de passe temporaire et code d'activation affichés une fois) et affiche le bloc `<integration>` pour
+Wazuh. Arrêt sans perte de données : `./uninstall.sh`. Mode d'emploi : `deploy/docker/README.md` ; durcissement
+(fiche ANSSI-FT-082), matrice des flux et limites : `docs/deploiement-docker.md` ; décision : ADR-0023.
+
+**Ce kit tout-en-un n'est pas une architecture qualifiable PDIS** (une machine, pas de zones, pas une machine par
+commanditaire pour le portail) : il convient aux essais, aux démonstrations et à un petit SOC non qualifié.
+
+L'image seule : `docker build -t keryx:0.7.0 .` Le conteneur applique `alembic upgrade head` puis démarre. Dépendances
+installées depuis `requirements.lock` (versions et empreintes figées, `--require-hashes`). Toujours placer Keryx
+derrière un proxy TLS.
 
 ## Configuration (variables d'environnement)
 
@@ -80,7 +89,7 @@ Le conteneur applique `alembic upgrade head` puis démarre. Dépendances install
 python -m pytest -q
 ```
 
-393 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
+394 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
 régressions des revues, migrations, notifications (SMTP simulé, relances), pièces jointes (clamd simulé, EICAR),
 administration, confort de travail, pilotage, conformité, sauvegarde, script d'intégration Wazuh,
 contexte Wazuh (faux indexeur OpenSearch local, `tests/fake_indexer.py`),
@@ -125,6 +134,7 @@ cd e2e && npm ci && node run.mjs        # CHROME_PATH et KERYX_PYTHON si besoin
 | Recherche d'une empreinte (SHA-256, SHA-1) sur VirusTotal, disponible par défaut, clé d'API par utilisateur : depuis une pièce, une preuve externe, une alerte ou une saisie ; jamais d'envoi de fichier ; chaque recherche tracée. **Dérogation à « aucun service externe »** | Demande de l'utilisateur ; PDIS IV.2.1.q, PRIS IV.3.q, PRIS VI.5.3.d ; ADR-0022 |
 | Stockage objet S3 des pièces, chiffré avant envoi ; quarantaine en archive chiffrée | PRIS IV.3.q, VI.2.4 ; ADR-0019 |
 | Sauvegarde chiffrée et restauration vérifiée | PDIS IV.3.6 ; ADR-0015 |
+| Déploiement par conteneurs durci (un conteneur par service, profils, HTTPS dans les deux modes), matrice des flux | Fiche ANSSI-FT-082 R1 à R16 ; PDIS IV.3.8.d ; ADR-0023 |
 
 Matrice complète : `docs/matrice-tracabilite.md` · exploitation : `docs/exploitation.md` · SBOM : `python scripts/sbom.py`.
 
@@ -132,8 +142,9 @@ Matrice complète : `docs/matrice-tracabilite.md` · exploitation : `docs/exploi
 
 - Limites de débit en mémoire, par processus : un seul processus uvicorn tant qu'elles ne sont pas partagées (ADR-0010).
 - Quarantaine : archive ZIP chiffrée (mot de passe « infected ») ; les pièces mises en quarantaine avant cette version restent stockées telles quelles (ADR-0019).
-- PostgreSQL 16 : la suite complète passe (393 tests, dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore). Non testé : haute disponibilité, réplication, très gros volumes.
-- Jamais testé contre un vrai manager Wazuh (le script d'intégration est testé avec un serveur simulé).
+- PostgreSQL 16 : la suite complète passe (393 tests lors de la dernière exécution sous PostgreSQL, antérieure au test de `add-user --activation` ; cette commande a été exercée sous PostgreSQL 16.16 par le déploiement Docker d'essai ; dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore). Non testé : haute disponibilité, réplication, très gros volumes.
+- Jamais testé contre un vrai manager Wazuh (le script d'intégration est testé avec un serveur simulé, et lancé à la main contre le déploiement Docker d'essai).
+- Déploiement Docker (ADR-0023) : essayé en mode local avec tous les profils ; le mode ACME, un vrai certificat fourni et les réglages du démon Docker (`userns-remap`, `bridge: none`, export des journaux) ne l'ont pas été. Ce n'est pas le cloisonnement en zones de PDIS IV.3.8.b, et Keryx ne sait pas encore séparer son portail client de sa console d'analyse (PDIS IV.3.13.b).
 - Contexte Wazuh (ADR-0021) : jamais testé contre un vrai indexeur ni un vrai tableau de bord Wazuh, seulement contre le faux indexeur des tests. À valider avant usage : champ de date, type du champ `agent.id`, motif d'index, droits du compte de lecture, certificat, modèle d'URL.
 - Recherche VirusTotal (ADR-0022) : jamais testée contre le vrai VirusTotal, seulement contre le faux serveur des tests. À valider avant usage : forme des réponses et des erreurs, forme des clés, quotas, conditions d'utilisation de l'API (à vérifier par l'exploitant). Keryx n'envoie aucun fichier à VirusTotal.
 - Interface testée dans Chrome sans tête (parcours de chaque rôle) et contrôlée avec axe-core (WCAG 2.1 A/AA) ; pas d'audit RGAA complet ni de test d'intrusion.

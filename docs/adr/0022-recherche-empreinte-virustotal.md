@@ -85,6 +85,17 @@ Aucun message d'erreur ne contient la clé, un en-tête ou le corps de la répon
 
 **Rétention** : les lignes de `hash_lookups` suivent le ticket (supprimées avec lui). La purge des alertes brutes ne les touche pas. Lors d'une fusion, elles restent sur le ticket où la recherche a été faite.
 
+## Déploiement visant la qualification PDIS : fonction coupée (ajout du 22/11/2026)
+
+Dans un déploiement qui vise la qualification PDIS : **`KERYX_VIRUSTOTAL_ENABLED=false`**. Texte lu dans le référentiel PDIS v2.0 du 21/12/2017, chapitre IV.3.7 (« Service de détection du service », la détection que le prestataire opère sur son propre système d'information) :
+
+- IV.3.7.j : « Il est recommandé que le prestataire utilise des outils permettant de réaliser une analyse statique ou dynamique de fichiers suspects. »
+- IV.3.7.k : « Dans le cas où le prestataire utilise des outils d'analyse statiques ou dynamiques de fichiers suspects faisant appel à des ressources hébergées sur Internet, le prestataire doit réaliser ces opérations hors du système d'information du service de détection des incidents de sécurité ».
+
+L'exigence est placée dans ce chapitre, mais ce qu'elle vise ne dépend pas de lui : un outil du système d'information du service qui interroge Internet à propos d'un fichier suspect, ce que fait cette recherche. Deux autres passages vont dans le même sens : la liste des interconnexions autorisées (IV.3.10.a) ne comprend aucune sortie vers un service d'Internet, et les recherches en sources ouvertes se font depuis la zone internet, hors du système d'information du service, sur des postes dédiés, en étant horodatées et journalisées (IV.3.16.a, d, f). L'analyste fait donc la recherche depuis son poste de la zone internet, et reporte le résultat sur la fiche. L'interprétation de IV.3.7.k appartient à l'organisme de qualification ; cet ADR retient la lecture prudente.
+
+Le kit `deploy/docker` (ADR-0023) écrit `KERYX_VIRUSTOTAL_ENABLED=false` tant que la sortie réseau de Keryx est fermée, ce qui est son réglage par défaut. Hors de ce cas, la décision ci-dessus (fonction disponible par défaut) est inchangée.
+
 ## Envoi de fichier : non fait, et ce qu'il faudrait
 
 **Keryx n'envoie aucun fichier à VirusTotal : il n'existe ni route, ni code, ni réglage pour cela.** Un fichier envoyé à VirusTotal devient accessible à ses abonnés : c'est une divulgation, sans retour possible. Le client HTTP est isolé dans `keryx/virustotal.py` (`Client`) pour qu'un envoi puisse y être ajouté comme une seconde opération, mais seulement après une nouvelle décision, qui devra au moins régler :

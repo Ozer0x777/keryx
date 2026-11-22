@@ -8,7 +8,10 @@ Testé uniquement avec des alertes simulées : à valider sur ton manager Wazuh.
 python -m keryx.cli add-api-key ACME wazuh-manager-01
 ```
 
-La clé n'est affichée qu'une fois. Une clé = un manager Wazuh = un client.
+La clé n'est affichée qu'une fois. Une clé = un manager Wazuh = un client. Elle se crée aussi dans l'interface
+(Administration > Clés d'API). Avec le déploiement Docker (`deploy/docker`) :
+`docker compose exec keryx python -m keryx.cli add-api-key ACME wazuh-manager-01` ; `install.sh` affiche en fin
+d'installation le bloc `<integration>` avec l'adresse réelle.
 
 ## 2. Installer le script sur le manager Wazuh
 
@@ -36,6 +39,10 @@ sudo chown root:wazuh /var/ossec/integrations/custom-keryx /var/ossec/integratio
 ```
 
 `<level>7</level>` : seules les alertes de niveau 7 ou plus quittent le manager (même seuil que Keryx).
+
+Si le certificat de Keryx est signé par une autorité privée (mode `local` ou `fourni` du déploiement Docker), le script
+doit la connaître : variable d'environnement `KERYX_CA_BUNDLE` (chemin du certificat de l'autorité, PEM) dans
+l'environnement du service `wazuh-manager`.
 
 Puis : `sudo systemctl restart wazuh-manager`. Les traces de l'intégration sont dans
 `/var/ossec/logs/integrations.log`.

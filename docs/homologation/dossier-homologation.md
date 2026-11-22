@@ -13,7 +13,7 @@
 Alertes de sécurité (adresses IP, noms d'hôtes, journaux bruts pouvant contenir des données personnelles), preuves déposées, commentaires, identités des utilisateurs, journal d'audit. Marquage TLP 2.0 par ticket et par pièce. **Durées de conservation à valider avec le DPO** (défauts : 12 mois pour les alertes brutes des tickets clos, 6 mois minimum ; tickets et registres sur la durée de la convention).
 
 ## 3. Mesures de sécurité en place
-Voir `docs/matrice-tracabilite.md` (exigence → fonction → code → test) et les ADR 0001 à 0020. Synthèse :
+Voir `docs/matrice-tracabilite.md` (exigence → fonction → code → test) et les ADR 0001 à 0023. Synthèse :
 
 | Domaine | Mesures |
 |---|---|
@@ -28,7 +28,8 @@ Voir `docs/matrice-tracabilite.md` (exigence → fonction → code → test) et 
 - **Tests automatisés** : `python -m pytest` (201 réussis, 8 ignorés faute d'environnement) ; `python scripts/pg_tests.py` sous PostgreSQL 16.2 (201 réussis). Dont `tests/test_security_surface.py` : toutes les routes découvertes automatiquement (96) exigent une authentification sauf une liste justifiée, toutes celles qui modifient exigent le jeton CSRF, aucune route d'administration n'est atteignable par un autre rôle, en-têtes de sécurité et cookies contrôlés, pas d'énumération de comptes.
 - **Parcours navigateur** (Chrome sans tête, base temporaire) : `cd e2e && E2E_KEYCLOAK=http://localhost:8180 node run.mjs` (plus de 100 contrôles : parcours de chaque rôle, mise en page, traduction, accessibilité axe-core sur 19 écrans).
 - **Analyse dynamique OWASP ZAP** (authentifiée, 5 min d'analyse active) : voir `dast-zap.md` ; un constat réel corrigé (CSP), un défaut de forme corrigé (chemins de fichiers), un faux positif démontré et verrouillé par test.
-- **Essais contre de vrais composants** : Keycloak 26.4 (SSO complet, déconnexion unique), PostgreSQL 16.2, Garage 1.0.1 (serveur S3 qui vérifie les signatures), FreeTSA (autorité d'horodatage publique, jeton revérifié par `openssl ts -verify`). Non testé : un vrai ClamAV, un vrai manager Wazuh, une clé WebAuthn physique, une autorité d'horodatage qualifiée eIDAS, un déploiement HTTPS réel derrière proxy.
+- **Essais contre de vrais composants** : Keycloak 26.4 (SSO complet, déconnexion unique), PostgreSQL 16.2, Garage 1.0.1 (serveur S3 qui vérifie les signatures), FreeTSA (autorité d'horodatage publique, jeton revérifié par `openssl ts -verify`). Non testé : un vrai manager Wazuh, une clé WebAuthn physique, une autorité d'horodatage qualifiée eIDAS.
+- **Déploiement par conteneurs** (22/11/2026, `docs/deploiement-docker.md`, section 8) : Keryx derrière Caddy en HTTPS (autorité locale, TLS 1.0 et 1.1 refusés), PostgreSQL 16.16, un vrai ClamAV 1.4.7 (fichier EICAR mis en quarantaine), Keycloak 26.8.2 avec second facteur imposé, Garage 1.3.1, sauvegarde planifiée ; huit conteneurs sans capability, en lecture seule, sans root. Non testé : certificat ACME, certificat fourni par une autorité, réglages du démon Docker (`userns-remap`, `bridge: none`, export des journaux).
 
 ## 5. Risques résiduels et limites connues
 - Sans SMTP ni adresse courriel, l'Admin connaît le code d'activation d'un nouveau compte et pourrait l'enrôler à sa place (ADR-0011).
@@ -41,7 +42,7 @@ Voir `docs/matrice-tracabilite.md` (exigence → fonction → code → test) et 
 - Contexte Wazuh (ADR-0021) : essayé contre un faux indexeur seulement. Un Admin peut faire émettre à Keryx une recherche authentifiée vers un hôte interne en HTTPS (les adresses privées sont acceptées, un indexeur étant interne) : le cloisonnement réseau du serveur reste nécessaire. Le compte de lecture doit être restreint, dans l'indexeur, aux index du client.
 
 ## 6. À décider ou fournir par l'organisation
-Durées de conservation (DPO) ; autorité d'horodatage : **prestataire qualifié eIDAS de l'UE retenu**, à désigner dans la liste de confiance (guide : `docs/horodatage-qualifie.md`) ; stockage des pièces : **Garage auto-hébergé retenu** (guide : `docs/deploiement-stockage-garage.md`) ; hébergeur et proxy TLS (TLS 1.2 minimum) ; politique de mots de passe et de rotation des clés d'API ; configuration MFA du realm Keycloak ; stratégie de sauvegarde (fréquence, lieu, test de restauration) ; supervision de Keryx lui-même ; niveau de sécurité visé (PRIS substantiel, compatible élevé) et commission d'homologation.
+Durées de conservation (DPO) ; autorité d'horodatage : **prestataire qualifié eIDAS de l'UE retenu**, à désigner dans la liste de confiance (guide : `docs/horodatage-qualifie.md`) ; stockage des pièces : **Garage auto-hébergé retenu** (guide : `docs/deploiement-stockage-garage.md`) ; hébergeur et proxy TLS (TLS 1.2 minimum) ; autorité de certification (le mode ACME du kit Docker n'a pas d'autorité par défaut : Let's Encrypt est hors UE, ADR-0023) ; source des signatures ClamAV (`database.clamav.net`, hors UE, ou miroir privé) ; architecture en zones si la qualification PDIS est visée (le kit tout-en-un ne la réalise pas, et Keryx ne sépare pas encore son portail client) ; politique de mots de passe et de rotation des clés d'API ; configuration MFA du realm Keycloak ; stratégie de sauvegarde (fréquence, lieu, test de restauration) ; supervision de Keryx lui-même ; niveau de sécurité visé (PRIS substantiel, compatible élevé) et commission d'homologation.
 
 ## 7. Prestations externes à commander
 1. **Audit d'accessibilité RGAA** : voir `rgaa.md`.
