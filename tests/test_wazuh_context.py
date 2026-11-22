@@ -503,13 +503,21 @@ def test_certificat_tls_de_l_indexeur(wapp, db, world, ticket, indexer, tmp_path
     other = tmp_path / "autre"
     other.mkdir()
     from .fake_indexer import make_pki
-    assert adm.patch("/api/v1/admin/clients/ACME", json={"wazuh_ca_pem": make_pki(str(other))}).status_code == 200
+    CREDS = {"wazuh_indexer_user": USER, "wazuh_indexer_password": PASSWORD}
+    # Changer l'autorité sans ressaisir le compte l'efface : il n'est pas envoyé à un serveur authentifié autrement.
+    r = adm.patch("/api/v1/admin/clients/ACME", json={"wazuh_ca_pem": make_pki(str(other))})
+    assert r.status_code == 200 and r.json()["wazuh_credentials_set"] is False
+    assert audit_rows(db, "client.update")[-1].details["wazuh"]["identifiants"] == "effaces"
+    assert fetch(a).status_code == 409
+    assert adm.patch("/api/v1/admin/clients/ACME", json={"wazuh_ca_pem": make_pki(str(other)), **CREDS}).status_code == 200
     assert fetch(a).status_code == 502
     # la bonne autorité : accepté
-    assert adm.patch("/api/v1/admin/clients/ACME", json={"wazuh_ca_pem": indexer.ca_pem}).status_code == 200
+    assert adm.patch("/api/v1/admin/clients/ACME", json={"wazuh_ca_pem": indexer.ca_pem, **CREDS}).status_code == 200
     assert fetch(a).status_code == 200
     # vérification désactivée (déconseillé, tracé) : accepté sans autorité, et inscrit dans le jeu
-    r = adm.patch("/api/v1/admin/clients/ACME", json={"wazuh_ca_pem": None, "wazuh_tls_verify": False})
+    r = adm.patch("/api/v1/admin/clients/ACME", json={"wazuh_tls_verify": False})
+    assert r.json()["wazuh_credentials_set"] is False            # contrôle TLS retiré : compte effacé aussi
+    r = adm.patch("/api/v1/admin/clients/ACME", json={"wazuh_ca_pem": None, "wazuh_tls_verify": False, **CREDS})
     assert r.json()["wazuh_tls_verify"] is False
     assert audit_rows(db, "client.update")[-1].details["wazuh"]["verification_tls"] is False
     assert fetch(a).json()["document"]["source"]["tls_verified"] is False

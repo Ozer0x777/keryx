@@ -22,6 +22,8 @@ from jwt.algorithms import ECAlgorithm, RSAAlgorithm
 
 ALLOWED_ALGS = ("RS256", "RS384", "RS512", "ES256", "ES384", "PS256")
 HTTP_TIMEOUT = 8.0
+KNOWN_ROLES = ("admin", "manager", "analyst", "client")
+DEFAULT_SSO_ROLES = ("manager", "analyst", "client")
 
 
 class OidcError(Exception):
@@ -36,6 +38,9 @@ class Provider:
     client_id: str
     client_secret: str | None = None
     scopes: str = "openid profile email"
+    # Rôles Keryx que ce fournisseur peut authentifier. Jamais « admin » par défaut : l'Admin garde l'authentification
+    # locale (accès de secours), et un realm ne doit pas pouvoir prendre un compte d'un autre périmètre (ADR-0017).
+    roles: tuple[str, ...] = DEFAULT_SSO_ROLES
 
 
 def load_providers(raw: str | None, allow_http: bool) -> dict[str, Provider]:
@@ -48,6 +53,11 @@ def load_providers(raw: str | None, allow_http: bool) -> dict[str, Provider]:
             p = Provider(name=str(it["name"]), label=str(it.get("label") or it["name"]), issuer=str(it["issuer"]).rstrip("/"),
                          client_id=str(it["client_id"]), client_secret=it.get("client_secret"),
                          scopes=str(it.get("scopes") or "openid profile email"))
+            if "roles" in it:
+                roles = it["roles"]
+                if not isinstance(roles, list) or not roles or any(r not in KNOWN_ROLES for r in roles):
+                    raise ValueError(f"rôles du fournisseur « {p.name} » : liste non vide parmi {', '.join(KNOWN_ROLES)}")
+                p.roles = tuple(dict.fromkeys(roles))
             if not p.name.replace("-", "").replace("_", "").isalnum():
                 raise ValueError("nom de fournisseur invalide")
             u = urlparse(p.issuer)

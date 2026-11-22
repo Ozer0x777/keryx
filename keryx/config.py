@@ -33,6 +33,8 @@ class Settings:
     min_rule_level: int = field(default_factory=lambda: _int("KERYX_MIN_RULE_LEVEL", 7))
     dedup_minutes: int = field(default_factory=lambda: _int("KERYX_DEDUP_MINUTES", 15))
     max_alert_bytes: int = 1_000_000
+    # Corps de requête ordinaire (JSON) : borne appliquée avant toute lecture, session ouverte ou non (voir bodylimit.py)
+    max_body_bytes: int = field(default_factory=lambda: _int("KERYX_MAX_BODY_BYTES", 2 * 1024 * 1024))
 
     # Sessions et authentification (RFC 6265, ASVS V6/V7)
     cookie_secure: bool = field(default_factory=lambda: _bool("KERYX_COOKIE_SECURE", True))

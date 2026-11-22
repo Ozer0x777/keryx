@@ -22,6 +22,11 @@ from .models import OidcFlow, User
 from .oidc import Discovery, OidcError, pkce_pair
 
 FLOW_MINUTES = 10
+# Cookie qui lie une connexion SSO en cours au navigateur qui l'a commencée (RFC 9700 §4.7 : sans ce lien, un tiers ferait
+# terminer par sa victime une connexion commencée chez lui). SameSite=Lax : il doit revenir avec la redirection du
+# fournisseur d'identité, ce qu'un cookie Strict ne ferait pas.
+FLOW_COOKIE = "keryx_sso"
+FLOW_COOKIE_PATH = "/api/v1/auth/oidc"
 
 
 def register(app, ctx) -> None:
@@ -33,7 +38,8 @@ def register(app, ctx) -> None:
         return f"{settings.public_url.rstrip('/')}/api/v1/auth/oidc/{name}/callback"
 
     def fail(db: DbSession, reason: str, code: str, name: str, ip: str, username: str | None = None) -> RedirectResponse:
-        audit.record(db, username or "anonyme", "auth.sso_failed", None, None, None, {"provider": name, "reason": reason, "ip": ip})
+        audit.record(db, username or "anonyme", "auth.sso_failed", None, None, None,
+                     {"provider": name, "reason": audit._neutralize(str(reason))[:200], "ip": ip})
         commit(db)
         return RedirectResponse(f"/connexion?sso_error={quote(code)}", status_code=303)
 
@@ -60,14 +66,18 @@ def register(app, ctx) -> None:
         verifier, challenge = pkce_pair()
         now = utcnow()
         db.execute(delete(OidcFlow).where(OidcFlow.expires_at < now))  # ménage des flux expirés
-        db.add(OidcFlow(state_hash=security.sha256(state), provider=name, nonce=nonce, code_verifier=verifier,
+        binding = secrets.token_urlsafe(32)
+        db.add(OidcFlow(state_hash=security.sha256(f"{state}:{binding}"), provider=name, nonce=nonce, code_verifier=verifier,
                         expires_at=now + timedelta(minutes=FLOW_MINUTES)))
         db.commit()
         try:
             url = discoveries[name].authorization_url(redirect_uri(name), state, nonce, challenge)
         except OidcError:
             return RedirectResponse("/connexion?sso_error=indisponible", status_code=303)
-        return RedirectResponse(url, status_code=303)
+        resp = RedirectResponse(url, status_code=303)
+        resp.set_cookie(FLOW_COOKIE, binding, max_age=FLOW_MINUTES * 60, httponly=True, secure=settings.cookie_secure,
+                        samesite="lax", path=FLOW_COOKIE_PATH)
+        return resp
 
     @app.get("/api/v1/auth/oidc/{name}/callback")
     def callback(name: str, request: Request, code: str | None = None, state: str | None = None,
@@ -79,7 +89,9 @@ def register(app, ctx) -> None:
             raise HTTPException(429, "Trop de tentatives, réessayez plus tard.")
         if error or not code or not state:
             return fail(db, error or "paramètres manquants", "refuse", name, ip)
-        flow = db.get(OidcFlow, security.sha256(state))
+        # L'état n'est reconnu qu'avec le cookie du navigateur qui a commencé la connexion.
+        binding = request.cookies.get(FLOW_COOKIE) or ""
+        flow = db.get(OidcFlow, security.sha256(f"{state}:{binding}")) if binding and len(binding) <= 100 else None
         if flow is not None:
             db.delete(flow)  # usage unique : l'état ne sert qu'une fois, quel que soit le résultat
             db.commit()
@@ -99,11 +111,17 @@ def register(app, ctx) -> None:
             email, verified = str(claims.get("email") or "").lower(), claims.get("email_verified") is True
             if cand is None or cand.oidc_sub is not None:
                 return fail(db, "aucun compte Keryx lié à cette identité", "inconnu", name, ip, uname)
+            if cand.role not in providers[name].roles:
+                # Avant toute liaison : ce fournisseur n'a pas autorité sur les comptes de ce rôle.
+                return fail(db, "liaison refusée : rôle non admis pour ce fournisseur", "inconnu", name, ip, uname)
             if not (verified and cand.email and cand.email.lower() == email):
                 return fail(db, "liaison refusée : courriel vérifié différent ou absent", "liaison", name, ip, uname)
             cand.oidc_issuer, cand.oidc_sub = issuer, sub
             user = cand
             audit.record(db, user.username, "auth.sso_linked", "user", user.id, None, {"provider": name})
+        if user.role not in providers[name].roles:
+            # Contrôlé à chaque connexion : un compte lié puis changé de rôle ne garde pas l'accès par ce fournisseur.
+            return fail(db, "rôle non admis pour ce fournisseur", "inconnu", name, ip, user.username)
         if not user.active:
             return fail(db, "compte inactif", "inconnu", name, ip, user.username)
         if user.locked_until and as_utc(user.locked_until) > utcnow():
@@ -117,6 +135,7 @@ def register(app, ctx) -> None:
             if s is not None:
                 db.delete(s)
         ctx.open_session(db, user, resp, ip, "sso", sso=(name, id_token))
+        resp.delete_cookie(FLOW_COOKIE, path=FLOW_COOKIE_PATH)
         return resp
 
     @app.post("/api/v1/admin/users/{username}/unlink-sso", dependencies=[Depends(ctx.admin_guard)])

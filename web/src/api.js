@@ -25,7 +25,7 @@ export async function api(path, { method = 'GET', json, form, params } = {}) {
   } else if (form) {
     body = form
   }
-  if (method !== 'GET') headers['X-CSRF-Token'] = csrfToken()
+  headers['X-CSRF-Token'] = csrfToken()   // aussi en lecture : le téléchargement d'une pièce l'exige
   const res = await fetch(url, { method, headers, body, credentials: 'same-origin' })
   const type = res.headers.get('content-type') || ''
   if (!res.ok) {

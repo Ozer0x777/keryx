@@ -35,9 +35,10 @@ from . import attachments as att
 from . import audit, inbox, routes_admin, routes_oidc, routes_ops, routes_isi, routes_reports, routes_timestamp, routes_wazuh, routes_webauthn, routes_work, security
 from . import wazuh_context
 from .oidc import load_providers
+from .bodylimit import BodyLimitMiddleware
 from .config import Settings
 from .db import Base, make_engine, make_session_factory
-from .ids import as_utc, rfc3339, utcnow
+from .ids import as_utc, bounded_input_date, rfc3339, utcnow
 from .iodef import validate as iodef_validate
 from .ingest import AlertRejected, ingest_alert
 from .mitre import valid_technique
@@ -280,6 +281,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             response.headers["Cache-Control"] = "no-store"
         return response
 
+    # -- taille des corps de requête, bornée avant toute lecture (voir bodylimit.py)
+    def _has_full_session(token: str) -> bool:
+        db = SessionLocal()
+        try:
+            s = db.get(Session, security.sha256(token))
+            return bool(s and s.stage == "full" and as_utc(s.expires_at) > utcnow())
+        finally:
+            db.close()
+
+    app.add_middleware(BodyLimitMiddleware, default_limit=settings.max_body_bytes, cookie_name=SESSION_COOKIE,
+                       has_session=_has_full_session, large=[
+                           (re.compile(r"^/api/v1/tickets/[^/]+/attachments$"), settings.max_attachment_bytes + 1024 * 1024),
+                           (re.compile(r"^/api/v1/mitre/import$"), routes_ops.MAX_STIX_BYTES + 1024 * 1024)])
+
     # -- dépendances
     def get_db():
         db = SessionLocal()
@@ -362,6 +377,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def admin_guard(user: User = Depends(current_user)) -> None:
         """Contrôle de rôle placé AVANT la validation du corps : un non-admin reçoit 403, jamais le détail du schéma."""
         require_role(user, "admin")
+
+    def input_date(value: datetime | None, what: str, future_days: int = 1) -> datetime | None:
+        try:
+            return bounded_input_date(value, what, future_days)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
 
     def require_open(t: Ticket) -> None:
         if t.status in TERMINAL:
@@ -522,6 +543,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if s is None or s.stage != "password":
             raise HTTPException(401, "Étape mot de passe requise.")
         user = db.get(User, s.user_id)
+        if user is None or not user.active:
+            raise HTTPException(401, "Étape mot de passe requise.")
         if not login_ip_limiter.allow(ip, db) or not login_user_limiter.allow(user.username.lower(), db):
             raise HTTPException(429, "Trop de tentatives, réessayez plus tard.")
         if not user.enrolled:
@@ -986,7 +1009,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 v = getattr(body, f)
                 setattr(t, f, clean_html(v) if v else None)
         if "compromission_initiale" in sent:
-            t.compromission_initiale = body.compromission_initiale
+            t.compromission_initiale = input_date(body.compromission_initiale, "Date de compromission initiale")
         t.updated_at = utcnow()
         event(db, t, user, "synthese", {"champs": sorted(sent)})
         commit(db)
@@ -1067,6 +1090,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                           user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         t = load_ticket(db, user, ref)
         require_open(t)  # chaîne de possession figée sur un ticket clos [ISO/IEC 27037]
+        collected_at = input_date(collected_at, "Date de collecte")
         if embedded:
             # Image insérée depuis l'éditeur : jamais visible au dépôt ; elle le devient à l'enregistrement d'un contenu
             # visible qui la référence (voir reveal_embedded_images). Le dépôt d'un client reste visible par le client.
@@ -1128,6 +1152,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         require_open(t)
         if body.sensitivity not in TLP:
             raise HTTPException(422, f"Sensibilité attendue parmi : {', '.join(TLP)}.")
+        body.collected_at = input_date(body.collected_at, "Date de collecte")
         a = Attachment(ticket_id=t.id, tenant_id=t.tenant_id, kind="preuve_externe",
                        filename=att.safe_filename(body.filename), storage_name=None, size=body.size,
                        sha256=body.sha256, description=body.description, collected_at=body.collected_at,
@@ -1141,9 +1166,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return attachment_view(a)
 
     @app.get("/api/v1/attachments/{attachment_id}/content")
-    def download_attachment(attachment_id: str, motif: str | None = None, confirmer_malveillant: bool = False,
+    def download_attachment(attachment_id: str, request: Request, motif: str | None = None,
+                            confirmer_malveillant: bool = False, x_csrf_token: str | None = Header(default=None),
                             user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         a, t = load_attachment(db, user, attachment_id)
+        if a.kind != "image" or a.scan_status == "quarantaine":
+            # Un fichier se télécharge par un appel explicite de l'interface (jeton CSRF), jamais par une balise <img> ou
+            # un lien glissé dans un contenu : sinon un tiers ferait inscrire un téléchargement, avec le motif de son
+            # choix, au nom de qui ouvre le ticket (chaîne de possession, ISO/IEC 27037).
+            s = _session_from_cookie(request, db)
+            if not s or not x_csrf_token or not security.hmac_equal(x_csrf_token, s.csrf_token):
+                raise HTTPException(403, "Jeton CSRF manquant ou invalide.")
         if a.kind == "preuve_externe" or not a.storage_name or a.lifecycle != "conserve":
             raise HTTPException(410, "Contenu non disponible dans Keryx (preuve externe, restituée ou détruite).")
         quarantined = a.scan_status == "quarantaine"
@@ -1257,7 +1290,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         login_ip_limiter=login_ip_limiter, login_user_limiter=login_user_limiter, sso_only=sso_only,
         count_second_factor_failure=count_second_factor_failure, open_session=open_session,
         set_cookie=_set_cookie, load_attachment=load_attachment, SESSION_COOKIE=SESSION_COOKIE, CSRF_COOKIE=CSRF_COOKIE, oidc_providers=oidc_providers,
-        limiter=limiter, attachment_view=attachment_view)
+        limiter=limiter, attachment_view=attachment_view, input_date=input_date)
     routes_admin.register(app, ctx)
     routes_work.register(app, ctx)
     routes_reports.register(app, ctx)

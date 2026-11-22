@@ -53,6 +53,7 @@ Le conteneur applique `alembic upgrade head` puis démarre. Dépendances install
 | Variable | Rôle | Défaut |
 |---|---|---|
 | `KERYX_DATABASE_URL` | SQLite (tests) ou PostgreSQL, ex. `postgresql+psycopg://u:p@hôte/base` (production) | `sqlite:///./keryx.db` |
+| `KERYX_MAX_BODY_BYTES` | Taille maximale d'une requête ordinaire, contrôlée avant lecture, voir `docs/exploitation.md` | `2097152` |
 | `KERYX_OIDC_PROVIDERS`, `KERYX_OIDC_ENFORCE`, `KERYX_OIDC_REQUIRED_ACR`, `KERYX_OIDC_ALLOW_HTTP` | SSO OpenID Connect (Keycloak), voir `docs/exploitation.md` et ADR-0017 | désactivé |
 | `KERYX_STORAGE`, `KERYX_S3_*`, `KERYX_QUARANTINE_PASSWORD` | Stockage objet S3 chiffré avant envoi ; mot de passe de l'archive de quarantaine, voir ADR-0019 | disque ; « infected » |
 | `KERYX_TSA_URL`, `KERYX_TSA_CA_FILE`, `KERYX_TSA_USER`/`_PASSWORD`/`_BEARER`/`_CLIENT_CERT`/`_CLIENT_KEY`, `KERYX_TSA_POLICY_OID` | Horodatage de confiance RFC 3161 (autorité à choisir dans l'UE), voir ADR-0018 | désactivé |

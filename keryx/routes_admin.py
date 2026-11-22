@@ -279,13 +279,14 @@ def register(app, ctx) -> None:
                 "wazuh_link_enabled": bool(t.wazuh_dashboard_url), "wazuh_context_enabled": wz.context_configured(t),
                 "tickets": tickets, "created_at": rfc3339(t.created_at)}
 
-    def apply_wazuh(t: Tenant, body: ClientPatchIn, sent: set) -> dict:
+    def apply_wazuh(db: DbSession, t: Tenant, body: ClientPatchIn, sent: set) -> dict:
         """Applique les réglages du contexte Wazuh (ADR-0021) et renvoie ce qui en est tracé dans l'audit : des noms
         d'hôte et des indicateurs, jamais un identifiant ni un mot de passe. Lève ConfigError (422) sans rien enregistrer."""
         if "wazuh_dashboard_url" in sent:
             t.wazuh_dashboard_url = wz.validate_dashboard_template(body.wazuh_dashboard_url) if (body.wazuh_dashboard_url or "").strip() else None
         if "wazuh_index_pattern" in sent:
             t.wazuh_index_pattern = wz.validate_index_pattern(body.wazuh_index_pattern) if (body.wazuh_index_pattern or "").strip() else None
+        trust_before = (t.wazuh_tls_verify, t.wazuh_ca_pem)
         if "wazuh_tls_verify" in sent:
             t.wazuh_tls_verify = True if body.wazuh_tls_verify is None else body.wazuh_tls_verify
         if "wazuh_ca_pem" in sent:
@@ -293,6 +294,12 @@ def register(app, ctx) -> None:
         credentials = "inchanges"
         new_user = "wazuh_indexer_user" in sent and bool(body.wazuh_indexer_user)
         new_password = "wazuh_indexer_password" in sent and bool(body.wazuh_indexer_password)
+        # Contrôle TLS retiré ou autorité changée : le serveur qui recevra le compte n'est plus celui qui était
+        # authentifié à la saisie. Comme pour un changement d'adresse, le compte enregistré doit être ressaisi.
+        if (t.wazuh_tls_verify, t.wazuh_ca_pem) != trust_before and (t.wazuh_tls_verify is False or t.wazuh_ca_pem != trust_before[1]) \
+                and (t.wazuh_indexer_user or t.wazuh_indexer_password) and not (new_user and new_password):
+            t.wazuh_indexer_user = t.wazuh_indexer_password = None
+            credentials = "effaces"
         if "wazuh_indexer_url" in sent:
             previous = t.wazuh_indexer_url
             if (body.wazuh_indexer_url or "").strip():
@@ -315,6 +322,14 @@ def register(app, ctx) -> None:
             raise wz.ConfigError("Indiquer ensemble l'identifiant et le mot de passe du compte de lecture de l'indexeur.")
         if t.wazuh_indexer_user and not t.wazuh_indexer_url:
             raise wz.ConfigError("Indiquer l'adresse de l'indexeur avant le compte de lecture.")
+        if t.wazuh_indexer_url:
+            # Indexeur partagé : les numéros d'agent ne sont uniques que par manager Wazuh. Deux clients sur la même
+            # adresse et le même motif d'index liraient les événements l'un de l'autre [PDIS IV.3.8.g].
+            pattern = t.wazuh_index_pattern or wz.DEFAULT_INDEX_PATTERN
+            for other in db.scalars(select(Tenant).where(Tenant.id != t.id, Tenant.wazuh_indexer_url == t.wazuh_indexer_url)):
+                if (other.wazuh_index_pattern or wz.DEFAULT_INDEX_PATTERN) == pattern:
+                    raise wz.ConfigError(f"Le client {other.key} utilise déjà cet indexeur avec le motif d'index « {pattern} » : "
+                                         "donner à chaque client un motif d'index qui ne couvre que ses propres alertes.")
         dashboard = urlsplit(t.wazuh_dashboard_url).hostname if t.wazuh_dashboard_url else None
         return {"tableau_de_bord": dashboard,
                 "indexeur": wz.parse_indexer_url(t.wazuh_indexer_url, True).label if t.wazuh_indexer_url else None,
@@ -374,7 +389,7 @@ def register(app, ctx) -> None:
         details: dict = {"champs": changed}
         if sent & set(WAZUH_FIELDS):
             try:
-                details["wazuh"] = apply_wazuh(t, body, sent)
+                details["wazuh"] = apply_wazuh(db, t, body, sent)
             except wz.ConfigError as exc:
                 raise HTTPException(422, str(exc))
             changed.extend(f for f in WAZUH_FIELDS if f in sent)

@@ -102,7 +102,7 @@ def register(app, ctx) -> None:
             raise HTTPException(409, "Le mode crise n'est pas actif sur ce ticket.")
         if body.kind not in CRISIS_KINDS:
             raise HTTPException(422, f"Type attendu parmi : {', '.join(CRISIS_KINDS)}.")
-        due = body.due_at.astimezone(timezone.utc) if body.due_at and body.due_at.tzinfo else body.due_at
+        due = ctx.input_date(body.due_at, "Échéance", future_days=3660)
         e = CrisisEntry(ticket_id=t.id, tenant_id=t.tenant_id, kind=body.kind, body=body.body.strip(),
                         owner=body.owner, due_at=due, created_by=user.username)
         db.add(e)
