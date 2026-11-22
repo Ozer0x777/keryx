@@ -108,6 +108,9 @@ class User(Base):
     # Identité fédérée (OIDC, Keycloak) : « émetteur » et « sub » du jeton, liés à la première connexion SSO
     oidc_issuer: Mapped[str | None] = mapped_column(String(300), nullable=True)
     oidc_sub: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Clé d'API VirusTotal personnelle (ADR-0022) : chiffrée AES-256-GCM, contexte « vt_api_key:<id> ». Jamais
+    # renvoyée par l'API, jamais journalisée ; l'Admin n'en voit rien.
+    vt_api_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     tenants: Mapped[list["Tenant"]] = relationship(secondary="user_tenants")
 
 
@@ -322,6 +325,28 @@ class CustodyEvent(Base):
     actor: Mapped[str] = mapped_column(String(120))
     action: Mapped[str] = mapped_column(String(32))
     reason: Mapped[str] = mapped_column(String(500), default="")
+
+
+HASH_SOURCES = ("piece", "preuve_externe", "alerte", "saisie")
+HASH_LOOKUP_STATUS = ("trouve", "inconnu")
+
+
+class HashLookup(Base):
+    """Recherche d'une empreinte sur VirusTotal, rattachée à un ticket : ce qui a été demandé, par qui, quand, et le
+    résumé borné de la réponse. Interne : jamais montré au client. Un échec n'est pas enregistré ici (audit seulement).
+    [PRIS VI.5.3.d registre des actions ; PDIS IV.3.8.g cloisonnement ; ADR-0022]"""
+    __tablename__ = "hash_lookups"
+    id: Mapped[str] = _id()
+    ticket_id: Mapped[str] = mapped_column(ForeignKey("tickets.id", ondelete="CASCADE"), index=True)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    hash: Mapped[str] = mapped_column(String(64))                  # hexadécimal en minuscules
+    hash_type: Mapped[str] = mapped_column(String(8))              # sha256 | sha1
+    source_type: Mapped[str] = mapped_column(String(16))           # piece | preuve_externe | alerte | saisie
+    source_id: Mapped[str | None] = mapped_column(String(64), nullable=True)   # pièce ou alerte brute ; vide en saisie
+    status: Mapped[str] = mapped_column(String(16))                # trouve | inconnu (jamais « sain »)
+    summary: Mapped[dict] = mapped_column(JSON, default=dict)      # résumé borné, texte assaini (voir virustotal.summarize)
+    actor: Mapped[str] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class AuditEntry(Base):

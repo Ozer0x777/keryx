@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session as DbSession
 from starlette.background import BackgroundTask
 
 from . import attachments as att
-from . import audit, inbox, routes_admin, routes_oidc, routes_ops, routes_isi, routes_reports, routes_timestamp, routes_wazuh, routes_webauthn, routes_work, security
+from . import audit, inbox, routes_admin, routes_oidc, routes_ops, routes_isi, routes_reports, routes_timestamp, routes_virustotal, routes_wazuh, routes_webauthn, routes_work, security
 from . import wazuh_context
 from .oidc import load_providers
 from .bodylimit import BodyLimitMiddleware
@@ -598,7 +598,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def me(request: Request, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         s = _session_from_cookie(request, db)
         return {"username": user.username, "display_name": user.display_name, "role": user.role,
-                "csrf_token": s.csrf_token if s else None, "features": {"timestamping": bool(settings.tsa_url)},
+                "csrf_token": s.csrf_token if s else None,
+                # « virustotal » : interrupteur d'instance ET rôle de l'équipe (ADR-0022) ; faux pour le client et l'Admin,
+                # l'interface ne leur montre alors rien de cette fonction.
+                "features": {"timestamping": bool(settings.tsa_url),
+                             "virustotal": bool(settings.virustotal_enabled and user.role in ("analyst", "manager"))},
                 # Session ouverte par SSO : la double authentification est alors celle du fournisseur d'identité, que
                 # Keryx ne constate pas lui-même (l'interface n'affiche « 2FA active » que pour une session locale).
                 "sso": bool(s and s.sso_provider),
@@ -834,6 +838,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             wazuh = wazuh_context.ticket_view(db, t, db.get(Tenant, t.tenant_id))
             if wazuh:
                 out["wazuh"] = wazuh
+            # Recherches VirusTotal déjà faites sur ce ticket (ADR-0022) : pour l'équipe seulement. La clé est absente
+            # pour le client, et absente pour tous quand la fonction est coupée sur l'instance.
+            if settings.virustotal_enabled:
+                out["virustotal"] = routes_virustotal.ticket_view(db, t)
         audit.record(db, user.username, "ticket.read", "ticket", t.ref, t.tenant_id)
         commit(db)
         return out
@@ -1300,6 +1308,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     routes_timestamp.register(app, ctx)
     routes_isi.register(app, ctx)
     routes_wazuh.register(app, ctx)
+    routes_virustotal.register(app, ctx)
 
     # ---------------------------------------------------------------- interface web
     dist = settings.web_dist

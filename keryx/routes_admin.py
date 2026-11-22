@@ -233,6 +233,11 @@ def register(app, ctx) -> None:
         if "active" in sent and body.active is not None and body.active != u.active:
             changes["active"] = body.active
             u.active = body.active
+        # Clé VirusTotal (ADR-0022) : réservée à l'analyste et au manager. Un compte qui quitte ces rôles la perd ;
+        # l'Admin ne la voit pas, il sait seulement qu'elle a été effacée.
+        if u.role not in ("analyst", "manager") and u.vt_api_key:
+            u.vt_api_key = None
+            changes["cle_virustotal"] = "effacee"
         if changes.get("active") is False or "role" in changes or "clients" in changes:
             drop_sessions(db, u)  # les droits changent : reconnexion obligatoire
         audit.record(db, user.username, "user.update", "user", u.id, None, changes)

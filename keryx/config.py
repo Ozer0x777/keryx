@@ -122,6 +122,21 @@ class Settings:
     wazuh_context_user_limit: int = field(default_factory=lambda: _int("KERYX_WAZUH_CONTEXT_USER_LIMIT", 20))
     wazuh_context_client_limit: int = field(default_factory=lambda: _int("KERYX_WAZUH_CONTEXT_CLIENT_LIMIT", 60))
 
+    # Recherche d'empreinte sur VirusTotal (ADR-0022) : DÉROGATION à « aucun service externe ». Seule une empreinte
+    # (SHA-256 ou SHA-1) sort, avec la clé d'API de l'utilisateur qui lance la recherche (saisie dans son profil).
+    # Disponible par défaut ; cet interrupteur la coupe pour toute l'instance (routes en 409, rien dans l'interface).
+    virustotal_enabled: bool = field(default_factory=lambda: _bool("KERYX_VIRUSTOTAL_ENABLED", True))
+    # Adresse de base de l'API : NE PAS RÉGLER en production (vide = https://www.virustotal.com, hôte fixe). Sert aux
+    # essais contre un faux serveur : HTTPS, ou boucle locale en clair seulement si KERYX_VIRUSTOTAL_ALLOW_LOOPBACK.
+    virustotal_url: str | None = field(default_factory=lambda: os.environ.get("KERYX_VIRUSTOTAL_URL") or None)
+    virustotal_allow_loopback: bool = field(default_factory=lambda: _bool("KERYX_VIRUSTOTAL_ALLOW_LOOPBACK", False))
+    # Mandataire HTTP explicite pour cette seule sortie (http://hôte:port). Les variables HTTP(S)_PROXY de
+    # l'environnement ne sont jamais lues.
+    virustotal_proxy: str | None = field(default_factory=lambda: os.environ.get("KERYX_VIRUSTOTAL_PROXY") or None)
+    # Recherches par minute : par utilisateur (à rapprocher du quota réel de la clé employée) et par client.
+    virustotal_user_limit: int = field(default_factory=lambda: _int("KERYX_VIRUSTOTAL_USER_LIMIT", 4))
+    virustotal_client_limit: int = field(default_factory=lambda: _int("KERYX_VIRUSTOTAL_CLIENT_LIMIT", 20))
+
     # Interface web (fichiers construits par Vite)
     web_dist: str = field(default_factory=lambda: os.environ.get(
         "KERYX_WEB_DIST", os.path.join(os.path.dirname(__file__), "web_dist")))
