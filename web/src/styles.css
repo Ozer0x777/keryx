@@ -68,11 +68,11 @@ textarea { resize: vertical; }
 .nav-link { display: flex; align-items: center; gap: 10px; color: #C9D1DC; text-decoration: none; padding: 9px 10px; border-radius: 6px; min-height: 40px; }
 .nav-link:hover { background: #1A2230; color: #fff; }
 .nav-link.active { background: #1F2A3A; color: #fff; box-shadow: inset 3px 0 0 var(--accent); }
-.sidebar-user { margin-top: auto; border-top: 1px solid #222C3A; padding-top: 12px; display: flex; align-items: center; gap: 10px; }
+.sidebar-user { margin-top: auto; border-top: 1px solid #222C3A; padding: 12px 10px 0; display: flex; align-items: center; gap: 10px; }
 .avatar { width: 34px; height: 34px; border-radius: 50%; background: #2A3648; color: #fff; display: grid; place-items: center; font-weight: 600; flex: none; }
 .who { flex: 1; min-width: 0; font-size: 12px; }
 .who .name { display: block; color: #fff; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nav-logout { background: none; border-color: #2E3A4C; color: #C9D1DC; min-height: 32px; padding: 4px 10px; font-size: 12px; }
+.nav-logout { background: none; border-color: #2E3A4C; color: #C9D1DC; min-height: 32px; padding: 4px 10px; font-size: 12px; margin-top: 12px; }
 .content { padding: 24px 32px; min-width: 0; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
 
@@ -364,8 +364,8 @@ select.narrow-select { max-width: 260px; }
   .sidebar .nav-section { display: none; }
   .sidebar .nav-link { min-height: 34px; padding: 5px 10px; font-size: 13px; }
   .sidebar .nav-link.active { box-shadow: none; }
-  .sidebar-user { margin-top: 0; border-top: 0; padding-top: 0; flex: 1 1 100%; justify-content: space-between; }
-  .nav-logout { width: auto; min-height: 32px; padding: 4px 12px; }
+  .sidebar-user { margin-top: 0; border-top: 0; padding: 0; flex: 1 1 100%; justify-content: space-between; }
+  .nav-logout { width: auto; min-height: 32px; padding: 4px 12px; margin-top: 0; }
   .bell-panel { position: fixed; left: 12px; right: 12px; bottom: auto; top: 64px; width: auto; }
 }
 @media (max-width: 800px) {
