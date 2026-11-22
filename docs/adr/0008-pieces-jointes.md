@@ -1,4 +1,4 @@
-# ADR-0008 — Pièces jointes, preuves et quarantaine
+# ADR-0008 : Pièces jointes, preuves et quarantaine
 
 - **Statut** : accepté (20/11/2026)
 - **Décision** :

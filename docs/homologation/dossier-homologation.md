@@ -1,4 +1,4 @@
-# Keryx — éléments pour le dossier d'homologation
+# Keryx : éléments pour le dossier d'homologation
 
 *État au 21/11/2026, version 0.7.0. Ce document **n'est pas** une homologation, un audit ni un test d'intrusion : il rassemble ce que Keryx fournit à une commission d'homologation, avec ce qui a été réellement vérifié et ce qui reste à décider ou à faire faire par un tiers.*
 

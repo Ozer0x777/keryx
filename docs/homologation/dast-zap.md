@@ -1,4 +1,4 @@
-# Analyse dynamique automatisée (OWASP ZAP) — Keryx 0.7.0
+# Analyse dynamique automatisée (OWASP ZAP) : Keryx 0.7.0
 
 *Auto-contrôle de l'équipe de développement. **Ce n'est pas un test d'intrusion** : un scan automatique ne remplace ni l'analyse humaine ni les tests de logique métier (cloisonnement, rôles), qui restent à confier à un prestataire (`cahier-test-intrusion.md`).*
 

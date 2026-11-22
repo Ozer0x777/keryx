@@ -1,4 +1,4 @@
-# ADR-0007 — Scellement HMAC du journal d'audit et point de contrôle externe
+# ADR-0007 : Scellement HMAC du journal d'audit et point de contrôle externe
 
 - **Statut** : accepté (20/11/2026), complète ADR-0004
 - **Décision** : chaque entrée du journal porte un numéro de séquence continu et un sceau HMAC-SHA256 calculé sur (sceau précédent, contenu canonique, numéro). La clé HMAC est dérivée de `KERYX_SECRET_KEY` (jamais en base). Les écritures sont sérialisées (BEGIN IMMEDIATE sous SQLite, verrou consultatif sous PostgreSQL). `keryx checkpoint` produit un couple `séquence:sceau` à archiver hors de Keryx ; `keryx verify-audit --checkpoint` vérifie qu'aucune entrée antérieure n'a disparu ni changé.

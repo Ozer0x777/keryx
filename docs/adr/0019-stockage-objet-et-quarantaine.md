@@ -1,4 +1,4 @@
-# ADR-0019 — Stockage objet S3 et archive de quarantaine
+# ADR-0019 : Stockage objet S3 et archive de quarantaine
 
 - **Statut** : accepté (20/11/2026) ; stockage objet testé contre un serveur S3 simulé (moto), la signature recoupée avec botocore et le vecteur officiel d'AWS, et contre un vrai serveur qui vérifie les signatures, Garage 1.0.1 (`KERYX_TEST_S3_REAL`). Scaleway, OVHcloud et autres restent à essayer
 - **Stockage objet** : `KERYX_STORAGE=s3` envoie les pièces dans un stockage compatible S3 hébergé dans l'UE (`KERYX_S3_ENDPOINT`, `_BUCKET`, `_ACCESS_KEY`, `_SECRET_KEY`, `_REGION`, `_PREFIX`). Le client (PUT, GET, DELETE, HEAD, signature AWS v4) est écrit sans dépendance lourde. Les objets sont **chiffrés avant envoi** (AES-256-GCM, clé dérivée de `KERYX_SECRET_KEY`, chemin de l'objet lié aux données authentifiées) : le serveur d'objets ne voit jamais le contenu, un objet déplacé ou altéré ne se déchiffre pas. HTTPS obligatoire (HTTP seulement avec `KERYX_S3_ALLOW_HTTP`, essais locaux). Une panne du stockage donne une erreur 502 explicite, sans pièce enregistrée à moitié.

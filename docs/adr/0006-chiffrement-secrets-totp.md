@@ -1,4 +1,4 @@
-# ADR-0006 — Chiffrement des secrets TOTP au repos
+# ADR-0006 : Chiffrement des secrets TOTP au repos
 
 - **Statut** : accepté (20/11/2026)
 - **Décision** : les secrets TOTP sont chiffrés en AES-256-GCM (bibliothèque `cryptography`) avec une clé maîtresse `KERYX_SECRET_KEY` (32 octets, base64) fournie par l'environnement, jamais stockée en base. Le contexte `totp:<id utilisateur>` est passé en données associées : un secret copié d'un compte à l'autre ne se déchiffre pas. Format versionné `v1:` pour permettre une rotation de clé.

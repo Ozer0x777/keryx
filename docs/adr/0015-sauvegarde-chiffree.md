@@ -1,4 +1,4 @@
-# ADR-0015 — Sauvegarde chiffrée
+# ADR-0015 : Sauvegarde chiffrée
 
 - **Statut** : accepté (20/11/2026) ; SQLite et PostgreSQL (pg_dump / pg_restore)
 - **Décision** : `keryx backup` produit une archive unique (copie cohérente de la base SQLite par l'API de sauvegarde en ligne, pièces, manifeste d'empreintes SHA-256) chiffrée par blocs de 1 Mio en AES-256-GCM, dans la construction STREAM (compteur et indicateur de dernier bloc dans le nonce) : toute modification, permutation ou troncature est détectée. Clé dérivée de `KERYX_SECRET_KEY` par HKDF-SHA256 avec un sel aléatoire. `keryx restore` exige un dossier vide, vérifie les empreintes, puis la chaîne d'audit.

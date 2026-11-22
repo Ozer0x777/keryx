@@ -1,4 +1,4 @@
-# ADR-0020 — Classification ETSI GS ISI 002 et export IODEF 2.0
+# ADR-0020 : Classification ETSI GS ISI 002 et export IODEF 2.0
 
 - **Statut** : accepté (20/11/2026) ; lu dans ETSI GS ISI 002 V1.2.1 (2015-11), document public. À confronter à la version en vigueur avant homologation.
 - **Décision** : un analyste ou un manager peut classer un ticket selon le modèle d'événement ETSI ISI : catégorie (IEX, IMF, IDB) et les 8 axes de la clause 4.4 : qui et/ou pourquoi, quoi, comment, statut, vulnérabilité(s) exploitée(s) (3 au plus), type de cible, conséquence C-I-D, type d'impact. Les valeurs de premier niveau reprennent les intitulés de l'Annexe B (références B.1.1 à B.1.8) ; chaque axe accepte une précision libre pour les sous-listes détaillées, que Keryx ne contraint pas (l'Annexe B précise que ses listes ne sont pas exhaustives). Quatre axes sont obligatoires pour exporter, comme dans la norme : qui/pourquoi, quoi, statut, type de cible.

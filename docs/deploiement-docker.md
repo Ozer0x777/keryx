@@ -110,7 +110,7 @@ La fiche rappelle aussi ses risques résiduels : le démon Docker tourne sous ro
 | 17 | `keryx` | indexeur Wazuh d'un client | 9200/tcp | HTTPS, lecture seule | `keryx-sortie` | sortie ouverte, réglé par client |
 | 18 | `keryx` | manager Wazuh | 514/udp | syslog RFC 5424 (audit de Keryx) | `keryx-sortie` | sortie ouverte, `KERYX_SYSLOG_HOST` |
 | 19 | `keryx` | `www.virustotal.com` | 443/tcp | HTTPS | `keryx-sortie` | sortie ouverte **et** `KERYX_VIRUSTOTAL_ENABLED=true` |
-| 20 | Administrateur | démon Docker de l'hôte | SSH de l'hôte | hors kit | — | administration |
+| 20 | Administrateur | démon Docker de l'hôte | SSH de l'hôte | hors kit | : | administration |
 
 Trois flux internes sont en clair (4, 10, 13) : chacun reste sur un réseau `internal` à deux conteneurs, sur la même machine. Pour le flux 13, Keryx chiffre chaque pièce avant l'envoi et signe chaque requête : ni le contenu ni le secret ne circulent (ADR-0019). Si ces services sont répartis sur plusieurs machines, ces flux doivent passer en TLS (PDIS IV.3.8.e).
 

@@ -1,4 +1,4 @@
-# ADR-0016 — Clés de sécurité WebAuthn (second facteur en option)
+# ADR-0016 : Clés de sécurité WebAuthn (second facteur en option)
 
 - **Statut** : accepté (20/11/2026)
 - **Décision** : en plus du TOTP, un utilisateur peut enregistrer des clés de sécurité WebAuthn / FIDO2 (Profil > Clés de sécurité, mot de passe redemandé). À l'étape 2 de la connexion, une clé peut remplacer le code TOTP. Le mot de passe reste le premier facteur. Le TOTP et les codes de secours restent disponibles : perdre une clé ne bloque pas le compte. Une réinitialisation de la 2FA par l'Admin retire aussi les clés. Les échecs d'une clé comptent pour le verrouillage comme ceux du TOTP.

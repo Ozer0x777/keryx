@@ -1,4 +1,4 @@
-# ADR-0021 — Contexte Wazuh : lien vers l'alerte et lecture de l'indexeur
+# ADR-0021 : Contexte Wazuh : lien vers l'alerte et lecture de l'indexeur
 
 - **Statut** : accepté (21/11/2026). **Essayé uniquement contre le faux indexeur des tests** (`tests/fake_indexer.py`, sous-ensemble de l'API OpenSearch), **jamais contre un vrai Wazuh** : voir « À valider » plus bas. Désactivé par défaut : tant qu'un Admin n'a rien réglé pour un client, la fonction n'apparaît nulle part (ni dans l'API, ni dans l'interface).
 - **Pourquoi** : pour qualifier une alerte, l'analyste a besoin de ce que le même équipement a journalisé juste avant et juste après, et d'un accès direct à l'alerte dans le tableau de bord Wazuh. Sans cela, il quitte Keryx, cherche l'agent et l'heure à la main, et ce qu'il a vu n'est rattaché à rien. Première intégration **sortante** de Keryx vers Wazuh (jusqu'ici, Wazuh poussait ses alertes vers Keryx) : d'où cet ADR.

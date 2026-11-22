@@ -1,11 +1,11 @@
-# ADR-0023 — Déploiement par conteneurs
+# ADR-0023 : Déploiement par conteneurs
 
 - **Statut** : accepté (22/11/2026). **Essayé pour de bon** en mode `local` avec tous les profils (Docker 29.9.3, compose 5.7.0) : voir `docs/deploiement-docker.md`, section 8. **Pas essayé** : le mode `acme`, le mode `fourni` avec un vrai certificat, un vrai manager Wazuh, les réglages du démon Docker (`userns-remap`, `bridge: none`, pilote de journaux).
 - **Pourquoi** : installer Keryx demandait jusqu'ici d'assembler à la main la base, le proxy TLS, l'antivirus, l'annuaire et le stockage objet, chacun décrit dans un guide différent. Un essai prenait une journée et chaque installation était différente, donc impossible à durcir une fois pour toutes.
 - **Exigences** : fiche ANSSI-FT-082 « Recommandations de sécurité relatives aux déploiements de conteneur Docker » (23/09/2020), R1 à R16, lue en entier ; PDIS v2.0, IV.3.8.d (matrice des flux), IV.3.6 (sauvegardes), IV.3.9.d et IV.3.13.c (annuaires, second facteur), IV.3.3 (Union européenne) ; RFC 9325 (TLS 1.2 au minimum) et RFC 6797 (HSTS), déjà retenues par le projet. Le kit **ne** satisfait **pas** IV.3.8.b, IV.3.10.b et c, IV.3.13.b et g, IV.3.6.c, IV.3.11 : c'est écrit dans la référence, section 6.
 - **Dépendance** : aucune bibliothèque ajoutée à Keryx. Images tierces, toutes libres et épinglées par empreinte : PostgreSQL 16.16, Caddy 2.11.9, ClamAV 1.4.7, Keycloak 26.8.2, Garage 1.3.1.
 
-## Décisions de l'utilisateur (22/11/2026)
+## Décisions du projet (22/11/2026)
 
 Un conteneur par service. **Un seul** fichier compose, avec des **profils**. HTTPS dans les deux modes : certificat automatique (ACME) ou certificat fourni. Keycloak et Garage en profils facultatifs qui arrivent configurés.
 

@@ -1,4 +1,4 @@
-# ADR-0018 — Horodatage de confiance (RFC 3161)
+# ADR-0018 : Horodatage de confiance (RFC 3161)
 
 - **Statut** : accepté (20/11/2026) ; testé contre une autorité locale (`openssl ts`) et contre une vraie autorité publique, FreeTSA (jeton revérifié par `openssl ts -verify`, `KERYX_TEST_TSA_REAL`). FreeTSA est un service gratuit, **non qualifié eIDAS** : il valide la chaîne technique, pas la valeur probante
 - **Décision** : une pièce ou un point de contrôle du journal d'audit peut être horodaté par une autorité d'horodatage (TSA) configurée (`KERYX_TSA_URL`, certificats d'autorité dans `KERYX_TSA_CA_FILE`). Désactivé par défaut. Seule l'empreinte du message `keryx-v1:<type>:<id>:<sha256>` quitte Keryx, jamais le contenu. La réponse est vérifiée avant d'être conservée (statut accordé, signature, chaîne jusqu'aux certificats configurés, empreinte et nonce de la demande) puis stockée avec la pièce ; elle peut être revérifiée à tout moment, hors ligne, et téléchargée (`.tsr`) pour être vérifiée par un tiers avec `openssl ts -verify`.

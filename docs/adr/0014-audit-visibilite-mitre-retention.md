@@ -1,4 +1,4 @@
-# ADR-0014 — Consultation de l'audit, référentiel MITRE, rétention
+# ADR-0014 : Consultation de l'audit, référentiel MITRE, rétention
 
 - **Statut** : accepté (20/11/2026) ; **durées de rétention à valider avec le DPO**
 - **Journal d'audit consultable** : par l'Admin et le Manager. Le Manager ne voit que les entrées de ses clients. L'Admin voit toutes les entrées mais les détails des actions touchant au contenu (tickets, pièces, rapports, modèles) lui sont masqués, pour respecter la séparation administrateur / opérateur. Chaque consultation est elle-même journalisée. Le point de contrôle (numéro et sceau) se génère dans l'interface pour archivage hors de Keryx.

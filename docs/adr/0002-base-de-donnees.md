@@ -1,4 +1,4 @@
-# ADR-0002 — SQLite pour les tests, PostgreSQL en production
+# ADR-0002 : SQLite pour les tests, PostgreSQL en production
 
 - **Statut** : accepté (20/11/2026)
 - **Décision** : SQLite (mode WAL, clés étrangères actives) pour le développement et les tests ; PostgreSQL en production. Passage par simple changement de `KERYX_DATABASE_URL`.

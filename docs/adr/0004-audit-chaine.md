@@ -1,4 +1,4 @@
-# ADR-0004 — Journal d'audit chaîné par empreintes
+# ADR-0004 : Journal d'audit chaîné par empreintes
 
 - **Statut** : accepté (20/11/2026), précisé par ADR-0007 (scellement HMAC + point de contrôle)
 - **Décision** : chaque entrée contient l'empreinte SHA-256 de la précédente et de son propre contenu canonique ; `verify_chain` recalcule toute la chaîne. Chaque entrée est aussi exportable en syslog RFC 5424 (facilité 13 « log audit ») vers Wazuh.

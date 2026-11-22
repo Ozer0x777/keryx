@@ -1,9 +1,113 @@
-# Keryx — v0.7
+# Keryx
 
-Outil open source de gestion d'incidents de sécurité alimenté par Wazuh. Une alerte Wazuh arrive,
-Keryx ouvre un ticket pré-rempli (description, criticité, règle, équipement, MITRE ATT&CK),
-le registre, notifie le client par la seule référence, et trace tout dans un journal d'audit scellé.
+Console de gestion des incidents de sécurité pour un SOC équipé de Wazuh. Une alerte Wazuh arrive, Keryx ouvre un
+ticket pré-rempli (règle, équipement, criticité, MITRE ATT&CK), l'équipe le qualifie et le traite, le client suit
+son incident sur son portail, et chaque action est inscrite dans un journal d'audit scellé.
 
+Keryx est écrit pour les exigences des référentiels PDIS et PRIS de l'ANSSI et de l'ISO/IEC 27035 : registres,
+traçabilité, cloisonnement par client, chaîne de possession des preuves. Un outil ne qualifie pas un prestataire :
+la qualification reste une affaire d'organisation.
+
+![File de triage](docs/captures/file-de-triage.png)
+
+| Fiche d'un ticket (analyste) | Le même incident vu par le client |
+|---|---|
+| ![Fiche ticket](docs/captures/fiche-ticket.png) | ![Vue client](docs/captures/vue-client.png) |
+
+| Kanban | Pilotage | Administration |
+|---|---|---|
+| ![Kanban](docs/captures/kanban.png) | ![Pilotage](docs/captures/pilotage.png) | ![Administration](docs/captures/administration.png) |
+
+Les captures viennent du banc d'essai : client, équipements et alertes sont fictifs.
+
+## Installer en une commande (Docker)
+
+```bash
+git clone https://github.com/Ozer0x777/keryx.git
+cd keryx/deploy/docker && ./install.sh
+```
+
+Le script demande le nom de domaine, le mode HTTPS (certificat automatique, certificat fourni, ou essai local) et les
+profils facultatifs. Il génère les secrets, démarre Keryx, PostgreSQL et le reverse proxy Caddy, crée le premier compte
+Admin et affiche le bloc à coller dans Wazuh.
+
+| Profil | Ajoute |
+|---|---|
+| (socle) | Keryx, PostgreSQL 16, Caddy (HTTPS) |
+| `antivirus` | ClamAV : analyse des pièces déposées, quarantaine |
+| `sso` | Keycloak : authentification unique, double authentification imposée |
+| `objets` | Garage : stockage objet des pièces, chiffré avant envoi |
+| `sauvegarde` | Sauvegarde chiffrée planifiée |
+
+**Sauvegardez `deploy/docker/.env`** : il contient la clé maîtresse. Si elle est perdue, les secrets chiffrés et les
+sauvegardes le sont aussi. Arrêt sans perte de données : `./uninstall.sh`.
+
+Mode d'emploi : [`deploy/docker/README.md`](deploy/docker/README.md). Durcissement, matrice des flux et limites :
+[`docs/deploiement-docker.md`](docs/deploiement-docker.md).
+
+Ce kit tout-en-un convient aux essais, aux démonstrations et à un petit SOC non qualifié. Ce n'est pas une
+architecture qualifiable PDIS (une seule machine, pas de zones de confiance). L'architecture cible par zones est
+décrite dans la même page.
+
+## Brancher Wazuh
+
+1. Dans Keryx : créer le client, puis une clé d'API pour son manager Wazuh (Administration > Clés d'API).
+2. Sur le manager : copier `integrations/wazuh/custom-keryx` et `custom-keryx.py` dans `/var/ossec/integrations/`.
+3. Ajouter dans `/var/ossec/etc/ossec.conf`, puis redémarrer le manager :
+
+```xml
+<integration>
+  <name>custom-keryx</name>
+  <hook_url>https://keryx.exemple.eu/api/v1/ingest/wazuh</hook_url>
+  <api_key>kx_VOTRE_CLE</api_key>
+  <level>7</level>
+  <alert_format>json</alert_format>
+</integration>
+```
+
+Détail, file d'attente locale si Keryx est injoignable : [`integrations/wazuh/README.md`](integrations/wazuh/README.md).
+
+## Ce que fait Keryx
+
+**Traiter**
+- Ticket pré-rempli depuis l'alerte, alerte brute conservée avec son empreinte, dédoublonnage sur 15 minutes.
+- Cycle de vie ISO/IEC 27035 : nouveau, en évaluation, faux positif ou incident confirmé, en réponse, clôturé, retour
+  d'expérience (obligatoire si la gravité est Élevée ou Critique).
+- Criticité initiale tirée du niveau Wazuh, gravité qualifiée selon une grille propre à chaque client, échéances.
+- MITRE ATT&CK : repris de Wazuh, sinon d'une table de correspondance, sinon complété à la main. Jamais deviné.
+- File de triage, Kanban, recherche, filtres enregistrés, affectation en masse, liens et fusion, modèles, mode crise.
+
+**Prouver**
+- Pièces jointes avec registre de collecte, empreinte SHA-256, chaîne de possession, quarantaine antivirus.
+- Journal d'audit en ajout seul, scellé par HMAC, exportable en syslog, avec point de contrôle externe.
+- Horodatage de confiance RFC 3161 des pièces et du journal (facultatif).
+- Export IODEF, classification ETSI GS ISI 002, registre par client, rapports imprimables.
+
+**Cloisonner**
+- Quatre rôles : Admin (aucun accès au contenu des tickets), Manager, Analyste, Client (ses incidents seulement,
+  jamais les notes internes).
+- Cloisonnement par client dans la couche d'accès aux données, vérifié par des tests.
+- Mot de passe Argon2id et TOTP obligatoire, clés de sécurité WebAuthn, authentification unique OpenID Connect.
+
+**Enrichir** (facultatif)
+- Contexte Wazuh : lien vers l'alerte et lecture des événements voisins du même agent dans l'indexeur.
+- Recherche d'une empreinte sur VirusTotal avec la clé de l'analyste. Seule l'empreinte sort, jamais un fichier.
+  C'est un service externe hors UE : voir l'ADR-0022 avant de l'activer.
+
+Interface en français et en anglais. Aucun service externe n'est appelé par défaut : pas de CDN, pas d'API tierce.
+
+Table complète des fonctions et de leurs exigences : [`docs/fonctions-et-exigences.md`](docs/fonctions-et-exigences.md).
+
+## Documentation
+
+| Sujet | Où |
+|---|---|
+| Exploitation au quotidien | [`docs/exploitation.md`](docs/exploitation.md) |
+| Variables de configuration | [`docs/configuration.md`](docs/configuration.md) |
+| Déploiement Docker, fiche ANSSI, PDIS | [`docs/deploiement-docker.md`](docs/deploiement-docker.md) |
+| Décisions d'architecture (ADR) | [`docs/adr/`](docs/adr/) |
+| Matrice exigence, code, test | [`docs/matrice-tracabilite.md`](docs/matrice-tracabilite.md) |
+| Dossier pour l'homologation | [`docs/homologation/`](docs/homologation/) |
 
 ## Démarrer en local (SQLite)
 
@@ -37,59 +141,13 @@ curl -X POST http://localhost:8000/api/v1/ingest/wazuh \
 
 Brancher un vrai Wazuh : voir `integrations/wazuh/README.md` (script d'intégration avec file d'attente locale si Keryx est injoignable).
 
-## Déployer avec Docker
-
-```bash
-cd deploy/docker && ./install.sh
-```
-
-Le script demande le mode HTTPS (certificat automatique ACME, certificat fourni, ou essai local), le nom de domaine et
-les profils facultatifs (`antivirus`, `sso`, `objets`, `sauvegarde`), écrit `deploy/docker/.env` (clé maîtresse et mots
-de passe aléatoires, **à sauvegarder**), construit, démarre Keryx, PostgreSQL et le reverse proxy Caddy, crée le premier
-compte Admin (mot de passe temporaire et code d'activation affichés une fois) et affiche le bloc `<integration>` pour
-Wazuh. Arrêt sans perte de données : `./uninstall.sh`. Mode d'emploi : `deploy/docker/README.md` ; durcissement
-(fiche ANSSI-FT-082), matrice des flux et limites : `docs/deploiement-docker.md` ; décision : ADR-0023.
-
-**Ce kit tout-en-un n'est pas une architecture qualifiable PDIS** (une machine, pas de zones, pas une machine par
-commanditaire pour le portail) : il convient aux essais, aux démonstrations et à un petit SOC non qualifié.
-
-L'image seule : `docker build -t keryx:0.7.0 .` Le conteneur applique `alembic upgrade head` puis démarre. Dépendances
-installées depuis `requirements.lock` (versions et empreintes figées, `--require-hashes`). Toujours placer Keryx
-derrière un proxy TLS.
-
-## Configuration (variables d'environnement)
-
-| Variable | Rôle | Défaut |
-|---|---|---|
-| `KERYX_DATABASE_URL` | SQLite (tests) ou PostgreSQL, ex. `postgresql+psycopg://u:p@hôte/base` (production) | `sqlite:///./keryx.db` |
-| `KERYX_MAX_BODY_BYTES` | Taille maximale d'une requête ordinaire, contrôlée avant lecture, voir `docs/exploitation.md` | `2097152` |
-| `KERYX_OIDC_PROVIDERS`, `KERYX_OIDC_ENFORCE`, `KERYX_OIDC_REQUIRED_ACR`, `KERYX_OIDC_ALLOW_HTTP` | SSO OpenID Connect (Keycloak), voir `docs/exploitation.md` et ADR-0017 | désactivé |
-| `KERYX_STORAGE`, `KERYX_S3_*`, `KERYX_QUARANTINE_PASSWORD` | Stockage objet S3 chiffré avant envoi ; mot de passe de l'archive de quarantaine, voir ADR-0019 | disque ; « infected » |
-| `KERYX_TSA_URL`, `KERYX_TSA_CA_FILE`, `KERYX_TSA_USER`/`_PASSWORD`/`_BEARER`/`_CLIENT_CERT`/`_CLIENT_KEY`, `KERYX_TSA_POLICY_OID` | Horodatage de confiance RFC 3161 (autorité à choisir dans l'UE), voir ADR-0018 | désactivé |
-| `KERYX_WAZUH_ALLOW_LOOPBACK`, `KERYX_WAZUH_TIME_FIELD`, `KERYX_WAZUH_CONTEXT_USER_LIMIT`, `KERYX_WAZUH_CONTEXT_CLIENT_LIMIT` | Contexte Wazuh (lecture de l'indexeur) : le reste se règle par client dans l'administration, voir ADR-0021 | boucle locale refusée ; `timestamp` ; 20 et 60 par minute |
-| `KERYX_VIRUSTOTAL_ENABLED` | Recherche d'une empreinte de fichier sur VirusTotal (**service externe hors UE**, dérogation ADR-0022) : seule l'empreinte sort, avec la clé d'API que chaque analyste saisit dans son profil. `false` coupe la fonction pour toute l'instance | `true` |
-| `KERYX_VIRUSTOTAL_USER_LIMIT`, `KERYX_VIRUSTOTAL_CLIENT_LIMIT`, `KERYX_VIRUSTOTAL_PROXY` | Recherches VirusTotal par minute, par utilisateur et par client ; mandataire HTTP explicite de cette sortie (les variables `HTTP_PROXY` ne sont pas lues) | 4 et 20 ; aucun |
-| `KERYX_VIRUSTOTAL_URL`, `KERYX_VIRUSTOTAL_ALLOW_LOOPBACK` | **Essais seulement** : adresse d'un faux VirusTotal (HTTPS, ou HTTP sur la boucle locale avec la dérogation). Ne pas régler en production | `https://www.virustotal.com` ; refusée |
-| `KERYX_LOGIN_USER_LIMIT` | Tentatives de connexion par identifiant et par 5 minutes | 10 |
-| `KERYX_LOGIN_IP_LIMIT` | Tentatives de connexion par adresse IP et par 5 minutes | 30 |
-| `KERYX_RATE_LIMIT_BACKEND` | `memory` (par processus) ou `db` (partagée entre processus) | `db` si PostgreSQL |
-| `KERYX_RETENTION_MONTHS` | Rétention des alertes brutes des tickets clos (6 minimum) | 12 |
-| `KERYX_NOTIFY_RETRY_S` | Intervalle de relance des courriels en échec (0 = désactivée) | 300 |
-| `KERYX_SECRET_KEY` | Clé maîtresse 32 octets base64 (`keryx gen-key`) — obligatoire | — |
-| `KERYX_PUBLIC_URL` | URL utilisée dans les liens des notifications | `https://keryx.local` |
-| `KERYX_SMTP_HOST`, `_PORT`, `_TLS` (`starttls`/`ssl`), `_USER`, `_PASSWORD`, `_FROM` | Envoi des notifications | désactivé |
-| `KERYX_ATTACHMENTS_DIR` | Stockage des pièces (hors racine web) | `./data/attachments` |
-| `KERYX_CLAMAV_HOST`, `_PORT` | Analyse antivirus clamd | désactivé |
-| `KERYX_SYSLOG_HOST`, `_PORT` | Copie du journal d'audit en syslog RFC 5424 (vers Wazuh) | désactivé |
-| `KERYX_MIN_RULE_LEVEL`, `KERYX_DEDUP_MINUTES` | Seuil d'ouverture de ticket, fenêtre de dédoublonnage | 7, 15 |
-
 ## Tests
 
 ```bash
 python -m pytest -q
 ```
 
-394 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
+395 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
 régressions des revues, migrations, notifications (SMTP simulé, relances), pièces jointes (clamd simulé, EICAR),
 administration, confort de travail, pilotage, conformité, sauvegarde, script d'intégration Wazuh,
 contexte Wazuh (faux indexeur OpenSearch local, `tests/fake_indexer.py`),
@@ -101,42 +159,6 @@ Parcours dans un navigateur (Chrome sans tête, base temporaire : parcours de ch
 ```bash
 cd e2e && npm ci && node run.mjs        # CHROME_PATH et KERYX_PYTHON si besoin
 ```
-
-## Ce que fait Keryx
-
-| Fonction | Exigences |
-|---|---|
-| Ingestion `POST /api/v1/ingest/wazuh`, clé d'API par manager et par client, idempotence et dédoublonnage 15 min | PDIS IV.3.8.g, IV.3.10.e, IV.2.1.w |
-| Ticket pré-rempli (règles, équipements, identifiants, criticité, MITRE), alerte brute + SHA-256 | PDIS IV.2.1.w, aa ; IV.2.2.s |
-| Criticité initiale (niveau Wazuh) / gravité qualifiée (grille par client) | PDIS IV.2.1.e, q, r, s |
-| MITRE en cascade Wazuh → table → correction manuelle tracée | Décision projet, ISO 27035 |
-| Cycle ISO 27035, qualification obligatoire, synthèse et REX obligatoire si Élevée/Critique | ISO/IEC 27035-1, PRIS VI.5.3.e, ISO 27002 5.27 |
-| Interface web : liste, Kanban, ticket, portail client, administration | Maquettes validées |
-| Rôles Admin/Manager/Analyste/Client, cloisonnement par client, admin sans accès au contenu | PDIS IV.3.8.g, IV.3.9.d–h, PRIS IV.3.d |
-| Argon2id + TOTP obligatoire (secret chiffré) + codes de secours + anti-rejeu + limites de débit + clés de sécurité WebAuthn en option + SSO OpenID Connect (Keycloak) | RFC 9106, 6238, 6585 ; ADR-0006, 0010, 0016, 0017 |
-| Session cookie HttpOnly/Secure/SameSite, rotation, CSRF, inactivité 30 min | RFC 6265, ASVS chap. 7 |
-| HTML assaini (nh3, liste blanche) ; CSP sans source externe | ASVS chap. 1, 3 |
-| Pièces jointes 20 Mo, images ré-encodées, registre de collecte, ClamAV + quarantaine, chaîne de possession, preuves externes | PRIS VI.5.3.c, VI.2.4 ; ISO/IEC 27037 ; RFC 3227 ; ADR-0008 |
-| Notifications SMTP (référence + lien seulement) avec registre | PDIS IV.2.3.g, h, j ; ADR-0009 |
-| Journal d'audit scellé HMAC, point de contrôle externe, export syslog | PDIS IV.3.9.c, ISO 27002 8.15, RFC 5424 ; ADR-0007 |
-| Revue des comptes et des droits | PDIS IV.3.4.b |
-| Export IODEF JSON (sous-ensemble) | RFC 7970, RFC 8727 |
-| Classification ETSI GS ISI 002 (8 axes, dictionnaire de l'Annexe B) et export IODEF 2.0 recommandé par l'ETSI | PDIS IV.2.1.y ; ADR-0020 |
-| Erreurs Problem Details, UUIDv7, dates RFC 3339 UTC, no-store, HSTS | RFC 9457, 9562, 3339, 9111, 6797 |
-| Migrations Alembic | ISO 27002 8.32 ; ADR-0005 |
-| Administration dans l'interface : comptes, clients (grille, SLA, rétention), clés d'API, MITRE, revue, état du système | PDIS IV.3.4.b, IV.3.9.d à h ; ADR-0011 |
-| Recherche plein texte, vues, tri, affectation en masse, filtres enregistrés, modèles, liens et fusion, échéances (SLA), notifications dans l'interface | PDIS IV.2.1.e, r, s ; ADR-0012 |
-| Pilotage : tableau de bord, registre par client (CSV), rapport périodique et d'incident imprimables | PDIS IV.2.1.bb |
-| Mode crise (registre des décisions, plan d'action, synthèse) | PRIS VI.5.5.1 ; ADR-0013 |
-| Journal d'audit consultable (contenu masqué à l'Admin), point de contrôle, import ATT&CK (STIX), rétention | PDIS IV.3.9.c, IV.2.2.w ; ADR-0014 |
-| Horodatage de confiance RFC 3161 des pièces et du point de contrôle d'audit | RFC 3161 ; ISO/IEC 27037 ; ADR-0018 |
-| Contexte Wazuh, désactivé par défaut et réglé par client : lien vers l'alerte dans le tableau de bord (équipe seulement), lecture de 5, 10 ou 15 événements du même agent dans l'indexeur, conservation à la demande comme pièce interne | PDIS IV.2.1.aa ; PRIS VI.5.3.c ; ADR-0021 |
-| Recherche d'une empreinte (SHA-256, SHA-1) sur VirusTotal, disponible par défaut, clé d'API par utilisateur : depuis une pièce, une preuve externe, une alerte ou une saisie ; jamais d'envoi de fichier ; chaque recherche tracée. **Dérogation à « aucun service externe »** | Demande de l'utilisateur ; PDIS IV.2.1.q, PRIS IV.3.q, PRIS VI.5.3.d ; ADR-0022 |
-| Stockage objet S3 des pièces, chiffré avant envoi ; quarantaine en archive chiffrée | PRIS IV.3.q, VI.2.4 ; ADR-0019 |
-| Sauvegarde chiffrée et restauration vérifiée | PDIS IV.3.6 ; ADR-0015 |
-| Déploiement par conteneurs durci (un conteneur par service, profils, HTTPS dans les deux modes), matrice des flux | Fiche ANSSI-FT-082 R1 à R16 ; PDIS IV.3.8.d ; ADR-0023 |
-
-Matrice complète : `docs/matrice-tracabilite.md` · exploitation : `docs/exploitation.md` · SBOM : `python scripts/sbom.py`.
 
 ## Limites connues
 
@@ -151,5 +173,6 @@ Matrice complète : `docs/matrice-tracabilite.md` · exploitation : `docs/exploi
 - Restent en français par construction, même en mode anglais : le corps de ticket généré par le serveur à partir de l'alerte Wazuh (libellés « Règle », « Décodeur »…), les lignes techniques du registre des actions (codes d'action et clés de détail) et les noms de langues.
 - Pas encore : validation IODEF contre le schéma officiel complet, PDF généré côté serveur (impression du navigateur à la place).
 
-Un outil ne qualifie pas un prestataire : Keryx fournit les registres, la traçabilité et le
-cloisonnement exigés par PDIS/PRIS, la qualification reste organisationnelle.
+## Licence
+
+MIT. Voir [`LICENSE`](LICENSE).

@@ -1,4 +1,4 @@
-# ADR-0001 — Stack technique
+# ADR-0001 : Stack technique
 
 - **Statut** : accepté (20/11/2026)
 - **Décision** : Python + FastAPI, SQLAlchemy 2, Argon2id (argon2-cffi), TOTP (pyotp), nh3. Bibliothèque standard uniquement côté manager Wazuh.

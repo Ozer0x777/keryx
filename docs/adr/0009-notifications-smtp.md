@@ -1,4 +1,4 @@
-# ADR-0009 — Envoi des notifications par SMTP
+# ADR-0009 : Envoi des notifications par SMTP
 
 - **Statut** : accepté (20/11/2026)
 - **Décision** : à la création d'un ticket, une notification par contact du client est inscrite au registre (statut `en_attente`), puis envoyée en tâche de fond après la réponse à Wazuh. SMTP via la bibliothèque standard, TLS obligatoire (STARTTLS vérifié par le contexte par défaut, ou SMTPS). Le message ne contient que la référence et un lien. Statuts : `envoye`, `echec`, `non_envoye_smtp_absent`, `sans_destinataire`, chacun journalisé.

@@ -1,4 +1,4 @@
-# ADR-0017 — Authentification unique OIDC (Keycloak)
+# ADR-0017 : Authentification unique OIDC (Keycloak)
 
 - **Statut** : accepté (20/11/2026) ; testé contre Keycloak 26.4 (mode développement), pas contre une installation de production
 - **Décision** : en plus de la connexion locale (mot de passe + TOTP ou clé de sécurité), Keryx accepte une connexion par un annuaire OpenID Connect dédié (Keycloak, realms « soc » et « clients » comme le plan le prévoit). Un fournisseur se déclare par `KERYX_OIDC_PROVIDERS` (JSON : nom, libellé, émetteur, identifiant et secret du client). Flux : code d'autorisation avec PKCE (S256), état et nonce à usage unique stockés en base (10 minutes).

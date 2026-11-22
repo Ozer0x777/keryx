@@ -1,4 +1,4 @@
-# ADR-0005 — Évolutions du schéma par migrations Alembic
+# ADR-0005 : Évolutions du schéma par migrations Alembic
 
 - **Statut** : accepté (20/11/2026)
 - **Décision** : le schéma n'est plus créé au démarrage. Toute évolution passe par une migration Alembic versionnée (`migrations/versions/`), appliquée par `alembic upgrade head` au lancement du conteneur. `KERYX_AUTO_CREATE_SCHEMA=true` reste réservé aux tests. Mode `render_as_batch` pour que les mêmes migrations fonctionnent sous SQLite (tests) et PostgreSQL (production).

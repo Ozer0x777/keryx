@@ -3,7 +3,7 @@
 [PRIS IV.3.q codes malveillants ; PDIS IV.2.1.q qualification ; PRIS VI.5.3.d registre des actions ; ISO/IEC 27037
 (chaîne de possession) ; PDIS IV.3.8.g cloisonnement ; ISO/IEC 27002:2022 8.24 (secrets, via ADR-0006) ; RFC 3339]
 Aucune exigence de la matrice du projet n'impose de consulter un service de réputation : la fonction est une demande
-de l'utilisateur (22/11/2026), rattachée ici à la qualification et au traitement des codes malveillants.
+du projet (22/11/2026), rattachée ici à la qualification et au traitement des codes malveillants.
 
 Ce qui sort de Keryx, et rien d'autre : UNE empreinte (SHA-256 ou SHA-1, 64 ou 40 caractères hexadécimaux), la clé
 d'API de l'utilisateur qui lance la recherche (en-tête `x-apikey`), et l'adresse IP de sortie du serveur. Jamais un

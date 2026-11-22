@@ -1,8 +1,8 @@
-# ADR-0022 — Recherche d'empreinte sur VirusTotal
+# ADR-0022 : Recherche d'empreinte sur VirusTotal
 
 - **Statut** : accepté (22/11/2026). **DÉROGATION explicite** à la décision du plan de projet « Hébergement : UE uniquement, aucun service externe (pas de CDN ni d'API tierce) », rappelée dans ADR-0018 et ADR-0021. C'est la première et la seule sortie de Keryx vers un service tiers. **Essayé seulement contre un faux serveur** (`tests/fake_virustotal.py`), **jamais contre le vrai VirusTotal** : voir « À valider » plus bas.
 - **Pourquoi** : pour qualifier une alerte, l'analyste veut savoir si un fichier (pièce déposée, fichier signalé par le contrôle d'intégrité de Wazuh) est déjà connu comme malveillant. Sans cela, il copie l'empreinte dans un navigateur, hors de Keryx : la recherche n'est ni tracée ni rattachée au ticket.
-- **Exigence** : aucune exigence de la matrice du projet n'impose de consulter un service de réputation. La fonction est une **demande de l'utilisateur** (22/11/2026). Elle est rattachée à la qualification (PDIS IV.2.1.q) et au traitement des codes malveillants (PRIS IV.3.q) qu'elle outille ; sa traçabilité relève de PRIS VI.5.3.d (registre des actions), d'ISO/IEC 27037 (chaîne de possession) et de PDIS IV.3.9.c (journalisation).
+- **Exigence** : aucune exigence de la matrice du projet n'impose de consulter un service de réputation. La fonction est une **décision du projet** (22/11/2026). Elle est rattachée à la qualification (PDIS IV.2.1.q) et au traitement des codes malveillants (PRIS IV.3.q) qu'elle outille ; sa traçabilité relève de PRIS VI.5.3.d (registre des actions), d'ISO/IEC 27037 (chaîne de possession) et de PDIS IV.3.9.c (journalisation).
 - **Dépendance** : aucune ajoutée. L'appel utilise `httpx`, déjà présent pour le SSO ; la SBOM est inchangée.
 
 ## Ce qui sort de Keryx, et ce qui n'en sort pas
@@ -29,7 +29,7 @@ Le lien « Ouvrir la fiche sur VirusTotal » affiché avec un résultat est une 
 
 ## Décision
 
-**Disponible par défaut** (décision de l'utilisateur du 22/11/2026) : pas d'activation par l'Admin, pas d'accord par client, pas de blocage selon le marquage TLP du ticket ou de la pièce. Ce choix est assumé comme une dérogation ; ses garde-fous sont : seule l'empreinte sort, un geste explicite par recherche, une clé personnelle (sans clé, rien ne part), une trace de chaque recherche, et l'interrupteur ci-dessous. Un exploitant qui ne veut pas de cette sortie la coupe ; il peut aussi fermer la sortie réseau du serveur vers `www.virustotal.com` (les recherches échouent alors proprement, en 503).
+**Disponible par défaut** (décision du projet du 22/11/2026) : pas d'activation par l'Admin, pas d'accord par client, pas de blocage selon le marquage TLP du ticket ou de la pièce. Ce choix est assumé comme une dérogation ; ses garde-fous sont : seule l'empreinte sort, un geste explicite par recherche, une clé personnelle (sans clé, rien ne part), une trace de chaque recherche, et l'interrupteur ci-dessous. Un exploitant qui ne veut pas de cette sortie la coupe ; il peut aussi fermer la sortie réseau du serveur vers `www.virustotal.com` (les recherches échouent alors proprement, en 503).
 
 **Interrupteur d'instance** : `KERYX_VIRUSTOTAL_ENABLED` (vrai par défaut). À `false` : les routes de recherche, de liste des empreintes et d'enregistrement de la clé répondent 409 ; `features.virustotal` de `/api/v1/me` est faux et l'interface ne montre rien ; la fiche d'un ticket ne porte plus le bloc `virustotal`. Les recherches déjà faites restent en base, à l'audit et au registre des actions des tickets. Le retrait de sa propre clé reste possible (un secret doit toujours pouvoir être effacé).
 
