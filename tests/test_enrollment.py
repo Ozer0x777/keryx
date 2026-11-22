@@ -82,3 +82,33 @@ def test_enrolement_sans_session_ou_pour_un_autre_compte(app, db, world):
     # Un compte déjà enrôlé (rôle quelconque) ne peut pas relancer un enrôlement qui écraserait son secret
     c.post("/api/v1/auth/login", json={"username": "manager", "password": "correct-horse-battery-staple"})
     assert c.post("/api/v1/auth/enroll/start", json={"activation_code": "x" * 10}).status_code == 409
+
+
+def test_premier_admin_cree_par_la_cli_avec_code_d_activation(app, db, settings, monkeypatch, capsys):
+    """Installation : « keryx add-user … --activation » crée un compte à activer, comme l'interface le fait
+    (aucun secret TOTP affiché dans le terminal, mot de passe temporaire à changer). [PDIS IV.3.9.d à h ; RFC 6238]"""
+    from keryx.cli import main as cli_main
+    monkeypatch.setenv("KERYX_DATABASE_URL", settings.database_url)
+    monkeypatch.setenv("KERYX_SECRET_KEY", settings.secret_key)
+    monkeypatch.setenv("KERYX_NEW_PASSWORD", TEMP)
+    assert cli_main(["add-user", "admin", "Administrateur", "admin", "--activation"]) == 0
+    out = capsys.readouterr().out
+    assert "otpauth://" not in out and "Codes de secours" not in out          # rien d'autre que le code d'activation
+    act = out.strip().splitlines()[-1].strip()
+    assert len(act) >= 12 and "Code d'activation" in out
+    u = db.scalars(select(User).where(User.username == "admin")).one()
+    assert u.role == "admin" and not u.enrolled and u.totp_secret == "" and u.recovery_codes == []
+    assert u.enroll_code_hash and act not in u.enroll_code_hash                 # seul le haché est en base
+    db.rollback()
+    # Relance de l'installateur : pas de doublon, pas de trace d'erreur, code de sortie 2
+    assert cli_main(["add-user", "admin", "Administrateur", "admin", "--activation"]) == 2
+    assert "existe déjà" in capsys.readouterr().err
+    # Le titulaire active son compte : mot de passe temporaire + code, TOTP enrôlé dans le navigateur
+    c = TestClient(app)
+    assert c.post("/api/v1/auth/login", json={"username": "admin", "password": TEMP}).json()["next"] == "enroll"
+    assert c.post("/api/v1/auth/enroll/start", json={"activation_code": "mauvais-code-xx"}).status_code == 401
+    start = c.post("/api/v1/auth/enroll/start", json={"activation_code": act}).json()
+    code = pyotp.TOTP(start["totp_secret"]).now()
+    done = c.post("/api/v1/auth/enroll/finish", json={"code": code, "new_password": "un-autre-mot-de-passe"})
+    assert done.status_code == 200 and done.json()["role"] == "admin" and len(done.json()["recovery_codes"]) == 10
+    assert TestClient(app).post("/api/v1/auth/login", json={"username": "admin", "password": TEMP}).status_code == 401

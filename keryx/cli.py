@@ -4,6 +4,7 @@ Exemples :
   python -m keryx.cli init-db
   python -m keryx.cli add-client ACME "ACME Industrie"
   python -m keryx.cli add-user sbenali "S. Benali" analyst --clients ACME
+  python -m keryx.cli add-user admin "Administrateur" admin --activation   # premier compte : code d'activation
   python -m keryx.cli add-api-key ACME wazuh-manager-01
   python -m keryx.cli add-mitre --group authentication_failures T1110 "Brute Force" "Credential Access"
   python -m keryx.cli verify-audit [--checkpoint SEQ:SCEAU]
@@ -80,6 +81,9 @@ def _main(argv: list[str] | None = None) -> int:
     u = sub.add_parser("add-user")
     u.add_argument("username"); u.add_argument("display_name"); u.add_argument("role", choices=ROLES)
     u.add_argument("--clients", default="", help="clés clients séparées par des virgules")
+    u.add_argument("--activation", action="store_true",
+                   help="compte à activer par son titulaire : le mot de passe est temporaire, un code d'activation "
+                        "(usage unique, 72 h) est affiché une fois, le TOTP est enrôlé à la première connexion")
     k = sub.add_parser("add-api-key"); k.add_argument("client_key"); k.add_argument("name")
     m = sub.add_parser("add-mitre")
     g = m.add_mutually_exclusive_group(required=True)
@@ -133,6 +137,27 @@ def _main(argv: list[str] | None = None) -> int:
         if args.role == "admin" and tenants:
             print("Un compte Admin n'est rattaché à aucun client (séparation admin / opérateurs).", file=sys.stderr)
             return 2
+        if db.scalars(select(User).where(User.username == args.username)).first() is not None:
+            print(f"L'identifiant {args.username} existe déjà.", file=sys.stderr)
+            return 2
+        if args.activation:
+            # Même parcours qu'un compte créé dans l'interface (routes_admin.users_create) : aucun secret TOTP n'est
+            # généré ni affiché ici, le titulaire l'enrôle dans son navigateur et choisit son mot de passe.
+            import secrets
+            from datetime import timedelta
+            from .ids import utcnow
+            code = secrets.token_urlsafe(12)
+            user = User(username=args.username, display_name=args.display_name, role=args.role,
+                        password_hash=security.hash_password(password), totp_secret="", recovery_codes=[],
+                        enrolled=False, enroll_code_hash=security.sha256(code),
+                        enroll_code_expires=utcnow() + timedelta(hours=72), tenants=tenants)
+            db.add(user); db.flush()
+            audit.record(db, actor, "user.create", "user", user.id, None,
+                         {"role": args.role, "clients": [t.key for t in tenants], "activation": "cli"})
+            db.commit()
+            print(f"Utilisateur {args.username} créé ({args.role}), à activer à la première connexion.")
+            print(f"Code d'activation (affiché une seule fois, valable 72 h) :\n  {code}")
+            return 0
         secret = security.new_totp_secret()
         plain_codes, hashed_codes = security.new_recovery_codes()
         user = User(username=args.username, display_name=args.display_name, role=args.role,
