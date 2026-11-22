@@ -8,6 +8,7 @@ sans session, elles gardent la borne ordinaire. L'ingestion Wazuh a sa propre bo
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from http.cookies import SimpleCookie
@@ -15,10 +16,25 @@ from http.cookies import SimpleCookie
 from starlette.concurrency import run_in_threadpool
 
 
+DRAIN_MAX = 128 * 1024 * 1024     # corps trop gros lu et jeté jusqu'à cette taille, pour répondre 413 proprement
+DRAIN_SECONDS = 30
+
+
 class BodyLimitMiddleware:
     def __init__(self, app, default_limit: int, large: list[tuple[re.Pattern, int]], cookie_name: str, has_session):
         self.app, self.default_limit, self.large = app, default_limit, large
         self.cookie_name, self.has_session = cookie_name, has_session
+
+    @staticmethod
+    async def _drain(receive) -> None:
+        seen = 0
+        while seen <= DRAIN_MAX:
+            message = await receive()
+            if message["type"] != "http.request":
+                return
+            seen += len(message.get("body", b""))
+            if not message.get("more_body"):
+                return
 
     async def _limit(self, scope, headers: dict[bytes, bytes]) -> int:
         for pattern, limit in self.large:
@@ -52,6 +68,14 @@ class BodyLimitMiddleware:
 
         declared = headers.get(b"content-length")
         if declared and declared.isdigit() and int(declared) > limit:
+            # Le corps annoncé est lu et JETÉ (ni mémoire, ni disque) avant de répondre, dans la limite de DRAIN_MAX et
+            # de DRAIN_SECONDS : répondre puis couper pendant l'envoi fait voir au client, ou au reverse proxy, une
+            # connexion réinitialisée (502) au lieu du 413. Au-delà de ces bornes, la connexion est coupée.
+            if int(declared) <= DRAIN_MAX:
+                try:
+                    await asyncio.wait_for(self._drain(receive), DRAIN_SECONDS)
+                except (asyncio.TimeoutError, Exception):  # noqa: BLE001 - client parti ou trop lent : on répond quand même
+                    pass
             return await reject()
 
         async def bounded_receive():

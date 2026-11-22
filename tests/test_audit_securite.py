@@ -186,3 +186,30 @@ def test_deux_clients_sur_le_meme_indexeur_et_le_meme_motif_refuses(app, db, wor
     assert adm.patch("/api/v1/admin/clients/DELTA", json={**cfg, "wazuh_index_pattern": "wazuh-alerts-delta-*"}).status_code == 200
     # et l'inverse : ACME ne peut pas reprendre le motif de DELTA
     assert adm.patch("/api/v1/admin/clients/ACME", json={"wazuh_index_pattern": "wazuh-alerts-delta-*"}).status_code == 422
+
+
+def test_corps_trop_gros_lu_et_jete_avant_le_413():
+    """Le 413 part APRÈS la lecture du corps annoncé (jeté, non conservé) : sinon le client, ou le reverse proxy, voit
+    une connexion réinitialisée pendant son envoi (502 constaté derrière Caddy) au lieu du refus."""
+    import asyncio
+    from keryx.bodylimit import BodyLimitMiddleware
+
+    events = []
+
+    async def app(scope, receive, send):   # jamais atteinte : le refus se fait avant l'application
+        events.append("application")
+
+    chunks = [{"type": "http.request", "body": b"x" * 1000, "more_body": True}] * 4 + [{"type": "http.request", "body": b"", "more_body": False}]
+    queue = list(chunks)
+
+    async def receive():
+        events.append("lecture")
+        return queue.pop(0)
+
+    async def send(message):
+        events.append(message["type"] + (f":{message['status']}" if "status" in message else ""))
+
+    mw = BodyLimitMiddleware(app, default_limit=100, large=[], cookie_name="keryx_session", has_session=lambda t: False)
+    scope = {"type": "http", "path": "/api/v1/auth/login", "headers": [(b"content-length", b"4000")]}
+    asyncio.run(mw(scope, receive, send))
+    assert events == ["lecture"] * 5 + ["http.response.start:413", "http.response.body"] and queue == []
