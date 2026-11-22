@@ -141,6 +141,9 @@ table.grid { width: 100%; border-collapse: collapse; background: var(--surface);
 .ticket-facts dd { margin: 0; font-size: 13px; }
 .ticket-facts .mono { font-size: 12.5px; }
 .ticket-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+/* Les colonnes peuvent rétrécir sous la largeur minimale de leur contenu : un tableau large (registre des preuves) défile
+   alors dans son cadre au lieu d'élargir toute la fiche sur un écran étroit. */
+.ticket-main, .ticket-aside { min-width: 0; }
 /* La colonne de pilotage défile avec la page : collante, sa partie basse était inatteignable dès qu'elle dépassait l'écran. */
 .ticket-aside label, .ticket-aside select, .ticket-aside textarea, .ticket-aside input:not([type=checkbox]):not([type=radio]) { width: 100%; }
 label.check input { flex: none; }
@@ -436,3 +439,33 @@ form.row > .action-status.ok, .retention-actions > .action-status.ok { align-sel
 .wz-log { margin: 4px 0 0; font-family: var(--mono); font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .wz-hash { overflow-wrap: anywhere; }
 .wz-hint { margin: -6px 0 10px; }
+
+/* VirusTotal (components/VirusTotal.jsx) : outil d'exploitation, sans effet. Un résultat n'est jamais vert : rouge si des
+   moteurs signalent le fichier, ambre s'il est seulement suspect, neutre s'il est inconnu ou sans détection ; toujours
+   avec son libellé. Commandes du panneau et du profil : 44 px de haut. Dans une ligne du registre des preuves, le bouton
+   garde la taille de ses voisins et sa zone cliquable est étendue à 44 px. */
+.vt-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin: 0 0 4px; }
+.vt-controls label { margin: 0; min-width: min(100%, 260px); }
+.vt-controls input, .vt-controls button, .vt-cands button, .vt-key input, .vt-key button { min-height: 44px; }
+.vt-key form label { min-width: min(100%, 340px); }
+.vt-cands, .vt-list { list-style: none; margin: 4px 0 12px; padding: 0; border: 1px solid var(--border); border-radius: var(--radius); }
+.vt-cands > li { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.vt-list > li { padding: 8px 12px 0; border-bottom: 1px solid var(--border); }
+.vt-cands > li:last-child, .vt-list > li:last-child { border-bottom: 0; }
+.vt-cands p, .vt-list > li > p, .vt-nokey { margin: 0; }
+.vt-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; font-size: 12px; color: var(--muted); }
+.vt-meta time { color: var(--text); font-size: 12px; font-weight: 500; }
+.vt-hash { overflow-wrap: anywhere; }
+.vt-list summary { padding: 13px 0; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.vt-detail { padding: 0 0 12px; }
+.vt-detail p { margin: 0 0 8px; }
+.vt-engines { list-style: none; margin: 0; padding: 0; }
+.vt-row-btn { position: relative; }
+.vt-row-btn::after { content: ''; position: absolute; left: 0; right: 0; top: -7px; bottom: -7px; }
+.vt-row-state { margin: 6px 0 0; }
+.fold .section-body > .vt-nokey { margin: 0 0 8px; }
+@media (max-width: 800px) {
+  /* Écran étroit : le libellé passe au-dessus de sa valeur, qui garde toute la largeur. */
+  .vt-detail .kv { grid-template-columns: 1fr; gap: 0; }
+  .vt-detail .kv dd { margin-bottom: 8px; }
+}

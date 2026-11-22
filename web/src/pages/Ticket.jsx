@@ -11,6 +11,7 @@ import IsiPanel from '../components/IsiPanel.jsx'
 import Section, { OPEN_BY_STATUS, OPEN_FOR_CLIENT, PhaseContext } from '../components/Section.jsx'
 import Stamps from '../components/Stamps.jsx'
 import WazuhContext from '../components/WazuhContext.jsx'
+import { useVirusTotal, VirusTotalPanel, VtPieceButton, VtPieceState } from '../components/VirusTotal.jsx'
 import RichEditor from '../components/RichEditor.jsx'
 import { isoToUtcInput, untilUtc, utcClock, utcInputNow, utcInputToIso } from '../dates.js'
 import { queuePath } from '../queue.js'
@@ -67,6 +68,8 @@ export default function Ticket() {
     try { setT(await api(`/tickets/${enc}`)) } catch (e) { setError(e.message) }
   }, [enc])
   useEffect(() => { load() }, [load])
+  // Recherche d'empreinte sur VirusTotal (ADR-0022) : null pour le client, pour l'Admin, et quand l'instance l'a coupée.
+  const vt = useVirusTotal(isTeam && !!me.features?.virustotal, enc, { announce: setNotice, reload: load })
   const [tpls, setTpls] = useState([])
   useEffect(() => { if (isTeam) api('/templates').then((r) => setTpls(r.items)).catch(() => {}) }, [isTeam])
   const templates = (kind) => tpls.filter((x) => x.kind === kind)
@@ -193,7 +196,8 @@ export default function Ticket() {
           <Description t={t} enc={enc} canEdit={isTeam && open} run={run} onImage={uploadImage} alertMerged={isTeam && alertMerged} />
           {isTeam && !alertMerged && <AlertBlock t={t} />}
           {isTeam && t.wazuh?.context && <WazuhContext t={t} enc={enc} run={run} open={open} />}
-          <Attachments t={t} enc={enc} me={me} run={run} />
+          <Attachments t={t} enc={enc} me={me} run={run} vt={vt} />
+          {vt && <VirusTotalPanel t={t} enc={enc} vt={vt} />}
           {isTeam && <Synthese t={t} enc={enc} run={run} onImage={uploadImage} templates={templates('synthese')} />}
           <Events t={t} />
           <Comments t={t} enc={enc} isClient={isClient} run={run} onImage={uploadImage} templates={templates('commentaire')} />
@@ -289,7 +293,7 @@ function AlertBlock({ t }) {
   )
 }
 
-function Attachments({ t, enc, me, run }) {
+function Attachments({ t, enc, me, run, vt }) {
   const isClient = me.role === 'client'
   const isTeam = !isClient
   const [form, setForm] = useState(null)
@@ -412,9 +416,12 @@ function Attachments({ t, enc, me, run }) {
                       {a.kind !== 'preuve_externe' && a.lifecycle === 'conserve' && !(isClient && a.scan_status === 'quarantaine') &&
                         <button type="button" className="small-btn" onClick={() => download(a)}>{tr("Télécharger")}</button>}
                       {isTeam && a.lifecycle === 'conserve' && <button type="button" className="small-btn" onClick={() => lifecycle(a, 'restitue')}>{tr("Restituer")}</button>}
+                      {/* Seule l'empreinte de la pièce part vers VirusTotal ; c'est le serveur qui la prend. */}
+                      <VtPieceButton vt={vt} a={a} />
                       {me.role === 'manager' && a.lifecycle !== 'detruit' && <button type="button" className="small-btn danger" onClick={() => lifecycle(a, 'detruit')}>{tr("Détruire")}</button>}
                     </div>
                     {rowStatus?.id === a.id && <ActionStatus state={rowStatus} />}
+                    <VtPieceState vt={vt} a={a} lookups={t.virustotal?.lookups} />
                   </td>
                 </tr>
               ))}

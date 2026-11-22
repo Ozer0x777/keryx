@@ -20,7 +20,8 @@ export const PhaseContext = createContext({ status: '', open: null })
 // `summary` : ce qu'il faut savoir du panneau sans l'ouvrir (compteur, verdict, assigné…), affiché après le titre.
 // `tools` : boutons du panneau ; ils sont dans le corps, pas dans <summary> (un bouton dans un bouton de pliage ne
 // serait ni cliquable proprement ni annoncé correctement).
-export default function Section({ id, title, summary, tools, children, className = '' }) {
+// `onToggle(ouvert)` : prévient le panneau qu'il vient d'être déplié ou replié (chargement à la première ouverture).
+export default function Section({ id, title, summary, tools, children, className = '', onToggle }) {
   const { status, open: openIds } = useContext(PhaseContext)
   const byDefault = openIds ? openIds.includes(id) : true
   const [open, setOpen] = useState(byDefault)
@@ -30,7 +31,7 @@ export default function Section({ id, title, summary, tools, children, className
   }, [status, byDefault])
   return (
     <section className={`card section fold ${className}`.trim()} aria-label={title}>
-      <details open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <details open={open} onToggle={(e) => { setOpen(e.currentTarget.open); onToggle?.(e.currentTarget.open) }}>
         <summary><h2>{title}</h2>{summary && <span className="fold-summary">{summary}</span>}</summary>
         <div className="section-body">
           {tools && <div className="section-tools">{tools}</div>}

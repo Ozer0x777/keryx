@@ -3,6 +3,7 @@ import { api } from '../api.js'
 import { useAuth } from '../App.jsx'
 import { useConfirm } from '../components/Confirm.jsx'
 import OneTime from '../components/OneTime.jsx'
+import { VirusTotalKey } from '../components/VirusTotal.jsx'
 import { getLang, LANGS, setLang, t, t as tr } from '../i18n.js'
 import { createCredential, webauthnSupported } from '../webauthn.js'
 import { formatUtc, ROLES } from '../labels.js'
@@ -110,6 +111,8 @@ export default function Profile() {
           <button>{tr("Régénérer")}</button>
         </form>
       </section>
+      {/* Clé VirusTotal personnelle (ADR-0022) : analyste et manager seulement, et seulement si l'instance l'autorise. */}
+      {me.features?.virustotal && <VirusTotalKey />}
       {prefs && (
         <section className="card section" aria-label={tr("Notifications")}>
           <header className="section-head"><h2>{tr("Notifications dans l'interface")}</h2></header>
