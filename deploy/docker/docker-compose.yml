@@ -1,0 +1,465 @@
+# Keryx : déploiement par conteneurs, un conteneur par service, un seul fichier, des profils.
+#
+#   Toujours démarrés : caddy (seul service qui publie des ports), keryx, postgres.
+#   Profils (COMPOSE_PROFILES dans .env) : antivirus (ClamAV), sso (Keycloak et sa base),
+#                                          objets (Garage), sauvegarde (keryx backup planifié).
+#
+# Ne pas lancer ce fichier à la main la première fois : ./install.sh écrit le fichier .env (secrets),
+# construit, démarre et crée le premier compte. Référence : docs/deploiement-docker.md, ADR-0023.
+#
+# Durcissement : fiche ANSSI-FT-082 « Recommandations de sécurité relatives aux déploiements de conteneur
+# Docker » (23/09/2020). Chaque réglage ci-dessous porte le numéro de la recommandation qu'il applique.
+# R3, R7 et R16 se règlent sur le démon Docker, pas ici : voir docs/deploiement-docker.md.
+
+name: keryx
+
+# ---------------------------------------------------------------------------------------------------------
+# Réglages communs à TOUS les services
+# ---------------------------------------------------------------------------------------------------------
+x-durci: &durci
+  # R1 : ni « privileged », ni système de fichiers de l'hôte, ni socket Docker. R2 : aucun périphérique.
+  # R4 : jamais « network_mode: host ». R6 : pas de pid / ipc / uts partagés. R9 : pas de cgroup_parent.
+  # R8 : aucune capability (aucun service n'en rajoute).
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  # R12 : racine en lecture seule ; ce qui doit s'écrire va dans un tmpfs borné (R13) ou un volume nommé (R14).
+  read_only: true
+  restart: unless-stopped
+  # Journaux sur la sortie standard, bornés sur le disque de l'hôte. R16 (export vers un serveur central) :
+  # voir docs/deploiement-docker.md ; c'est ce seul bloc qu'il faut changer pour un autre pilote.
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+# Image de Keryx, construite depuis le Dockerfile du dépôt (services keryx et sauvegarde).
+x-image-keryx: &image-keryx
+  image: keryx:${KERYX_VERSION:-0.7.0}
+  build:
+    context: ../..
+    dockerfile: Dockerfile
+
+# Environnement de Keryx. Une variable écrite « - NOM » (sans valeur) n'est transmise que si elle est
+# définie dans .env : ne jamais y laisser une variable vide (KERYX_SMTP_PORT= ferait échouer le démarrage),
+# la commenter. Toutes sont lues par keryx/config.py.
+x-env-keryx: &env-keryx
+  KERYX_DATABASE_URL: postgresql+psycopg://keryx:${POSTGRES_PASSWORD:?Lancer ./install.sh (POSTGRES_PASSWORD absent de .env)}@postgres:5432/keryx
+  KERYX_SECRET_KEY: ${KERYX_SECRET_KEY:?Lancer ./install.sh (KERYX_SECRET_KEY absent de .env)}
+  KERYX_ATTACHMENTS_DIR: /data/attachments
+  KERYX_HOSTNAME: ${KERYX_DOMAIN:-localhost}
+  # Autorités de certification reconnues pour les appels sortants en HTTPS (SSO, stockage objet, SMTP, horodatage,
+  # VirusTotal) : celles du système, ou un fichier de ./confiance (autorité privée, essai local avec SSO).
+  SSL_CERT_FILE: ${KERYX_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}
+  PYTHONDONTWRITEBYTECODE: "1"
+  # Stockage des pièces (profil « objets » : écrit par install.sh)
+  KERYX_STORAGE: ${KERYX_STORAGE:-disk}
+  KERYX_S3_ENDPOINT:
+  KERYX_S3_BUCKET:
+  KERYX_S3_ACCESS_KEY:
+  KERYX_S3_SECRET_KEY:
+  KERYX_S3_REGION:
+  KERYX_S3_PREFIX:
+  KERYX_S3_ALLOW_HTTP:
+
+services:
+
+  # -------------------------------------------------------------------------------------------------------
+  # Reverse proxy : termine TLS, seul service joignable depuis l'extérieur
+  # -------------------------------------------------------------------------------------------------------
+  caddy:
+    <<: *durci
+    image: caddy:2.11.9-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
+    # Pas root. install.sh y met l'utilisateur qui installe, pour qu'il lise ./certs sans droit particulier.
+    user: "${KERYX_CADDY_UID:-10003}:${KERYX_CADDY_GID:-10003}"
+    environment:
+      KERYX_DOMAIN: ${KERYX_DOMAIN:-localhost}
+      KERYX_HTTP_PORT: ${KERYX_HTTP_PORT:-80}
+      KERYX_HTTPS_PORT: ${KERYX_HTTPS_PORT:-443}
+      KERYX_PORT_SUFFIX: ${KERYX_HTTPS_PORT:+:${KERYX_HTTPS_PORT}}      # « :port » dans les redirections, vide pour 443
+      # Fichier de ./caddy/tls importé : acme, acme-eab (si un identifiant de liaison de compte est donné), fourni, local
+      KERYX_TLS: ${KERYX_HTTPS_MODE:-local}${KERYX_ACME_EAB_KID:+-eab}
+      KERYX_ACME_CA: ${KERYX_ACME_CA:-}
+      KERYX_ACME_EMAIL: ${KERYX_ACME_EMAIL:-}
+      KERYX_ACME_EAB_KID: ${KERYX_ACME_EAB_KID:-}
+      KERYX_ACME_EAB_HMAC: ${KERYX_ACME_EAB_HMAC:-}
+      # Site de Keycloak : ./caddy/sso-actif.caddy si KERYX_SSO_DOMAIN est défini (profil « sso »), sinon aucun
+      KERYX_SSO: sso${KERYX_SSO_DOMAIN:+-actif}
+      KERYX_SSO_DOMAIN: ${KERYX_SSO_DOMAIN:-}
+      KERYX_ADMIN_CIDRS: ${KERYX_ADMIN_CIDRS:-private_ranges}
+      KERYX_MAX_BODY_BYTES: ${KERYX_MAX_BODY_BYTES:-2097152}             # même borne que Keryx pour une requête ordinaire
+    # Les ports du conteneur sont ceux de l'hôte : les redirections et l'adresse de l'émetteur SSO restent
+    # justes de l'intérieur comme de l'extérieur. Écouter sur 80/443 sans capability est permis par Docker
+    # (net.ipv4.ip_unprivileged_port_start=0 dans l'espace réseau du conteneur, valeur par défaut depuis 20.10).
+    ports:
+      - "${KERYX_LISTEN_ADDR:-0.0.0.0}:${KERYX_HTTP_PORT:-80}:${KERYX_HTTP_PORT:-80}"
+      - "${KERYX_LISTEN_ADDR:-0.0.0.0}:${KERYX_HTTPS_PORT:-443}:${KERYX_HTTPS_PORT:-443}"
+    volumes:
+      - ./caddy:/etc/caddy:ro
+      - ./certs:/certs:ro                 # mode « fourni » : certificat et clé, lecture seule (R14, R15)
+      - caddy_data:/data/caddy            # certificats obtenus, compte ACME, autorité locale du mode « local »
+    tmpfs:
+      - /config/caddy:size=8m,mode=0700,uid=${KERYX_CADDY_UID:-10003},gid=${KERYX_CADDY_GID:-10003},noexec,nosuid,nodev
+      - /tmp:size=8m,mode=0700,uid=${KERYX_CADDY_UID:-10003},gid=${KERYX_CADDY_GID:-10003},noexec,nosuid,nodev
+    networks:
+      entree: {}
+      proxy-keryx:
+        ipv4_address: ${KERYX_NET_PREFIX:-172.31.240}.2
+      proxy-keycloak:
+        ipv4_address: ${KERYX_NET_PREFIX:-172.31.240}.10
+    depends_on:
+      keryx:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/sante"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    mem_limit: 256m          # R10
+    memswap_limit: 256m      # R10 : pas de mémoire d'échange en plus
+    cpus: 1.0                # R11
+    pids_limit: 128
+
+  # -------------------------------------------------------------------------------------------------------
+  # Keryx : API et interface web
+  # -------------------------------------------------------------------------------------------------------
+  keryx:
+    <<: [*durci, *image-keryx]
+    user: "10001:10001"
+    environment:
+      <<: *env-keryx
+      KERYX_PUBLIC_URL: https://${KERYX_DOMAIN:-localhost}${KERYX_HTTPS_PORT:+:${KERYX_HTTPS_PORT}}
+      KERYX_COOKIE_SECURE: "true"
+      # Adresse du reverse proxy sur le réseau proxy-keryx, jamais « * » : seules ses en-têtes X-Forwarded-* sont crues.
+      FORWARDED_ALLOW_IPS: ${KERYX_NET_PREFIX:-172.31.240}.2
+      # Coupée tant que la sortie de Keryx est fermée ; dans un déploiement visant la qualification PDIS,
+      # la laisser à false (PDIS IV.3.7.k, voir ADR-0022 et docs/deploiement-docker.md).
+      KERYX_VIRUSTOTAL_ENABLED: ${KERYX_VIRUSTOTAL_ENABLED:-false}
+      # Réglages facultatifs, transmis seulement s'ils sont définis dans .env (voir .env.example)
+      KERYX_MIN_RULE_LEVEL:
+      KERYX_DEDUP_MINUTES:
+      KERYX_MAX_BODY_BYTES:
+      KERYX_SESSION_HOURS:
+      KERYX_LOGIN_USER_LIMIT:
+      KERYX_LOGIN_IP_LIMIT:
+      KERYX_RATE_LIMIT_BACKEND:
+      KERYX_RETENTION_MONTHS:
+      KERYX_NOTIFY_RETRY_S:
+      KERYX_QUARANTINE_PASSWORD:
+      KERYX_SMTP_HOST:
+      KERYX_SMTP_PORT:
+      KERYX_SMTP_TLS:
+      KERYX_SMTP_USER:
+      KERYX_SMTP_PASSWORD:
+      KERYX_SMTP_FROM:
+      KERYX_CLAMAV_HOST:
+      KERYX_CLAMAV_PORT:
+      KERYX_SYSLOG_HOST:
+      KERYX_SYSLOG_PORT:
+      KERYX_OIDC_PROVIDERS:
+      KERYX_OIDC_ENFORCE:
+      KERYX_OIDC_REQUIRED_ACR:
+      KERYX_TSA_URL:
+      KERYX_TSA_CA_FILE:
+      KERYX_TSA_USER:
+      KERYX_TSA_PASSWORD:
+      KERYX_TSA_BEARER:
+      KERYX_TSA_CLIENT_CERT:
+      KERYX_TSA_CLIENT_KEY:
+      KERYX_TSA_POLICY_OID:
+      KERYX_WAZUH_ALLOW_LOOPBACK:
+      KERYX_WAZUH_TIME_FIELD:
+      KERYX_WAZUH_CONTEXT_USER_LIMIT:
+      KERYX_WAZUH_CONTEXT_CLIENT_LIMIT:
+      KERYX_VIRUSTOTAL_PROXY:
+      KERYX_VIRUSTOTAL_USER_LIMIT:
+      KERYX_VIRUSTOTAL_CLIENT_LIMIT:
+    # L'émetteur SSO est l'adresse publique de Keycloak : Keryx la joint en passant par le reverse proxy.
+    extra_hosts:
+      - "${KERYX_SSO_DOMAIN:-sso-inactif.invalid}:${KERYX_NET_PREFIX:-172.31.240}.2"
+    volumes:
+      - keryx_data:/data                  # pièces déposées (stockage « disk »)
+      - ./confiance:/etc/keryx/confiance:ro
+    tmpfs:
+      # Corps des requêtes en cours de réception (pièce de 20 Mio, référentiel ATT&CK de 80 Mio) : en mémoire, bornés.
+      - /tmp:size=256m,mode=0700,uid=10001,gid=10001,noexec,nosuid,nodev
+    networks:
+      proxy-keryx: {}
+      keryx-postgres: {}
+      keryx-clamav: {}
+      keryx-garage: {}
+      keryx-sortie: {}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    mem_limit: 1g
+    memswap_limit: 1g
+    cpus: 2.0
+    pids_limit: 256
+
+  # -------------------------------------------------------------------------------------------------------
+  # Base de données de Keryx
+  # -------------------------------------------------------------------------------------------------------
+  postgres:
+    <<: *durci
+    image: postgres:16.16-bookworm@sha256:ce3efec6bc404f6b15ebf5d9bed6b45a9d4655aea238d7dacc3467ccb05a1175
+    user: "999:999"                       # utilisateur « postgres » de l'image : pas de passage par root
+    environment:
+      POSTGRES_USER: keryx
+      POSTGRES_DB: keryx
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Lancer ./install.sh (POSTGRES_PASSWORD absent de .env)}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --data-checksums
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    tmpfs:
+      - /tmp:size=64m,mode=1777,noexec,nosuid,nodev
+      - /var/run/postgresql:size=1m,mode=0750,uid=999,gid=999,noexec,nosuid,nodev
+    shm_size: 128m
+    networks:
+      keryx-postgres: {}
+      sauvegarde-postgres: {}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-q", "-U", "keryx", "-d", "keryx"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    mem_limit: 1g
+    memswap_limit: 1g
+    cpus: 2.0
+    pids_limit: 256
+
+  # -------------------------------------------------------------------------------------------------------
+  # Profil « antivirus » : ClamAV (clamd, port 3310) et mise à jour des signatures (freshclam)
+  # -------------------------------------------------------------------------------------------------------
+  clamav:
+    <<: *durci
+    profiles: [antivirus]
+    image: clamav/clamav:1.4.7@sha256:b7357e2c1c59480628839df301b0d27923561389b36cf341911e1dd9e02cdd05
+    user: "100:101"                       # utilisateur « clamav » de l'image
+    entrypoint: ["/init-unprivileged"]    # point d'entrée de l'image prévu pour un démarrage sans root
+    volumes:
+      - clamav_data:/var/lib/clamav       # signatures
+    tmpfs:
+      - /tmp:size=256m,mode=1777,noexec,nosuid,nodev     # prise de clamd et fichiers en cours d'analyse
+      - /var/log/clamav:size=16m,mode=0750,uid=100,gid=101,noexec,nosuid,nodev
+    networks:
+      keryx-clamav: {}
+      clamav-sortie: {}                   # téléchargement des signatures uniquement
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 300s
+    mem_limit: 3g                         # clamd charge toutes les signatures en mémoire
+    memswap_limit: 3g
+    cpus: 2.0
+    pids_limit: 256
+
+  # -------------------------------------------------------------------------------------------------------
+  # Profil « sso » : Keycloak (annuaire OpenID Connect) et sa base
+  # -------------------------------------------------------------------------------------------------------
+  keycloak:
+    <<: *durci
+    profiles: [sso]
+    image: keryx-keycloak:26.8.2
+    build:
+      context: ./keycloak
+    user: "1000:0"                        # utilisateur « keycloak » de l'image
+    environment:
+      KC_DB_URL_HOST: keycloak-db
+      KC_DB_URL_DATABASE: keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-}
+      KC_HOSTNAME: https://${KERYX_SSO_DOMAIN:-sso-inactif.invalid}${KERYX_HTTPS_PORT:+:${KERYX_HTTPS_PORT}}
+      KC_HTTP_ENABLED: "true"             # HTTP sur le seul réseau proxy-keycloak ; TLS terminé par caddy
+      KC_PROXY_HEADERS: xforwarded
+      KC_PROXY_TRUSTED_ADDRESSES: ${KERYX_NET_PREFIX:-172.31.240}.10
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:-admin-keycloak}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-}
+      KC_LOG_CONSOLE_OUTPUT: default
+      # Remplacés dans ./keycloak/realms/*.json à l'import
+      KERYX_PUBLIC_URL: https://${KERYX_DOMAIN:-localhost}${KERYX_HTTPS_PORT:+:${KERYX_HTTPS_PORT}}
+      KERYX_OIDC_SECRET_SOC: ${KERYX_OIDC_SECRET_SOC:-}
+      KERYX_OIDC_SECRET_CLIENTS: ${KERYX_OIDC_SECRET_CLIENTS:-}
+    volumes:
+      - ./keycloak/realms:/opt/keycloak/data/import:ro
+    tmpfs:
+      - /tmp:size=128m,mode=1777,noexec,nosuid,nodev
+      - /opt/keycloak/data:size=64m,mode=0770,uid=1000,gid=0,noexec,nosuid,nodev
+    networks:
+      proxy-keycloak: {}
+      keycloak-postgres: {}
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    healthcheck:
+      # L'image n'a ni curl ni wget : requête écrite à la main sur le port de gestion (9000, non publié).
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"status\": \"UP\"' <&3"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    mem_limit: 1536m
+    memswap_limit: 1536m
+    cpus: 2.0
+    pids_limit: 512
+
+  keycloak-db:
+    <<: *durci
+    profiles: [sso]
+    image: postgres:16.16-bookworm@sha256:ce3efec6bc404f6b15ebf5d9bed6b45a9d4655aea238d7dacc3467ccb05a1175
+    user: "999:999"
+    environment:
+      POSTGRES_USER: keycloak
+      POSTGRES_DB: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --data-checksums
+    volumes:
+      - keycloak_db_data:/var/lib/postgresql/data
+    tmpfs:
+      - /tmp:size=64m,mode=1777,noexec,nosuid,nodev
+      - /var/run/postgresql:size=1m,mode=0750,uid=999,gid=999,noexec,nosuid,nodev
+    shm_size: 64m
+    networks:
+      keycloak-postgres: {}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-q", "-U", "keycloak", "-d", "keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+
+  # -------------------------------------------------------------------------------------------------------
+  # Profil « objets » : Garage, stockage objet compatible S3 (un seul nœud : essai, voir la documentation)
+  # -------------------------------------------------------------------------------------------------------
+  garage:
+    <<: *durci
+    profiles: [objets]
+    image: keryx-garage:v1.3.1
+    build:
+      context: ./garage
+    user: "10002:10002"
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:-}
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    networks:
+      keryx-garage: {}
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+
+  # -------------------------------------------------------------------------------------------------------
+  # Profil « sauvegarde » : « keryx backup » à intervalle fixe, dans un volume dédié
+  # -------------------------------------------------------------------------------------------------------
+  sauvegarde:
+    <<: [*durci, *image-keryx]
+    profiles: [sauvegarde]
+    user: "10001:10001"
+    init: true                            # relaie l'arrêt à la boucle ci-dessous
+    environment:
+      <<: *env-keryx
+      KERYX_BACKUP_INTERVAL_S: ${KERYX_BACKUP_INTERVAL_S:-86400}
+      KERYX_BACKUP_KEEP: ${KERYX_BACKUP_KEEP:-14}
+      TMPDIR: /sauvegardes/.tmp           # l'archive se prépare sur le volume, pas en mémoire
+    command: ["sh", "/usr/local/share/keryx/sauvegarde.sh"]
+    volumes:
+      - keryx_data:/data:ro               # pièces à sauvegarder, en lecture seule (R14)
+      - sauvegardes:/sauvegardes
+      - ./sauvegarde.sh:/usr/local/share/keryx/sauvegarde.sh:ro
+      - ./confiance:/etc/keryx/confiance:ro
+    tmpfs:
+      - /tmp:size=16m,mode=0700,uid=10001,gid=10001,noexec,nosuid,nodev
+    networks:
+      sauvegarde-postgres: {}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/derniere-sauvegarde-reussie"]
+      interval: 60s
+      timeout: 5s
+      retries: 2
+      start_period: 300s
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 1.0
+    pids_limit: 64
+
+# ---------------------------------------------------------------------------------------------------------
+# R5 : un réseau dédié par connexion. « internal » = aucune route vers l'extérieur ni vers l'hôte.
+# ---------------------------------------------------------------------------------------------------------
+networks:
+  entree:                                 # hôte <-> caddy : ports publiés ; sortie de caddy vers l'autorité ACME
+    driver: bridge
+  # Les deux réseaux du reverse proxy ont un sous-réseau fixe, pour que Keryx et Keycloak sachent de quelle adresse
+  # croire les en-têtes X-Forwarded-*. En cas de conflit avec un réseau existant : KERYX_NET_PREFIX dans .env
+  # (trois premiers octets ; le dernier doit laisser libres .0 à .15).
+  proxy-keryx:                            # caddy <-> keryx
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: ${KERYX_NET_PREFIX:-172.31.240}.0/29
+          ip_range: ${KERYX_NET_PREFIX:-172.31.240}.4/30      # adresses attribuées d'office : jamais celle de caddy (.2)
+  proxy-keycloak:                         # caddy <-> keycloak
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: ${KERYX_NET_PREFIX:-172.31.240}.8/29
+          ip_range: ${KERYX_NET_PREFIX:-172.31.240}.12/30     # idem (caddy : .10)
+  keryx-postgres:                         # keryx <-> postgres
+    driver: bridge
+    internal: true
+  sauvegarde-postgres:                    # sauvegarde <-> postgres
+    driver: bridge
+    internal: true
+  keryx-clamav:                           # keryx <-> clamav
+    driver: bridge
+    internal: true
+  keryx-garage:                           # keryx <-> garage
+    driver: bridge
+    internal: true
+  keycloak-postgres:                      # keycloak <-> keycloak-db
+    driver: bridge
+    internal: true
+  keryx-sortie:                           # sorties de keryx : SMTP, horodatage, indexeur Wazuh, syslog, VirusTotal.
+    driver: bridge                        # FERMÉE par défaut : KERYX_SORTIE_FERMEE=false dans .env pour l'ouvrir.
+    internal: ${KERYX_SORTIE_FERMEE:-true}
+  clamav-sortie:                          # sortie de clamav : téléchargement des signatures (database.clamav.net)
+    driver: bridge
+    internal: ${KERYX_CLAMAV_SORTIE_FERMEE:-false}
+
+# R14 : données persistantes dans des volumes nommés. Aucun n'est supprimé par ./uninstall.sh sans --purger.
+volumes:
+  keryx_data:
+  postgres_data:
+  caddy_data:
+  clamav_data:
+  keycloak_db_data:
+  garage_meta:
+  garage_data:
+  sauvegardes:

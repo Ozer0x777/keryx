@@ -1,0 +1,82 @@
+# Reverse proxy de Keryx. Les valeurs {$…} viennent de l'environnement du conteneur (docker-compose.yml, .env).
+# Mode HTTPS : un des fichiers de ./tls est importé selon KERYX_HTTPS_MODE (acme, fourni, local).
+{
+	admin off # pas d'API d'administration : la configuration ne change qu'au redémarrage
+	persist_config off
+	http_port {$KERYX_HTTP_PORT:80}
+	https_port {$KERYX_HTTPS_PORT:443}
+	# Redirections HTTP -> HTTPS écrites plus bas : celles de Caddy supposent le port 443 côté public.
+	auto_https disable_redirects
+	servers {
+		protocols h1 h2 # pas de HTTP/3 : aucun port UDP n'est publié
+		timeouts {
+			read_header 15s
+			read_body 5m # dépôt d'une pièce ou du référentiel ATT&CK sur une liaison lente
+			idle 2m
+		}
+		max_header_size 32KB
+	}
+	log {
+		output stdout
+		format json
+	}
+}
+
+# Réglages communs aux sites publiés.
+(commun) {
+	header {
+		# RFC 6797. Keryx le pose aussi ; « defer » remplace sa valeur au lieu de la doubler.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+		defer
+	}
+	log
+}
+
+# ----- Keryx -----
+{$KERYX_DOMAIN:localhost} {
+	import tls/{$KERYX_TLS:local}.caddy keryx
+	import commun
+	# Taille des requêtes : les mêmes bornes que Keryx (keryx/bodylimit.py, docs/exploitation.md), appliquées ici
+	# d'abord. Au-delà, c'est Caddy qui répond 413 : Keryx refuse un corps trop gros en coupant la connexion, ce
+	# qu'un reverse proxy rapporterait comme une erreur 502.
+	@pieces path_regexp ^/api/v1/tickets/[^/]+/attachments$
+	@referentiel path /api/v1/mitre/import
+	@ordinaire {
+		not path_regexp ^/api/v1/tickets/[^/]+/attachments$
+		not path /api/v1/mitre/import
+	}
+	request_body @pieces {
+		max_size 21MiB # une pièce : 20 Mio et son formulaire
+	}
+	request_body @referentiel {
+		max_size 81MiB # référentiel ATT&CK (STIX) : 80 Mio
+	}
+	request_body @ordinaire {
+		max_size {$KERYX_MAX_BODY_BYTES:2097152}
+	}
+	handle_errors 413 {
+		header Content-Type application/problem+json
+		header Cache-Control no-store
+		respond `{"type":"about:blank","title":"Contenu trop volumineux","status":413,"detail":"Le corps de la requête dépasse la taille admise."}` 413
+	}
+	# Caddy écrit lui-même X-Forwarded-For, -Proto et -Host et écarte ceux qu'un client aurait envoyés
+	# (aucun « trusted_proxies »). Keryx ne les croit que venant de cette adresse (FORWARDED_ALLOW_IPS).
+	reverse_proxy keryx:8000
+}
+
+# HTTP : rien n'est servi en clair, tout est redirigé vers HTTPS (sur le port public réel). Les défis ACME
+# (/.well-known/acme-challenge/) sont traités par Caddy avant cette redirection.
+http://{$KERYX_DOMAIN:localhost} {
+	redir https://{$KERYX_DOMAIN:localhost}{$KERYX_PORT_SUFFIX}{uri} 308
+}
+
+# ----- Keycloak (profil « sso ») -----
+# sso-actif.caddy si KERYX_SSO_DOMAIN est défini dans .env, sinon sso.caddy (aucun site).
+import {$KERYX_SSO:sso}.caddy
+
+# ----- Contrôle de santé du conteneur (non publié) -----
+http://127.0.0.1:8081 {
+	bind 127.0.0.1
+	respond /sante "ok" 200
+}

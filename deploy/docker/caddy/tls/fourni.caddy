@@ -1,0 +1,5 @@
+# Mode « fourni » : certificat (chaîne complète, PEM) et clé déposés dans ./certs, monté en lecture seule.
+# Fichiers attendus : keryx.crt et keryx.key ; avec le profil « sso » : sso.crt et sso.key.
+tls /certs/{args[0]}.crt /certs/{args[0]}.key {
+	protocols tls1.2 tls1.3
+}

@@ -8,3 +8,10 @@ __pycache__/
 *.pyc
 keryx/web_dist/
 e2e/node_modules/
+# Déploiement Docker : secrets et fichiers propres à une installation
+deploy/docker/.env
+deploy/docker/.env.partiel.*
+deploy/docker/certs/*
+!deploy/docker/certs/.gitkeep
+deploy/docker/confiance/*
+!deploy/docker/confiance/.gitkeep

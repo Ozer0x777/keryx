@@ -9,9 +9,11 @@ RUN npm run build -- --outDir dist --emptyOutDir
 
 # Étape 2 : application
 FROM python:3.12-slim
+# /sauvegardes : point de montage du volume de « keryx backup » (deploy/docker, profil sauvegarde). Le créer ici, au
+# bon propriétaire, évite tout « chown » à l'exécution : le volume nommé monté dessus en hérite.
 RUN useradd --create-home --uid 10001 keryx \
- && mkdir -p /data/attachments \
- && chown -R 10001:10001 /data && chmod 700 /data
+ && mkdir -p /data/attachments /sauvegardes \
+ && chown -R 10001:10001 /data /sauvegardes && chmod 700 /data /sauvegardes
 # Client PostgreSQL : nécessaire à « keryx backup » / « keryx restore » quand la base est PostgreSQL.
 # ca-certificates : autorités du système, contre lesquelles le certificat de VirusTotal est vérifié (ADR-0022).
 RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client openssl ca-certificates \

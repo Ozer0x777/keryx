@@ -1,0 +1,20 @@
+# Site de Keycloak, importé par Caddyfile quand KERYX_SSO_DOMAIN est défini (profil « sso »).
+{$KERYX_SSO_DOMAIN} {
+	import tls/{$KERYX_TLS:local}.caddy sso
+	import commun
+	request_body {
+		max_size 1MB
+	}
+	# Console d'administration et realm « master » : seulement depuis les adresses d'administration
+	# (PDIS IV.3.9.b). Par défaut les plages privées ; à resserrer avec KERYX_ADMIN_CIDRS.
+	@console {
+		path /admin /admin/* /realms/master /realms/master/*
+		not remote_ip {$KERYX_ADMIN_CIDRS:private_ranges}
+	}
+	respond @console 403
+	reverse_proxy keycloak:8080
+}
+
+http://{$KERYX_SSO_DOMAIN} {
+	redir https://{$KERYX_SSO_DOMAIN}{$KERYX_PORT_SUFFIX}{uri} 308
+}

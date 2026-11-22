@@ -1,0 +1,5 @@
+# Mode « local » : essai sur une machine. Certificat signé par l'autorité interne de Caddy,
+# que les navigateurs ne connaissent pas (avertissement attendu). Jamais en production.
+tls internal {
+	protocols tls1.2 tls1.3
+}

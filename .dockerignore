@@ -9,3 +9,13 @@ e2e/node_modules
 .github
 run.sh
 .env.local
+# Jamais dans le contexte de construction : secrets du déploiement, historique, documentation, outils
+.git
+**/.env
+**/.env.*
+deploy
+docs
+e2e
+integrations
+scripts
+web/dist

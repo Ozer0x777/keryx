@@ -1,0 +1,7 @@
+# Mode « acme » avec liaison de compte externe (EAB), quand l'autorité l'exige :
+# KERYX_ACME_EAB_KID et KERYX_ACME_EAB_HMAC sont fournis par l'autorité.
+tls {$KERYX_ACME_EMAIL} {
+	protocols tls1.2 tls1.3
+	ca {$KERYX_ACME_CA}
+	eab {$KERYX_ACME_EAB_KID} {$KERYX_ACME_EAB_HMAC}
+}

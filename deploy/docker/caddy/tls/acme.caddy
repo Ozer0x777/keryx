@@ -1,0 +1,6 @@
+# Mode « acme » : certificat obtenu et renouvelé automatiquement auprès de l'autorité KERYX_ACME_CA
+# (adresse de son annuaire ACME). L'autorité est un choix explicite : voir docs/deploiement-docker.md.
+tls {$KERYX_ACME_EMAIL} {
+	protocols tls1.2 tls1.3
+	ca {$KERYX_ACME_CA}
+}

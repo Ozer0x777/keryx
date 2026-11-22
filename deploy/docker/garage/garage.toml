@@ -1,0 +1,17 @@
+# Garage pour Keryx, un seul nœud dans un conteneur. Un seul nœud n'est qu'un essai : en production, au moins
+# 3 nœuds sur 3 sites (docs/deploiement-stockage-garage.md). Le secret RPC vient de GARAGE_RPC_SECRET (.env).
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "lmdb"
+replication_factor = 1
+
+# RPC sur la boucle locale du conteneur : seul « garage » lancé dans ce conteneur (install.sh) l'atteint.
+rpc_bind_addr = "127.0.0.1:3901"
+rpc_public_addr = "127.0.0.1:3901"
+
+[s3_api]
+s3_region = "garage"
+# En clair sur le seul réseau keryx-garage (interne, deux conteneurs). Keryx chiffre chaque pièce avant envoi
+# et signe chaque requête : ni contenu ni secret ne circulent en clair (ADR-0019, ADR-0023).
+api_bind_addr = "0.0.0.0:3900"
+root_domain = ".s3.garage.interne"
