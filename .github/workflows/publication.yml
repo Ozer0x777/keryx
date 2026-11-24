@@ -59,7 +59,7 @@ jobs:
           sbom: true
 
       - name: Attestation de provenance (GitHub)
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ steps.version.outputs.image }}
           subject-digest: ${{ steps.build.outputs.digest }}
