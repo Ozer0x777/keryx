@@ -53,6 +53,21 @@ const TAB_IDS = TABS.map((x) => x.id)
 
 const MAIN_NEXT = { nouveau: 'en_evaluation', en_evaluation: 'en_reponse', en_reponse: 'cloture', cloture: 'retour_experience' }
 
+// Écart d'horloge (ADR-0028) : « détecté » vient du manager Wazuh, « reçu » de Keryx. Reçu AVANT d'être détecté :
+// l'horloge du manager avance. Reçu longtemps après : file d'attente ou coupure entre Wazuh et Keryx.
+const CLOCK_AHEAD_S = 60
+const LATE_S = 15 * 60
+function ClockNote({ delay }) {
+  if (delay == null) return null
+  const min = Math.round(Math.abs(delay) / 60)
+  if (delay < -CLOCK_AHEAD_S) {
+    return <span className="pill warn" title={tr("Date de détection fournie par Wazuh, date de réception par Keryx : comparer les horloges (NTP).")}>
+      {tr("Horloge du manager Wazuh en avance d'environ {n} min sur Keryx", { n: Math.max(min, 1) })}</span>
+  }
+  if (delay > LATE_S) return <span className="pill">{tr('Reçu {n} min après la détection', { n: min })}</span>
+  return null
+}
+
 // Échéance de l'en-tête : la date (UTC) et le temps restant ou dépassé, recalculé chaque minute.
 function Deadline({ label, iso }) {
   const [now, setNow] = useState(() => Date.now())
@@ -177,6 +192,7 @@ export default function Ticket() {
             {t.gravite && <Severity value={t.gravite} prefix={tr("Gravité : ")} />}
             <Tlp value={t.tlp} />
             <span className="muted small">{tr('Détecté {when} · règle Wazuh {rule} (niveau {level}) · {n} occurrence(s)', { when: formatUtc(t.detected_at), rule: t.rule.id, level: t.rule.level, n: t.occurrences })}</span>
+            <ClockNote delay={t.reception_delay_s} />
           </div>
         </div>
         {isTeam && (
@@ -695,6 +711,17 @@ function Qualification({ t, enc, run, open }) {
       {t.severity_hint && open && (
         <p className="muted small" data-testid="severity-hint">{tr("Selon l'importance « {imp} » de l'équipement : dommages limités → {a}, significatifs → {b}, graves → {c} (grille du client). La gravité est fixée par votre qualification.", { imp: IMPORTANCES[v.importance], a: tr(t.severity_hint.limites), b: tr(t.severity_hint.significatifs), c: tr(t.severity_hint.graves) })}</p>
       )}
+      {t.proposition && open && !t.dommages && (
+        // Gravité proposée (ADR-0028) : jamais appliquée seule ; un clic la retient, et le registre dit qu'elle venait
+        // de la proposition.
+        <div className="proposal" data-testid="severity-proposal">
+          <p className="small">{tr('Gravité proposée : {g}, avec des dommages « {d} » (d\'après la criticité initiale {c} et l\'importance de l\'équipement). À confirmer.', { g: tr(t.proposition.gravite), d: DOMMAGES[t.proposition.dommages], c: tr(t.proposition.criticite) })}</p>
+          <button type="button" onClick={() => {
+            setV({ ...v, dommages: t.proposition.dommages })
+            track(() => run(() => api(`/tickets/${enc}/qualification`, { method: 'POST', json: { dommages: t.proposition.dommages, from_proposal: true } }), tr('Gravité proposée retenue.')))
+          }}>{tr('Retenir cette gravité')}</button>
+        </div>
+      )}
       <div className="row between gravity"><span className="muted">{tr("Gravité qualifiée")}</span><Severity value={t.gravite} /></div>
       <label>{tr("Impact constaté")}<textarea rows="2" value={v.impact} disabled={!open} onChange={(e) => setV({ ...v, impact: e.target.value })} /></label>
       <label>{tr("Risque induit")}<textarea rows="2" value={v.risque} disabled={!open} onChange={(e) => setV({ ...v, risque: e.target.value })} /></label>
@@ -832,6 +859,8 @@ function Details({ t }) {
       {/* Les échéances et l'assigné sont dans l'en-tête de la fiche. */}
       <dl className="kv">
         <dt>{tr("Client")}</dt><dd>{t.client}</dd>
+        <dt>{tr("Détecté (horloge Wazuh)")}</dt><dd className="mono small">{formatUtc(t.detected_at)}</dd>
+        {t.received_at && <><dt>{tr("Reçu par Keryx")}</dt><dd className="mono small">{formatUtc(t.received_at)}</dd></>}
         <dt>{tr("Dernière occurrence")}</dt><dd className="mono small">{formatUtc(t.last_seen_at)}</dd>
         <dt>{tr("REX")}</dt><dd>{t.rex_required ? tr('Obligatoire') : tr('Non requis')}</dd>
       </dl>

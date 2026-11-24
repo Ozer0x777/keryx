@@ -820,4 +820,12 @@ export default {
   "Rechargez la page. Si l'erreur revient, signalez-la à l'administrateur avec l'heure à laquelle elle s'est produite.": "Reload the page. If the error comes back, report it to the administrator with the time it occurred.",
   "Revenir à la file des tickets": "Back to the ticket queue",
   "{p} % ({a} sur {b})": "{p} % ({a} of {b})",
+  "Détecté (horloge Wazuh)": "Detected (Wazuh clock)",
+  "Reçu par Keryx": "Received by Keryx",
+  "Date de détection fournie par Wazuh, date de réception par Keryx : comparer les horloges (NTP).": "Detection time comes from Wazuh, reception time from Keryx: compare the clocks (NTP).",
+  "Horloge du manager Wazuh en avance d'environ {n} min sur Keryx": "Wazuh manager clock about {n} min ahead of Keryx",
+  "Reçu {n} min après la détection": "Received {n} min after detection",
+  "Gravité proposée : {g}, avec des dommages « {d} » (d'après la criticité initiale {c} et l'importance de l'équipement). À confirmer.": "Proposed severity: {g}, with “{d}” damage (based on the initial criticality {c} and the asset importance). To be confirmed.",
+  "Retenir cette gravité": "Accept this severity",
+  "Gravité proposée retenue.": "Proposed severity accepted.",
 }

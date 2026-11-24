@@ -158,6 +158,8 @@ label.check input { flex: none; }
 .ticket-tabs .tab:hover { color: var(--text); }
 .ticket-tabs .tab.on { color: var(--text); border-bottom-color: var(--accent); }
 .ticket-tabs .count, .ticket-tabs .pill { margin-left: 6px; }
+.proposal { border: 1px dashed var(--border); border-radius: var(--radius); padding: 8px 10px; margin: 8px 0; }
+.proposal p { margin: 0 0 6px; }
 .unsaved-dot { margin-left: 6px; color: #8A5A00; }
 [role=tabpanel][hidden] { display: none; }
 /* Panneaux repliables (components/Section.jsx) : tout l'en-tête plie et déplie, le chevron dit l'état */

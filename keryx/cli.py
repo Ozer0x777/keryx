@@ -55,6 +55,60 @@ def _trace(db, settings: Settings, actor: str, action: str, details: dict) -> No
 _OPEN: list = []   # sessions ouvertes par une commande, fermées à sa fin (utile quand main() est appelée dans un processus qui continue)
 
 
+# Jeu de démonstration : alertes fictives (règles, agents et adresses inventés, plages d'adresses de documentation
+# RFC 5737 pour l'extérieur), passées par la même ingestion que les vraies alertes. Niveau, règle, description, agent,
+# adresse, importance de l'équipement, techniques MITRE fournies par la « règle ».
+DEMO_ALERTS = [
+    (7, "5503", "Échecs d'ouverture de session SSH en série", "srv-web-01", "10.20.1.15", "standard", ["T1110"]),
+    (15, "100900", "Exfiltration corrélée vers une adresse externe", "srv-fichiers-02", "10.20.3.32", "standard", []),
+    (9, "92201", "Exécution de PowerShell encodé depuis un processus Office", "pc-compta-07", "10.20.5.41", "standard", ["T1059.001"]),
+    (7, "554", "Fichier ajouté dans un répertoire surveillé", "srv-web-01", "10.20.1.15", "standard", []),
+    (10, "31151", "Balayage web : nombreuses erreurs 400 depuis une même source", "srv-web-01", "10.20.1.15", "standard", ["T1595"]),
+    (7, "60122", "Échecs d'ouverture de session Windows en série", "srv-ad-01", "10.20.0.10", "vital", ["T1110.003"]),
+    (7, "100210", "Accès à un partage RH en dehors du périmètre habituel", "srv-fichiers-02", "10.20.3.32", "sensible", []),
+    (12, "52502", "Fichier reconnu malveillant par l'intégration antivirus", "pc-compta-07", "10.20.5.41", "sensible", ["T1204.002"]),
+    (8, "5402", "Élévation de privilèges par sudo vers root", "srv-bdd-01", "10.20.2.20", "sensible", ["T1548.003"]),
+    (10, "100320", "Désactivation de la journalisation d'audit", "srv-bdd-01", "10.20.2.20", "vital", ["T1562.001"]),
+]
+
+
+def _demo(db, settings, actor: str) -> int:
+    from datetime import timedelta
+    from .ids import utcnow
+    from .ingest import AlertRejected, ingest_alert
+    if db.scalars(select(Tenant).where(Tenant.key == "DEMO")).first() is not None:
+        print("Le client DEMO existe déjà : rien n'a été créé (le supprimer d'abord pour recommencer).", file=sys.stderr)
+        return 2
+    tenant = Tenant(key="DEMO", name="Démonstration (données fictives)")
+    db.add(tenant); db.flush()
+    audit.record(db, actor, "client.create", "tenant", "DEMO", tenant.id, {"demo": True})
+    start = utcnow() - timedelta(hours=6)
+    refs = []
+    for n, (level, rule_id, desc, agent, ip, imp, mitre) in enumerate(DEMO_ALERTS):
+        when = start + timedelta(minutes=35 * n)
+        alert = {
+            "id": f"demo-{n + 1}", "timestamp": when.strftime("%Y-%m-%dT%H:%M:%S.000+0000"),
+            "rule": {"id": rule_id, "level": level, "description": desc, "groups": ["demo"],
+                     **({"mitre": {"id": mitre, "tactic": [], "technique": []}} if mitre else {})},
+            "agent": {"id": f"{90 + n:03d}", "name": agent, "ip": ip, "labels": {"importance": imp}},
+            "location": "/var/log/demo.log", "decoder": {"name": "demo"},
+            "data": {"srcip": "203.0.113.77"} if rule_id == "100900" else {},
+            "full_log": "Données fictives : jeu de démonstration de Keryx.",
+        }
+        try:
+            r = ingest_alert(db, settings, tenant, alert, actor)
+        except AlertRejected as exc:
+            db.rollback()
+            print(f"Alerte de démonstration refusée : {exc}", file=sys.stderr)
+            return 1
+        if r.ticket is not None:
+            refs.append(r.ticket.ref)
+    db.commit()
+    print(f"Client DEMO créé avec {len(refs)} incidents fictifs : {', '.join(refs)}.")
+    print("Pour les voir : rattacher un compte d'analyste au client DEMO (Administration, Comptes).")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         return _main(argv)
@@ -96,6 +150,7 @@ def _main(argv: list[str] | None = None) -> int:
     sub.add_parser("checkpoint")
     sc = sub.add_parser("set-contacts"); sc.add_argument("client_key"); sc.add_argument("emails", nargs="*")
     sub.add_parser("gen-key")
+    sub.add_parser("demo", help="Crée le client DEMO et dix incidents fictifs, pour essayer Keryx sans Wazuh")
     args = p.parse_args(argv)
 
     if args.cmd == "gen-key":
@@ -190,6 +245,9 @@ def _main(argv: list[str] | None = None) -> int:
         for code in plain_codes:
             print("  ", code)
         return 0
+
+    if args.cmd == "demo":
+        return _demo(db, settings, actor)
 
     if args.cmd == "add-api-key":
         t = db.scalars(select(Tenant).where(Tenant.key == args.client_key.upper())).first()

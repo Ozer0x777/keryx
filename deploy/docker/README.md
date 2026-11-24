@@ -50,6 +50,7 @@ Les commandes se lancent dans `deploy/docker`.
 | État | `docker compose ps` |
 | Journaux | `docker compose logs -f keryx` (ou `caddy`, `postgres`…) |
 | Commande d'administration de Keryx | `docker compose exec keryx python -m keryx.cli verify-audit` |
+| Essayer sans Wazuh | `docker compose exec keryx python -m keryx.cli demo` : client DEMO et dix incidents fictifs |
 | Changer un réglage | modifier `.env`, puis `docker compose up -d`. Relancer `./install.sh` ne change rien aux réglages d'un `.env` existant : une réponse donnée en variable (`KERYX_DOMAIN=…`) est signalée comme ignorée |
 | Ajouter un profil | l'ajouter à `COMPOSE_PROFILES` dans `.env`, puis `./install.sh` |
 | Mettre à jour Keryx | `git pull`, puis `./install.sh` (reconstruit, applique les migrations au démarrage) |

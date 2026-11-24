@@ -65,6 +65,21 @@ def _rule(alert: dict) -> dict:
     return rule
 
 
+TITLE_MAX = 100  # longueur maximale de la partie « description » du titre
+
+
+def short_title(description: str, agent_name: str) -> str:
+    """Titre lisible dans la file : la description de la règle, espaces normalisés, coupée à TITLE_MAX caractères sur
+    une limite de mot (une règle peut insérer une ligne de commande entière dans sa description, ex. Sysmon/PowerShell).
+    La description complète reste dans le corps du ticket et dans `rule_description`."""
+    text = " ".join(description.split())
+    if len(text) > TITLE_MAX:
+        cut = text[:TITLE_MAX]
+        space = cut.rfind(" ")
+        text = (cut[:space] if space >= TITLE_MAX * 0.6 else cut).rstrip(" ,;:-") + "…"
+    return f"{text} — {agent_name or 'agent inconnu'}"
+
+
 def _classification(rule: dict) -> list[str]:
     out = [f"group:{g}" for g in _str_list(rule.get("groups"))]
     for key in COMPLIANCE_KEYS:
@@ -182,7 +197,7 @@ def ingest_alert(db: DbSession, settings: Settings, tenant: Tenant, alert: dict,
     mitre, mitre_source = enrich(db, rule)
     seq, ref = next_ref(db, tenant)
     description = _str(rule.get("description"), 500) or "Alerte Wazuh"
-    title = f"{description} — {_str(agent.get('name'), 200) or 'agent inconnu'}"[:500]
+    title = short_title(description, _str(agent.get("name"), 200))
     agent_ip = _str(agent.get("ip"), 64) or None
     ticket = Ticket(
         tenant_id=tenant.id, seq=seq, ref=ref, title=title,

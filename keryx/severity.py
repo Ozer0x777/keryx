@@ -39,6 +39,19 @@ def gravite(dommages: str, importance: str, grid: dict | None = None) -> str:
     return g[dommages][importance]
 
 
+_RANK = {"Faible": 1, "Moyenne": 2, "Élevée": 3, "Critique": 4}
+
+
+def propose_dommages(criticite: str | None, importance: str, grid: dict | None = None) -> str | None:
+    """Proposition de dommages pour l'analyste (ADR-0028), jamais appliquée sans son clic : les dommages dont la
+    gravité, selon la grille du client et l'importance de l'équipement, est la plus proche de la criticité initiale
+    (niveau de la règle Wazuh). À égalité, les dommages les plus faibles : la proposition ne surévalue pas."""
+    if criticite not in _RANK or importance not in IMPORTANCES:
+        return None
+    target = _RANK[criticite]
+    return min(DOMMAGES, key=lambda d: (abs(_RANK[gravite(d, importance, grid)] - target), DOMMAGES.index(d)))
+
+
 def importance_from_alert(alert: dict) -> str:
     """Importance de l'équipement lue dans le label d'agent Wazuh « importance »
     (section <labels> d'ossec.conf, reprise dans les alertes). Par défaut : standard."""

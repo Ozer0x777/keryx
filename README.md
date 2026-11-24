@@ -102,6 +102,7 @@ Table complète des fonctions et de leurs exigences : [`docs/fonctions-et-exigen
 
 | Sujet | Où |
 |---|---|
+| Prise en main, une fiche par rôle | [`docs/prise-en-main/`](docs/prise-en-main/) |
 | Exploitation au quotidien | [`docs/exploitation.md`](docs/exploitation.md) |
 | Variables de configuration | [`docs/configuration.md`](docs/configuration.md) |
 | Déploiement Docker, fiche ANSSI, PDIS | [`docs/deploiement-docker.md`](docs/deploiement-docker.md) |
@@ -125,6 +126,7 @@ python -m keryx.cli set-contacts ACME soc@acme.example
 python -m keryx.cli add-user sbenali "S. Benali" analyst --clients ACME   # affiche l'URI TOTP et 10 codes de secours
 python -m keryx.cli add-api-key ACME wazuh-manager-01
 python -m keryx.cli add-mitre --group authentication_failures T1110 "Brute Force" "Credential Access"
+python -m keryx.cli demo                     # facultatif : client DEMO et dix incidents fictifs, pour essayer sans Wazuh
 uvicorn keryx.api:create_app --factory --port 8000
 ```
 

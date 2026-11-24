@@ -38,6 +38,7 @@ from .oidc import load_providers
 from .bodylimit import BodyLimitMiddleware
 from .config import Settings
 from .db import Base, make_engine, make_session_factory
+from . import __version__
 from .ids import as_utc, bounded_input_date, rfc3339, utcnow
 from .iodef import validate as iodef_validate
 from .ingest import AlertRejected, ingest_alert
@@ -50,7 +51,7 @@ from .notify import retry_failed, send_pending
 from .s3store import StorageError
 from .sanitize import clean_html
 from .sla import state as sla_state
-from .severity import DOMMAGES, IMPORTANCES, gravite, is_rex_required
+from .severity import DOMMAGES, IMPORTANCES, gravite, is_rex_required, propose_dommages
 from .models import TERMINAL_STATUSES as TERMINAL
 from .workflow import TransitionError, _visible_text, check_transition, rex_pending
 
@@ -177,6 +178,7 @@ class QualificationIn(BaseModel):
     impact: str | None = Field(default=None, max_length=5000)
     risque: str | None = Field(default=None, max_length=5000)
     tlp: str | None = None
+    from_proposal: bool = False   # dommages retenus depuis la proposition affichée (ADR-0028), tracé au registre
 
 
 MIN_REASON = 10   # longueur minimale du motif d'un faux positif
@@ -253,7 +255,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ingest_limiter = limiter("ingest", 600, 60)
 
     # Pas d'interface Swagger : elle charge ses scripts depuis un CDN (aucun service externe).
-    app = FastAPI(title="Keryx", version="0.7.0", docs_url=None, redoc_url=None, openapi_url="/api/openapi.json")
+    app = FastAPI(title="Keryx", version=__version__, docs_url=None, redoc_url=None, openapi_url="/api/openapi.json")
     app.state.settings = settings
     app.state.engine = engine
     app.state.SessionLocal = SessionLocal
@@ -682,6 +684,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return await run_in_threadpool(_ingest_sync, bytes(raw), tenant_id, key_name)
 
     # ---------------------------------------------------------------- tickets
+    def proposition(db: DbSession, t: Ticket) -> dict | None:
+        """Gravité proposée tant que les dommages ne sont pas qualifiés (ADR-0028) ; rien sur un ticket clos."""
+        if t.dommages or t.status not in ("nouveau", "en_evaluation", "en_reponse"):
+            return None
+        grid = db.get(Tenant, t.tenant_id).severity_grid
+        d = propose_dommages(t.criticite_initiale, t.importance, grid)
+        return {"dommages": d, "gravite": gravite(d, t.importance, grid), "criticite": t.criticite_initiale} if d else None
+
     def ticket_summary(t: Ticket, tenants: dict[str, Tenant], users: dict[str, User] | None = None,
                        with_sla: bool = True) -> dict[str, Any]:
         out = _ticket_summary(t, tenants, users)
@@ -864,6 +874,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "attachment_max_mb": db.get(Tenant, t.tenant_id).max_attachment_mb or 20,
             "severity_hint": {d: gravite(d, t.importance, db.get(Tenant, t.tenant_id).severity_grid) for d in DOMMAGES}
             if not is_client else None,
+            "proposition": proposition(db, t) if not is_client else None,
             "comments": [
                 {"author": authors[c.author_id].display_name if c.author_id in authors else "?",
                  "body_html": c.body_html, "visible_client": c.visible_client, "created_at": rfc3339(c.created_at)}
@@ -881,6 +892,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             out["assignee_username"] = assignee.username if assignee else None
             out["assignee_active"] = bool(assignee and assignee.active)
             out["raw_alerts"] = len(db.scalars(select(RawAlert.id).where(RawAlert.ticket_id == t.id)).all())
+            # Horloges (ADR-0028) : « détecté » vient du manager Wazuh, « reçu » de l'horloge de Keryx. Un délai négatif
+            # veut dire que l'horloge du manager est en avance sur celle de Keryx.
+            out["received_at"] = rfc3339(t.created_at)
+            out["reception_delay_s"] = int((as_utc(t.created_at) - as_utc(t.detected_at)).total_seconds())
             out["synthese"] = {"compromission_initiale": rfc3339(t.compromission_initiale),
                                "chronologie": t.chronologie, "mode_operatoire": t.mode_operatoire,
                                "perimetre": t.perimetre, "rex_html": t.rex_html}
@@ -924,6 +939,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         t.qualified_at = t.updated_at = utcnow()
         details = {"verdict": t.verdict, "gravite": t.gravite, "dommages": t.dommages, "importance": t.importance,
                    "tlp": t.tlp}
+        if body.from_proposal and "dommages" in sent:
+            details["source"] = "proposition"
         event(db, t, user, "qualification", details)
         commit(db)
         return {"ref": t.ref, "verdict": t.verdict, "gravite": t.gravite, "rex_required": t.rex_required}
