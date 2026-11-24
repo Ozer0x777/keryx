@@ -170,7 +170,7 @@ export default function Parc() {
                     {rows.map((a) => (
                       <tr key={a.id} className={a.id === selected ? 'selected' : ''}>
                         <td><StatusPill status={a.status} /></td>
-                        <td><button type="button" className="link strong" aria-label={tr('Voir le détail de {name}', { name: a.name })} onClick={() => setParam({ agent: a.id })}>{a.name}</button>
+                        <td><button type="button" className="link strong nowrap" aria-label={tr('Voir le détail de {name}', { name: a.name })} onClick={() => setParam({ agent: a.id })}>{a.name}</button>
                           <div className="mono small muted">{a.id}{a.ip ? ` · ${a.ip}` : ''}</div></td>
                         <td>{a.os || '—'}</td>
                         <td className="nowrap"><span className="mono">{a.version || '—'}</span>{a.version_gap && <> <span className="pill warn">{tr(GAP[a.version_gap])}</span></>}</td>
