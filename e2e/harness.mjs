@@ -143,13 +143,18 @@ export async function answerDialog(page, values = {}, { cancel = false, stays = 
 export async function unfold(page, title) {
   const d = page.locator(`section[aria-label="${title}"] > details`)
   await d.waitFor({ state: 'attached' })
+  // La fiche ticket de l'équipe est en onglets (ADR-0026) : on active d'abord celui qui contient le panneau.
+  const tab = await d.evaluate((e) => { const p = e.closest('[role=tabpanel]'); return p && p.hidden ? p.getAttribute('aria-labelledby') : null })
+  if (tab) await page.locator(`#${tab}`).click()
   if (!(await d.evaluate((e) => e.open))) await d.locator('> summary').click()
 }
 export async function unfoldAll(page) {
+  // Contrôles qui portent sur toute la page : les panneaux de tous les onglets sont rendus visibles (un état du
+  // composant qui changerait l'onglet les cacherait de nouveau ; ces contrôles n'en provoquent pas).
+  await page.evaluate(() => document.querySelectorAll('[role=tabpanel][hidden]').forEach((p) => { p.hidden = false }))
   const closed = page.locator('.fold > details:not([open]) > summary')
   for (let i = 0; i < 40 && await closed.count() > 0; i++) await closed.first().click()   // la liste raccourcit à chaque clic
 }
-
 export function check(cond, label) {
   if (!cond) { console.error(`✗ ${label}`); process.exitCode = 1 } else console.log(`✓ ${label}`)
 }

@@ -799,4 +799,10 @@ export default {
   "sa réponse n'est pas arrivée": "no reply yet",
   "Dossiers incomplets": "Incomplete files",
   "gravité, assigné ou synthèse manquants": "severity, assignee or summary missing",
+  "Vue générale": "Overview",
+  "Investigation": "Investigation",
+  "Preuves": "Evidence",
+  "Communication": "Communication",
+  "Sections de la fiche": "Ticket sections",
+  "L'alerte Wazuh est reprise dans la description (onglet Vue générale).": "The Wazuh alert is included in the description (Overview tab).",
 }

@@ -70,7 +70,7 @@ export default async ({ stack, BASE, check, login }) => {
   const ouverts = await m.locator('.fold > details[open]').evaluateAll((l) => l.map((d) => d.parentElement.getAttribute('aria-label')))
   check(JSON.stringify(ouverts) === JSON.stringify(['Description', 'Qualification', 'Affectation']), `statut Nouveau : alerte (dans la description), qualification et affectation ouvertes, le reste replié (${ouverts.join(', ')})`)
   check(await m.locator('section[aria-label="Alerte Wazuh"]').count() === 0 && await m.locator('.alert-extra').count() === 1, "l'alerte déjà reprise par la description n'est pas répétée dans un second panneau")
-  check(await m.locator('.ticket-actions button.primary').count() === 1, 'un seul bouton primaire parmi les actions de l\'en-tête')
+  check(await m.locator('.ticket-steps button.primary').count() === 1, 'un seul bouton primaire parmi les étapes de la barre fixe')
   check(await m.evaluate(() => getComputedStyle(document.querySelector('.ticket-aside')).position) !== 'sticky', 'colonne de pilotage non collante')
   // lien entre tickets depuis la fiche
   await unfold(m, 'Tickets liés')
@@ -79,19 +79,20 @@ export default async ({ stack, BASE, check, login }) => {
   check(true, 'lien créé depuis la fiche')
   // éditeur riche : l'état actif d'un bouton suit la mise en forme (classe et aria-pressed)
   await unfold(m, 'Commentaires')
-  await m.locator('.rich-content').last().click()
+  await m.locator('section[aria-label="Commentaires"] .rich-content').last().click()
   const gras = m.locator('section[aria-label="Commentaires"] .tool[aria-label="Gras"]')
   check(await gras.getAttribute('aria-pressed') === 'false', 'éditeur : bouton Gras relâché par défaut')
   await gras.click(); await m.keyboard.type('x')
   check(await gras.getAttribute('aria-pressed') === 'true' && (await gras.getAttribute('class')).includes('on'), 'éditeur : bouton Gras marqué actif (aria-pressed et style)')
   await gras.click(); await m.keyboard.press('Backspace')
   // modèle enregistré depuis un commentaire
-  await m.locator('.rich-content').last().click(); await m.keyboard.type('Accusé de réception, analyse en cours.')
+  await m.locator('section[aria-label="Commentaires"] .rich-content').last().click(); await m.keyboard.type('Accusé de réception, analyse en cours.')
   await m.getByRole('button', { name: 'Enregistrer comme modèle' }).click()
   await answerDialog(m, { name: 'Accusé' })
   await m.waitForSelector('text=Modèle enregistré.')
   check(true, 'modèle enregistré (nom saisi dans le dialogue)')
   // dialogue de fusion : deux champs, validation en ligne, Échap ferme et rend le focus au déclencheur
+  await m.getByRole('tab', { name: 'Vue générale' }).click()   // la fusion est dans l'onglet Vue générale
   const fusion = m.getByRole('button', { name: 'Fusionner dans un autre ticket…' })
   await fusion.click()
   const d = await answerDialog(m, { into: 'ACME-2', reason: 'x' }, { stays: true })

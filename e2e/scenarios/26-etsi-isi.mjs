@@ -5,7 +5,7 @@ export default async ({ BASE, check, login }) => {
   const m = await login('manager')
   await m.goto(`${BASE}/tickets/ACME-1`)
   const panel = m.locator('section[aria-label="Classification ETSI ISI"]')
-  await panel.waitFor()
+  await panel.waitFor({ state: 'attached' })   // dans l'onglet Investigation
   await unfold(m, 'Classification ETSI ISI')   // replié par défaut tant que le ticket n'est pas en réponse
   check(await panel.locator('legend').count() === 1, 'panneau ETSI ISI affiché dans la fiche ticket')
   await panel.getByLabel('Catégorie').selectOption('IEX')

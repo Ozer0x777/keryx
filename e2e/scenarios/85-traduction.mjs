@@ -25,7 +25,7 @@ export default async ({ BASE, check, login }) => {
   await c.context().close()
   const f = await login('manager')
   await f.evaluate(() => localStorage.setItem('keryx_lang', 'en'))
-  await f.goto(`${BASE}/tickets/ACME-1`); await f.waitForSelector('text=Evidence register')
+  await f.goto(`${BASE}/tickets/ACME-1`); await f.waitForSelector('text=Evidence register', { state: 'attached' })
   await unfoldAll(f)
   await f.getByRole('button', { name: /Upload a file/ }).click()
   await f.getByRole('button', { name: 'Declare external evidence' }).click()

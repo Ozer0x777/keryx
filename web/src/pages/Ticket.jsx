@@ -1,6 +1,6 @@
 import { t as tr } from '../i18n.js'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api, downloadBlob } from '../api.js'
 import { useAuth } from '../App.jsx'
 import { ActionStatus, useActionStatus } from '../components/ActionStatus.jsx'
@@ -10,6 +10,7 @@ import Crisis from '../components/Crisis.jsx'
 import IsiPanel from '../components/IsiPanel.jsx'
 import Section, { OPEN_BY_STATUS, OPEN_FOR_CLIENT, PhaseContext } from '../components/Section.jsx'
 import Stamps from '../components/Stamps.jsx'
+import { TabBar, TabPanel } from '../components/Tabs.jsx'
 import WazuhContext from '../components/WazuhContext.jsx'
 import { useVirusTotal, VirusTotalPanel, VtPieceButton, VtPieceState } from '../components/VirusTotal.jsx'
 import RichEditor from '../components/RichEditor.jsx'
@@ -39,6 +40,16 @@ function alertInDescription(t) {
 }
 
 // Étape suivante normale du cycle de vie : c'est le seul bouton primaire de l'en-tête, les autres sont secondaires.
+// Onglets de la fiche pour l'équipe (ADR-0026). `zones` : les zones de saisie (components/Unsaved.jsx) qui s'y trouvent.
+const TABS = [
+  { id: 'general', label: 'Vue générale', zones: ['description', 'qualification'] },
+  { id: 'investigation', label: 'Investigation', zones: [] },
+  { id: 'preuves', label: 'Preuves', zones: [] },
+  { id: 'communication', label: 'Communication', zones: ['commentaire'] },
+  { id: 'rex', label: 'REX', zones: ['synthese'] },
+]
+const TAB_IDS = TABS.map((x) => x.id)
+
 // Étapes qui demandent une confirmation explicite avant d'être franchies.
 const CONFIRMED_STEPS = ['en_reponse', 'cloture', 'retour_experience']
 const MAIN_NEXT = { nouveau: 'en_evaluation', en_evaluation: 'en_reponse', en_reponse: 'cloture', cloture: 'retour_experience' }
@@ -90,6 +101,14 @@ export default function Ticket() {
     await load()
     return out
   }
+
+  // Onglet courant : dans l'URL (?onglet=…), pour qu'un rechargement ou un lien retrouve le même onglet.
+  const [params, setParams] = useSearchParams()
+  const tab = TAB_IDS.includes(params.get('onglet')) ? params.get('onglet') : 'general'
+  const selectTab = useCallback((id) => {
+    setParams((p) => { const n = new URLSearchParams(p); if (id === 'general') n.delete('onglet'); else n.set('onglet', id); return n }, { replace: true })
+    if (window.scrollY > 0) window.scrollTo({ top: 0 })   // le nouvel onglet se lit depuis son début
+  }, [setParams])
 
   // Saisies non enregistrées : indicateur de l'en-tête et garde-fou de sortie (ADR-0024).
   const unsaved = useUnsavedRegistry()
@@ -196,12 +215,6 @@ export default function Ticket() {
               </a>
             )}
             <button type="button" onClick={exportIodef}>{tr("Exporter (IODEF JSON)")}</button>
-            {/* Un seul bouton primaire : l'étape suivante normale, placée en dernier ; l'issue alternative est secondaire. */}
-            {[...(TRANSITIONS[t.status] || [])].sort((a, b) => (a === MAIN_NEXT[t.status]) - (b === MAIN_NEXT[t.status])).map((s) => (
-              <button type="button" key={s} className={s === MAIN_NEXT[t.status] ? 'primary' : undefined} onClick={() => transition(s)}>
-                → {STATUS[s].label}
-              </button>
-            ))}
           </div>
         )}
         {isTeam && (
@@ -217,7 +230,6 @@ export default function Ticket() {
           </dl>
         )}
       </header>
-      {isTeam && <div className="head-status"><UnsavedSummary labels={unsaved.labels} /><ActionStatus state={headStatus} /></div>}
       {/* Zone live conservée pour les lecteurs d'écran ; le retour visible est au bouton de chaque section. */}
       <p className="sr-only" role="status" aria-live="polite">{notice}</p>
       {dialog}
@@ -226,29 +238,78 @@ export default function Ticket() {
       {t.crisis && <p className="banner danger" role="status">{tr("MODE CRISE actif sur ce ticket : toute décision et toute action sont consignées dans le registre de crise.")}</p>}
       <PhaseContext.Provider value={phase}>
       <UnsavedProvider value={unsaved.report}>
-      <div className="ticket-layout">
-        <div className="ticket-main">
-          {isTeam && <Crisis t={t} enc={enc} isManager={me.role === 'manager'} open={open} onChange={load} />}
-          <Description t={t} enc={enc} canEdit={isTeam && open} run={run} onImage={uploadImage} alertMerged={isTeam && alertMerged} />
-          {isTeam && !alertMerged && <AlertBlock t={t} />}
-          {isTeam && t.wazuh?.context && <WazuhContext t={t} enc={enc} run={run} open={open} />}
-          <Attachments t={t} enc={enc} me={me} run={run} vt={vt} />
-          {vt && <VirusTotalPanel t={t} enc={enc} vt={vt} />}
-          {isTeam && <Synthese t={t} enc={enc} run={run} onImage={uploadImage} templates={templates('synthese')} />}
-          <Events t={t} />
-          <Comments t={t} enc={enc} isClient={isClient} me={me} run={run} onImage={uploadImage} templates={templates('commentaire')} />
-        </div>
-        {isTeam && (
-          <aside className="ticket-aside" aria-label={tr("Pilotage du ticket")}>
-            <Qualification t={t} enc={enc} run={run} open={open} />
+      {isTeam ? (
+        <>
+          {/* Barre fixe : identité du ticket, étapes du cycle de vie, retour d'action et onglets restent à l'écran
+              quand on fait défiler la page (ADR-0026). */}
+          <div className="ticket-sticky">
+            <div className="ticket-bar-top">
+              <div className="ticket-bar-id"><span className="mono strong">{t.ref}</span><span className="title muted">{t.title}</span></div>
+              <div className="head-status"><UnsavedSummary labels={unsaved.labels} /><ActionStatus state={headStatus} /></div>
+              <div className="row wrap gap ticket-steps">
+                {/* Un seul bouton primaire : l'étape suivante normale, placée en dernier ; l'issue alternative est secondaire. */}
+                {[...(TRANSITIONS[t.status] || [])].sort((a, b) => (a === MAIN_NEXT[t.status]) - (b === MAIN_NEXT[t.status])).map((s) => (
+                  <button type="button" key={s} className={s === MAIN_NEXT[t.status] ? 'primary' : undefined} onClick={() => transition(s)}>
+                    → {STATUS[s].label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <TabBar idBase="ticket" label={tr('Sections de la fiche')} active={tab} onSelect={selectTab}
+              tabs={TABS.map((x) => ({
+                id: x.id, label: tr(x.label),
+                badge: <>
+                  {x.id === 'preuves' && t.attachments.length > 0 && <span className="count">{t.attachments.length}</span>}
+                  {x.id === 'communication' && t.comments.length > 0 && <span className="count">{t.comments.length}</span>}
+                  {x.id === 'rex' && t.rex_required && <span className="pill warn">{tr('obligatoire')}</span>}
+                  {x.zones.some((z) => unsaved.ids.includes(z)) && <span className="unsaved-dot"><span aria-hidden="true">●</span><span className="sr-only"> {tr('Modifications non enregistrées')}</span></span>}
+                </>,
+              }))} />
+          </div>
+          <TabPanel id="general" idBase="ticket" active={tab === 'general'}>
+            <div className="ticket-layout">
+              <div className="ticket-main">
+                <Crisis t={t} enc={enc} isManager={me.role === 'manager'} open={open} onChange={load} />
+                <Description t={t} enc={enc} canEdit={open} run={run} onImage={uploadImage} alertMerged={alertMerged} />
+              </div>
+              <aside className="ticket-aside" aria-label={tr("Pilotage du ticket")}>
+                <Qualification t={t} enc={enc} run={run} open={open} />
+                <Assignment t={t} enc={enc} run={run} open={open} />
+                <Links t={t} enc={enc} run={run} open={open} />
+                <Details t={t} />
+              </aside>
+            </div>
+          </TabPanel>
+          <TabPanel id="investigation" idBase="ticket" active={tab === 'investigation'}>
+            {!alertMerged && <AlertBlock t={t} />}
+            {t.wazuh?.context && <WazuhContext t={t} enc={enc} run={run} open={open} />}
             <Mitre t={t} enc={enc} run={run} open={open} />
             <IsiPanel t={t} enc={enc} run={run} open={open} />
-            <Assignment t={t} enc={enc} run={run} open={open} />
-            <Links t={t} enc={enc} run={run} open={open} />
-            <Details t={t} />
-          </aside>
-        )}
-      </div>
+            {alertMerged && !t.wazuh?.context && <p className="muted">{tr("L'alerte Wazuh est reprise dans la description (onglet Vue générale).")}</p>}
+          </TabPanel>
+          <TabPanel id="preuves" idBase="ticket" active={tab === 'preuves'}>
+            <Attachments t={t} enc={enc} me={me} run={run} vt={vt} />
+            {vt && <VirusTotalPanel t={t} enc={enc} vt={vt} />}
+            <Events t={t} />
+          </TabPanel>
+          <TabPanel id="communication" idBase="ticket" active={tab === 'communication'}>
+            <Comments t={t} enc={enc} isClient={isClient} me={me} run={run} onImage={uploadImage} templates={templates('commentaire')} />
+          </TabPanel>
+          <TabPanel id="rex" idBase="ticket" active={tab === 'rex'}>
+            <Synthese t={t} enc={enc} run={run} onImage={uploadImage} templates={templates('synthese')} />
+          </TabPanel>
+        </>
+      ) : (
+        // Portail client : peu de contenu, une seule page, sans onglets.
+        <div className="ticket-layout ticket-client">
+          <div className="ticket-main">
+            <Description t={t} enc={enc} canEdit={false} run={run} onImage={uploadImage} alertMerged={false} />
+            <Attachments t={t} enc={enc} me={me} run={run} vt={vt} />
+            <Events t={t} />
+            <Comments t={t} enc={enc} isClient={isClient} me={me} run={run} onImage={uploadImage} templates={templates('commentaire')} />
+          </div>
+        </div>
+      )}
       </UnsavedProvider>
       </PhaseContext.Provider>
     </>

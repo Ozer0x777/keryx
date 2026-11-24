@@ -20,7 +20,8 @@ export function useUnsavedRegistry() {
     })
   }, [])
   const labels = useMemo(() => Object.values(dirty), [dirty])
-  return { report, labels }
+  const ids = useMemo(() => Object.keys(dirty), [dirty])
+  return { report, labels, ids }
 }
 
 export const UnsavedProvider = UnsavedContext.Provider

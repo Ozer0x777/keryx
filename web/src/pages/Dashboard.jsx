@@ -62,7 +62,7 @@ export default function Dashboard() {
               <thead><tr><th scope="col">{tr("Analyste")}</th><th scope="col" className="num">{tr("Ouverts")}</th><th scope="col" className="num">{tr("En retard")}</th></tr></thead>
               <tbody>
                 {d.workload.length === 0 && <tr><td colSpan="3" className="muted">{tr("Aucun ticket ouvert.")}</td></tr>}
-                {d.workload.map((w) => <tr key={w.name}><td>{w.name}</td><td className="num">{w.open}</td><td className="num">{w.overdue ? <span className="pill danger">{w.overdue}</span> : 0}</td></tr>)}
+                {d.workload.map((w) => <tr key={w.name}><td>{w.name === 'Non assigné' ? tr('Non assigné') : w.name}</td><td className="num">{w.open}</td><td className="num">{w.overdue ? <span className="pill danger">{w.overdue}</span> : 0}</td></tr>)}
               </tbody></table></div>
           </section>
         </>

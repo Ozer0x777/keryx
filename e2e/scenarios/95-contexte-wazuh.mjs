@@ -66,7 +66,7 @@ export default async ({ stack, BASE, check, login }) => {
 
   // 3. Fiche du ticket pour l'équipe : lien, lecture, conservation
   await m.reload()
-  await m.waitForSelector(section)
+  await m.waitForSelector(section, { state: 'attached' })
   const link = m.getByRole('link', { name: /Ouvrir l'alerte dans Wazuh/ })
   const href = await link.getAttribute('href')
   check(href.startsWith('https://wazuh.exemple/') && href.includes(`id:%22${WAZUH_ALERT_ID}%22`) && href.includes("from:'2026-11-20T14%3A36%3A02.118Z'"), "lien vers l'alerte : identifiant et fenêtre de temps de l'alerte d'origine")
@@ -114,7 +114,7 @@ export default async ({ stack, BASE, check, login }) => {
   // en anglais : la section et le lien sont traduits (les événements, eux, restent tels que Wazuh les a écrits)
   await m.evaluate(() => localStorage.setItem('keryx_lang', 'en'))
   await m.reload()
-  await m.waitForSelector('section[aria-label="Wazuh context"]')
+  await m.waitForSelector('section[aria-label="Wazuh context"]', { state: 'attached' })
   await unfold(m, 'Wazuh context')
   const en = m.locator('section[aria-label="Wazuh context"]')
   await en.getByRole('button', { name: 'Fetch' }).click()
@@ -124,7 +124,7 @@ export default async ({ stack, BASE, check, login }) => {
   check(await m.getByRole('link', { name: /Open the alert in Wazuh/ }).count() === 1, 'traduction anglaise du lien vers l\'alerte')
   await m.evaluate(() => localStorage.setItem('keryx_lang', 'fr'))
   await m.reload()
-  await m.waitForSelector(section)
+  await m.waitForSelector(section, { state: 'attached' })
   await unfold(m, 'Contexte Wazuh')
   // indexeur arrêté : erreur claire, près de la commande
   stack.indexer.stop()
