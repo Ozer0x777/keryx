@@ -1,0 +1,26 @@
+name: Anomalie
+description: Un comportement de Keryx qui ne correspond pas à la documentation.
+labels: [anomalie]
+body:
+  - type: markdown
+    attributes:
+      value: "Une vulnérabilité ne se signale pas ici : voir SECURITY.md (signalement privé). Ne collez aucune donnée réelle de client, aucune alerte réelle, aucun secret."
+  - type: input
+    id: version
+    attributes: { label: "Version ou commit", placeholder: "0.2.0, ou les 7 premiers caractères du commit" }
+    validations: { required: true }
+  - type: dropdown
+    id: deploiement
+    attributes: { label: Déploiement, options: [Kit Docker, Installation manuelle, Développement local] }
+    validations: { required: true }
+  - type: textarea
+    id: etapes
+    attributes: { label: Étapes pour reproduire, placeholder: "1. Se connecter en analyste\n2. …" }
+    validations: { required: true }
+  - type: textarea
+    id: attendu
+    attributes: { label: Résultat attendu et résultat obtenu }
+    validations: { required: true }
+  - type: textarea
+    id: journaux
+    attributes: { label: "Journaux (anonymisés)", render: text }

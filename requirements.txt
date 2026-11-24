@@ -14,4 +14,4 @@ PyJWT[crypto]>=2.9,<3             # vérification des jetons d'identité OIDC (S
 httpx>=0.28,<1                    # échanges avec le fournisseur d'identité OIDC
 rfc3161-client>=1.0.9,<2           # horodatage de confiance RFC 3161 (client et vérification)
 pyzipper>=0.3.6,<1                # archive de quarantaine chiffrée (ZIP AES-256)
-pillow>=12.3,<13
+pillow>=13,<14

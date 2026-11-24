@@ -147,7 +147,7 @@ Brancher un vrai Wazuh : voir `integrations/wazuh/README.md` (script d'intégrat
 python -m pytest -q
 ```
 
-395 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
+402 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
 régressions des revues, migrations, notifications (SMTP simulé, relances), pièces jointes (clamd simulé, EICAR),
 administration, confort de travail, pilotage, conformité, sauvegarde, script d'intégration Wazuh,
 contexte Wazuh (faux indexeur OpenSearch local, `tests/fake_indexer.py`),
@@ -172,6 +172,12 @@ cd e2e && npm ci && node run.mjs        # CHROME_PATH et KERYX_PYTHON si besoin
 - Interface testée dans Chrome sans tête (parcours de chaque rôle) et contrôlée avec axe-core (WCAG 2.1 A/AA) ; pas d'audit RGAA complet ni de test d'intrusion.
 - Restent en français par construction, même en mode anglais : le corps de ticket généré par le serveur à partir de l'alerte Wazuh (libellés « Règle », « Décodeur »…), les lignes techniques du registre des actions (codes d'action et clés de détail) et les noms de langues.
 - Pas encore : validation IODEF contre le schéma officiel complet, PDF généré côté serveur (impression du navigateur à la place).
+
+## Contribuer, signaler une vulnérabilité
+
+Keryx est un projet libre. Pour contribuer : [`CONTRIBUTING.md`](CONTRIBUTING.md) (règles du projet, vérifications avant
+une demande de fusion). Une vulnérabilité se signale en privé : [`SECURITY.md`](SECURITY.md). Les changements sont
+listés dans [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Licence
 

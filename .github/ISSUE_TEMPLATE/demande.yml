@@ -1,0 +1,14 @@
+name: Demande de fonction
+description: Proposer une fonction ou une amélioration.
+labels: [demande]
+body:
+  - type: textarea
+    id: besoin
+    attributes: { label: "Besoin", description: "Quel problème du SOC ou du client cette fonction résout-elle ?" }
+    validations: { required: true }
+  - type: input
+    id: exigence
+    attributes: { label: "Exigence liée (si connue)", placeholder: "ex. PDIS IV.3.8.g, PRIS VI.5.3.e, ISO/IEC 27035-2 …" }
+  - type: textarea
+    id: proposition
+    attributes: { label: Proposition }
