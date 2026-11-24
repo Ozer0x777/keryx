@@ -20,6 +20,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session as DbSession
 
 from . import audit, notify, security
+from . import wazuh_agents as wa
 from . import wazuh_context as wz
 from .ids import as_utc, rfc3339, utcnow
 from .mitre import valid_technique
@@ -69,10 +70,16 @@ class ClientPatchIn(BaseModel):
     wazuh_indexer_password: str | None = Field(default=None, max_length=256)
     wazuh_tls_verify: bool | None = None
     wazuh_ca_pem: str | None = Field(default=None, max_length=20000)
+    # Parc d'agents (ADR-0030) : API du manager Wazuh, même confiance TLS que l'indexeur.
+    wazuh_api_url: str | None = Field(default=None, max_length=300)
+    wazuh_api_user: str | None = Field(default=None, max_length=128)
+    wazuh_api_password: str | None = Field(default=None, max_length=256)
+    wazuh_api_group: str | None = Field(default=None, max_length=128)
 
 
 WAZUH_FIELDS = ("wazuh_dashboard_url", "wazuh_indexer_url", "wazuh_index_pattern", "wazuh_indexer_user",
-                "wazuh_indexer_password", "wazuh_tls_verify", "wazuh_ca_pem")
+                "wazuh_indexer_password", "wazuh_tls_verify", "wazuh_ca_pem",
+                "wazuh_api_url", "wazuh_api_user", "wazuh_api_password", "wazuh_api_group")
 
 
 class ApiKeyCreateIn(BaseModel):
@@ -282,7 +289,50 @@ def register(app, ctx) -> None:
                 "wazuh_ca_pem": t.wazuh_ca_pem,
                 "wazuh_credentials_set": bool(t.wazuh_indexer_user and t.wazuh_indexer_password),
                 "wazuh_link_enabled": bool(t.wazuh_dashboard_url), "wazuh_context_enabled": wz.context_configured(t),
+                # Parc d'agents : adresse, groupe et état du dernier relevé ; du compte, seul un indicateur.
+                "wazuh_api_url": t.wazuh_api_url, "wazuh_api_group": t.wazuh_api_group,
+                "wazuh_api_credentials_set": bool(t.wazuh_api_user and t.wazuh_api_password),
+                "wazuh_agents_polled_at": rfc3339(t.wazuh_agents_polled_at), "wazuh_agents_error": t.wazuh_agents_error,
                 "tickets": tickets, "created_at": rfc3339(t.created_at)}
+
+    def apply_wazuh_api(db: DbSession, t: Tenant, body: ClientPatchIn, sent: set, trust_before: tuple) -> str:
+        """Réglages de l'API du manager Wazuh (parc d'agents, ADR-0030), mêmes règles que pour l'indexeur : une
+        adresse ou une confiance TLS changée emporte le compte enregistré. Renvoie l'état du compte pour l'audit."""
+        credentials = "inchanges"
+        new_user = "wazuh_api_user" in sent and bool(body.wazuh_api_user)
+        new_password = "wazuh_api_password" in sent and bool(body.wazuh_api_password)
+        if (t.wazuh_tls_verify, t.wazuh_ca_pem) != trust_before and (t.wazuh_tls_verify is False or t.wazuh_ca_pem != trust_before[1]) \
+                and (t.wazuh_api_user or t.wazuh_api_password) and not (new_user and new_password):
+            t.wazuh_api_user = t.wazuh_api_password = None
+            credentials = "effaces"
+        if "wazuh_api_group" in sent:
+            t.wazuh_api_group = wa.validate_group(body.wazuh_api_group) if (body.wazuh_api_group or "").strip() else None
+        if "wazuh_api_url" in sent:
+            previous = t.wazuh_api_url
+            t.wazuh_api_url = (wz.parse_indexer_url(body.wazuh_api_url, settings.wazuh_allow_loopback).url
+                               if (body.wazuh_api_url or "").strip() else None)
+            if t.wazuh_api_url != previous and (t.wazuh_api_user or t.wazuh_api_password) and not (new_user and new_password):
+                t.wazuh_api_user = t.wazuh_api_password = None
+                credentials = "effaces"
+        for name, validate in (("wazuh_api_user", wz.validate_username), ("wazuh_api_password", wz.validate_password)):
+            if name in sent:
+                value = getattr(body, name)
+                setattr(t, name, box.encrypt(validate(value), f"{name}:{t.id}") if value else None)
+                credentials = "definis" if value else "effaces"
+        if bool(t.wazuh_api_user) != bool(t.wazuh_api_password):
+            raise wz.ConfigError("Indiquer ensemble l'identifiant et le mot de passe du compte de lecture de l'API Wazuh.")
+        if t.wazuh_api_user and not t.wazuh_api_url:
+            raise wz.ConfigError("Indiquer l'adresse de l'API Wazuh avant le compte de lecture.")
+        if t.wazuh_api_url:
+            # Manager partagé entre clients : sans groupe propre à chacun, /agents renverrait les agents des autres
+            # clients [PDIS IV.3.8.g]. Deux clients sur la même API doivent avoir chacun un groupe, et des groupes différents.
+            for other in db.scalars(select(Tenant).where(Tenant.id != t.id, Tenant.wazuh_api_url == t.wazuh_api_url)):
+                if not t.wazuh_api_group or not other.wazuh_api_group or other.wazuh_api_group == t.wazuh_api_group:
+                    raise wz.ConfigError(f"Le client {other.key} utilise déjà cette API Wazuh : donner à chaque client un "
+                                         "groupe Wazuh qui ne contient que ses propres agents, différent pour chacun.")
+        if "wazuh_api_url" in sent or "wazuh_api_group" in sent:
+            t.wazuh_agents_error = None
+        return credentials
 
     def apply_wazuh(db: DbSession, t: Tenant, body: ClientPatchIn, sent: set) -> dict:
         """Applique les réglages du contexte Wazuh (ADR-0021) et renvoie ce qui en est tracé dans l'audit : des noms
@@ -305,6 +355,7 @@ def register(app, ctx) -> None:
                 and (t.wazuh_indexer_user or t.wazuh_indexer_password) and not (new_user and new_password):
             t.wazuh_indexer_user = t.wazuh_indexer_password = None
             credentials = "effaces"
+        api_credentials = apply_wazuh_api(db, t, body, sent, trust_before)
         if "wazuh_indexer_url" in sent:
             previous = t.wazuh_indexer_url
             if (body.wazuh_indexer_url or "").strip():
@@ -336,7 +387,8 @@ def register(app, ctx) -> None:
                     raise wz.ConfigError(f"Le client {other.key} utilise déjà cet indexeur avec le motif d'index « {pattern} » : "
                                          "donner à chaque client un motif d'index qui ne couvre que ses propres alertes.")
         dashboard = urlsplit(t.wazuh_dashboard_url).hostname if t.wazuh_dashboard_url else None
-        return {"tableau_de_bord": dashboard,
+        return {"tableau_de_bord": dashboard, "api": wz.parse_indexer_url(t.wazuh_api_url, True).label if t.wazuh_api_url else None,
+                "groupe_api": t.wazuh_api_group, "identifiants_api": api_credentials,
                 "indexeur": wz.parse_indexer_url(t.wazuh_indexer_url, True).label if t.wazuh_indexer_url else None,
                 "motif_index": t.wazuh_index_pattern, "verification_tls": t.wazuh_tls_verify,
                 "autorite_propre": bool(t.wazuh_ca_pem), "identifiants": credentials}

@@ -65,6 +65,49 @@ function WazuhSettings({ client, v, set }) {
   )
 }
 
+// Parc d'agents Wazuh d'un client (ADR-0030) : API du manager, lue en lecture seule. Même autorité et même contrôle TLS
+// que l'indexeur ci-dessus. Le groupe Wazuh est obligatoire quand un manager sert plusieurs clients.
+function WazuhApiSettings({ client, v, set }) {
+  const id = `wzapi-${client.key}`
+  const state = client.wazuh_api_credentials_set && client.wazuh_api_url
+    ? (client.wazuh_agents_error ? tr('relevé en échec') : client.wazuh_agents_polled_at ? tr('relevé actif') : tr('en attente du premier relevé'))
+    : tr("désactivé : rien n'est réglé")
+  return (
+    <>
+      <h3>{tr("Parc d'agents Wazuh")} <span className="muted small">({state})</span></h3>
+      <p className="muted small">{tr("État, version et disponibilité des agents de ce client, lus dans l'API du manager Wazuh. Keryx n'agit jamais sur Wazuh. Le client voit son parc sur son portail.")}</p>
+      {client.wazuh_agents_error && <p className="error small" role="alert">{client.wazuh_agents_error}</p>}
+      <div className="grid2">
+        <label>{tr("Adresse de l'API du manager Wazuh (HTTPS)")}
+          <input className="mono" value={v.apiUrl} maxLength={300} spellCheck={false} placeholder="https://manager.exemple:55000"
+            onChange={(e) => set({ apiUrl: e.target.value })} />
+        </label>
+        <label>{tr("Groupe Wazuh des agents du client")}
+          <input className="mono" value={v.apiGroup} maxLength={128} spellCheck={false} placeholder="acme" aria-describedby={`${id}-grp`}
+            onChange={(e) => set({ apiGroup: e.target.value })} />
+        </label>
+      </div>
+      <p className="field-hint wz-hint" id={`${id}-grp`}>{tr("Obligatoire si ce manager sert plusieurs clients : seuls les agents de ce groupe sont lus, et Keryx écarte tout agent hors du groupe même si le manager le renvoie.")}</p>
+      <div className="grid2">
+        <label>{tr("Compte de lecture de l'API : identifiant")}
+          <input value={v.apiUser} maxLength={128} autoComplete="off" spellCheck={false} disabled={v.apiDrop}
+            aria-describedby={`${id}-cred`} onChange={(e) => set({ apiUser: e.target.value })} />
+        </label>
+        <label>{tr("Compte de lecture de l'API : mot de passe")}
+          <input type="password" value={v.apiPassword} maxLength={256} autoComplete="new-password" disabled={v.apiDrop}
+            aria-describedby={`${id}-cred`} onChange={(e) => set({ apiPassword: e.target.value })} />
+        </label>
+      </div>
+      <p className="field-hint wz-hint" id={`${id}-cred`}>{client.wazuh_api_credentials_set
+        ? tr("Un compte est enregistré (chiffré) ; il n'est jamais réaffiché. Laisser ces champs vides pour le conserver.")
+        : tr("Aucun compte enregistré. Utiliser un compte de l'API Wazuh limité à la lecture des agents (permission agent:read).")}</p>
+      {client.wazuh_api_credentials_set && (
+        <label className="check"><input type="checkbox" checked={v.apiDrop} onChange={(e) => set({ apiDrop: e.target.checked })} /> {tr("Effacer le compte enregistré")}</label>
+      )}
+    </>
+  )
+}
+
 function ClientEditor({ client, onSaved }) {
   const [emails, setEmails] = useState((client.contact_emails || []).join(', '))
   const [retention, setRetention] = useState(client.retention_months ?? '')
@@ -74,6 +117,7 @@ function ClientEditor({ client, onSaved }) {
   const [wz, setWz] = useState({
     dashboard: client.wazuh_dashboard_url || '', indexer: client.wazuh_indexer_url || '', pattern: client.wazuh_index_pattern || '',
     user: '', password: '', dropCredentials: false, verify: client.wazuh_tls_verify !== false, ca: client.wazuh_ca_pem || '',
+    apiUrl: client.wazuh_api_url || '', apiGroup: client.wazuh_api_group || '', apiUser: '', apiPassword: '', apiDrop: false,
   })
   const [status, track] = useActionStatus()
   const g = grid || DEFAULT_GRID
@@ -85,6 +129,9 @@ function ClientEditor({ client, onSaved }) {
     const credentials = wz.dropCredentials
       ? { wazuh_indexer_user: null, wazuh_indexer_password: null }
       : { ...(wz.user ? { wazuh_indexer_user: wz.user } : {}), ...(wz.password ? { wazuh_indexer_password: wz.password } : {}) }
+    const apiCredentials = wz.apiDrop
+      ? { wazuh_api_user: null, wazuh_api_password: null }
+      : { ...(wz.apiUser ? { wazuh_api_user: wz.apiUser } : {}), ...(wz.apiPassword ? { wazuh_api_password: wz.apiPassword } : {}) }
     const ok = await track(() => api(`/admin/clients/${client.key}`, { method: 'PATCH', json: {
       contact_emails: emails.split(/[,\s;]+/).filter(Boolean),
       retention_months: retention === '' ? null : Number(retention),
@@ -92,9 +139,10 @@ function ClientEditor({ client, onSaved }) {
       severity_grid: grid, sla: Object.keys(cleanSla).length ? cleanSla : null,
       wazuh_dashboard_url: wz.dashboard.trim() || null, wazuh_indexer_url: wz.indexer.trim() || null,
       wazuh_index_pattern: wz.pattern.trim() || null, wazuh_tls_verify: wz.verify, wazuh_ca_pem: wz.ca.trim() || null,
-      ...credentials } }))
+      wazuh_api_url: wz.apiUrl.trim() || null, wazuh_api_group: wz.apiGroup.trim() || null,
+      ...credentials, ...apiCredentials } }))
     if (!ok) return
-    setWz((x) => ({ ...x, user: '', password: '', dropCredentials: false }))   // un secret saisi ne reste pas dans le formulaire
+    setWz((x) => ({ ...x, user: '', password: '', dropCredentials: false, apiUser: '', apiPassword: '', apiDrop: false }))   // un secret saisi ne reste pas dans le formulaire
     onSaved()
   }
   return (
@@ -121,6 +169,7 @@ function ClientEditor({ client, onSaved }) {
               onChange={(e) => setSla({ ...sla, [s]: { ...sla[s], [k]: e.target.value } })} /></td>))}</tr>))}
         </tbody></table></div>
       <WazuhSettings client={client} v={wz} set={(patch) => setWz((x) => ({ ...x, ...patch }))} />
+      <WazuhApiSettings client={client} v={wz} set={(patch) => setWz((x) => ({ ...x, ...patch }))} />
       <div className="row gap end wrap"><ActionStatus state={status} /><button className="primary">{tr("Enregistrer")}</button></div>
     </form>
   )

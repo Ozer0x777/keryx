@@ -76,6 +76,15 @@ class Tenant(Base):
     wazuh_indexer_password: Mapped[str | None] = mapped_column(Text, nullable=True)
     wazuh_tls_verify: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
     wazuh_ca_pem: Mapped[str | None] = mapped_column(Text, nullable=True)   # autorité de certification propre au client (PEM)
+    # Parc d'agents (ADR-0030) : API du manager Wazuh lue en lecture seule. Même autorité et même contrôle TLS que
+    # l'indexeur. `wazuh_api_group` : groupe Wazuh des agents du client quand un manager sert plusieurs clients.
+    wazuh_api_url: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    wazuh_api_user: Mapped[str | None] = mapped_column(Text, nullable=True)       # chiffré, jamais renvoyé par l'API
+    wazuh_api_password: Mapped[str | None] = mapped_column(Text, nullable=True)   # chiffré, jamais renvoyé par l'API
+    wazuh_api_group: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    wazuh_manager_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    wazuh_agents_polled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    wazuh_agents_error: Mapped[str | None] = mapped_column(String(300), nullable=True)   # dernier échec du relevé, vide si réussi
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -347,6 +356,41 @@ class HashLookup(Base):
     summary: Mapped[dict] = mapped_column(JSON, default=dict)      # résumé borné, texte assaini (voir virustotal.summarize)
     actor: Mapped[str] = mapped_column(String(120))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class WazuhAgent(Base):
+    """Dernier état connu d'un agent Wazuh d'un client, tel que l'API du manager l'a renvoyé au dernier relevé.
+    [ADR-0030 ; PDIS IV.3.8.g cloisonnement : un agent appartient à un seul client]"""
+    __tablename__ = "wazuh_agents"
+    __table_args__ = (UniqueConstraint("tenant_id", "agent_id", name="uq_wazuh_agent"),)
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    agent_id: Mapped[str] = mapped_column(String(16))
+    name: Mapped[str] = mapped_column(String(200))
+    ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    os_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    os_version: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    version: Mapped[str | None] = mapped_column(String(32), nullable=True)      # « 4.12.0 », sans le préfixe « Wazuh v »
+    status: Mapped[str] = mapped_column(String(20))      # active | disconnected | never_connected | pending
+    groups: Mapped[list] = mapped_column(JSON, default=list)
+    node: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    last_keepalive: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    registered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_event_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)   # indexeur, tous niveaux
+    status_since: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)          # vu par Keryx
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class WazuhAgentEvent(Base):
+    """Historique des changements d'état d'un agent, conservé sans limite (décision du mainteneur, 24/11/2026).
+    Une ligne par changement constaté par Keryx, pas par relevé. [ADR-0030]"""
+    __tablename__ = "wazuh_agent_events"
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    agent_id: Mapped[str] = mapped_column(String(16), index=True)
+    status: Mapped[str] = mapped_column(String(20))      # nouvel état ; « removed » : agent retiré de Wazuh
+    previous: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 
 class AuditEntry(Base):

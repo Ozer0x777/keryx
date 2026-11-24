@@ -17,11 +17,11 @@ export default async ({ BASE, check, login }) => {
     check(leaks.length === 0, `traduction anglaise complète pour ${label}${leaks.length ? ' — reste du français : ' + leaks.join(' ;; ') : ''}`)
   }
   const m = await login('manager')
-  await scan(m, ['/tickets', '/kanban', '/pilotage', '/rapports', '/tickets/ACME-1', '/tickets/ACME-1/rapport', '/mitre', '/audit', '/profil'], 'le manager')
+  await scan(m, ['/tickets', '/kanban', '/parc?client=ACME', '/pilotage', '/rapports', '/tickets/ACME-1', '/tickets/ACME-1/rapport', '/mitre', '/audit', '/profil'], 'le manager')
   await m.context().close()
   // client : portail et fiche ticket ; formulaires ouverts (états)
   const c = await login('client')
-  await scan(c, ['/tickets', '/tickets/ACME-1', '/profil'], 'le client')
+  await scan(c, ['/tickets', '/parc', '/tickets/ACME-1', '/profil'], 'le client')
   await c.context().close()
   const f = await login('manager')
   await f.evaluate(() => localStorage.setItem('keryx_lang', 'en'))

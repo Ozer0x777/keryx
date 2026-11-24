@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session as DbSession
 from starlette.background import BackgroundTask
 
 from . import attachments as att
-from . import audit, inbox, routes_admin, routes_oidc, routes_ops, routes_isi, routes_reports, routes_timestamp, routes_virustotal, routes_wazuh, routes_webauthn, routes_work, security
+from . import audit, inbox, routes_admin, routes_oidc, routes_ops, routes_isi, routes_parc, routes_reports, routes_timestamp, routes_virustotal, routes_wazuh, routes_webauthn, routes_work, security
 from . import wazuh_context
 from .oidc import load_providers
 from .bodylimit import BodyLimitMiddleware
@@ -1365,6 +1365,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     log.exception("Relance des notifications en échec")
         threading.Thread(target=_retry_loop, name="notify-retry", daemon=True).start()
 
+    # ---------------------------------------------------------------- relevé du parc d'agents Wazuh (ADR-0030)
+    if settings.wazuh_agents_poll_s > 0:
+        def _parc_loop() -> None:  # pragma: no cover - tâche de fond
+            while True:
+                time.sleep(settings.wazuh_agents_poll_s)
+                try:
+                    routes_parc.poll_all(SessionLocal, settings, box)
+                except Exception:
+                    log.exception("Relevé du parc d'agents Wazuh")
+        threading.Thread(target=_parc_loop, name="parc-wazuh", daemon=True).start()
+
     # ---------------------------------------------------------------- routeurs complémentaires
     ctx = SimpleNamespace(admin_guard=admin_guard,
         settings=settings, box=box, SessionLocal=SessionLocal, get_db=get_db, current_user=current_user,
@@ -1384,6 +1395,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     routes_timestamp.register(app, ctx)
     routes_isi.register(app, ctx)
     routes_wazuh.register(app, ctx)
+    routes_parc.register(app, ctx)
     routes_virustotal.register(app, ctx)
 
     # ---------------------------------------------------------------- interface web

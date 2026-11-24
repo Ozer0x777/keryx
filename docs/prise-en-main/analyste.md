@@ -45,6 +45,14 @@ Nouveau → En évaluation → En réponse → Clôturé → Retour d'expérienc
 - Les échéances de qualification et de résolution sont dans l'en-tête de la fiche ; un ticket en retard est
   signalé dans la file.
 
+## Le parc d'agents
+
+« Parc Wazuh » montre les agents de chaque client : actifs, déconnectés (et depuis quand), jamais connectés, versions
+en retard sur le manager, agents silencieux (actifs mais sans événement depuis 24 h, quand l'indexeur est relié).
+Un agent hors ligne depuis plus de 24 h est en tête et signalé en rouge : ses alertes n'arrivent plus au SOC. Le
+détail d'un agent montre sa disponibilité sur 7 et 30 jours et l'historique de ses changements d'état ; pour un agent
+déconnecté, « Ouvrir un ticket agent déconnecté » crée le ticket (ou complète celui déjà ouvert).
+
 ## Bon à savoir
 
 - Une pastille « Modifications non enregistrées » signale une saisie en cours ; quitter la page la demande de

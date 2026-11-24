@@ -2,9 +2,9 @@
 import { unfoldAll } from '../harness.mjs'
 
 const PAGES = {
-  manager: ['/tickets', '/kanban', '/pilotage', '/rapports', '/tickets/ACME-1', '/mitre', '/audit', '/profil'],
+  manager: ['/tickets', '/kanban', '/parc?client=ACME', '/pilotage', '/rapports', '/tickets/ACME-1', '/mitre', '/audit', '/profil'],
   admin: ['/admin/comptes', '/admin/clients', '/admin/cles', '/admin/mitre', '/admin/revue', '/admin/audit', '/admin/systeme'],
-  client: ['/tickets', '/tickets/ACME-1'],
+  client: ['/tickets', '/parc', '/tickets/ACME-1'],
 }
 export default async ({ BASE, check, login }) => {
   for (const [role, paths] of Object.entries(PAGES)) {

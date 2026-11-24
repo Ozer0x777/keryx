@@ -1,6 +1,7 @@
 import { t as tr } from '../i18n.js'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import ParcSummary from '../components/ParcSummary.jsx'
 import { api, downloadBlob } from '../api.js'
 import { useAuth } from '../App.jsx'
 import { Severity, Status } from '../components/Badges.jsx'
@@ -52,6 +53,7 @@ export default function Reports() {
               {r.incidents.length === 0 && <tr><td colSpan="7" className="muted">{tr("Aucun incident sur la période.")}</td></tr>}
               {r.incidents.map((i) => <tr key={i.ref}><td className="mono">{i.ref}</td><td>{i.title}</td><td className="mono small">{formatUtc(i.detected_at)}</td><td><Severity value={i.criticite_initiale} /></td><td><Severity value={i.gravite} /></td><td><Status value={i.status} /></td><td className="mono small">{i.mitre.join(', ') || '—'}</td></tr>)}
             </tbody></table></div>
+          <ParcSummary parc={r.parc} links={false} />
         </article>
       )}
     </>

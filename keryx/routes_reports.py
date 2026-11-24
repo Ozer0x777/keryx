@@ -15,7 +15,7 @@ from fastapi import Depends, HTTPException, Query, Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session as DbSession
 
-from . import audit, sla
+from . import audit, sla, wazuh_agents
 from .ids import as_utc, rfc3339, utcnow
 from .models import TERMINAL_STATUSES, Tenant, Ticket, User
 
@@ -120,6 +120,8 @@ def register(app, ctx) -> None:
             "sla": {"resolution_within_target": within, "closed": len(closed),
                     "rate_percent": round(100 * within / len(closed)) if closed else None},
             "trend": list(per_day.values()),
+            # Parc d'agents Wazuh (ADR-0030) : état courant et disponibilité sur la période, si un relevé existe.
+            "parc": wazuh_agents.summary(db, tenants, start, end),
         }
 
     @app.get("/api/v1/dashboard")

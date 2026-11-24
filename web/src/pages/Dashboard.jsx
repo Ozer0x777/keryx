@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import { useAuth } from '../App.jsx'
 import { BarList, TrendChart } from '../components/Charts.jsx'
+import ParcSummary from '../components/ParcSummary.jsx'
 import { STATUS } from '../labels.js'
 
 const SEV_COLORS = { Critique: '#7A1020', 'Élevée': '#D9732A', Moyenne: '#C99A12', Faible: '#8D97A5' }
@@ -65,6 +66,7 @@ export default function Dashboard() {
                 {d.workload.map((w) => <tr key={w.name}><td>{w.name === 'Non assigné' ? tr('Non assigné') : w.name}</td><td className="num">{w.open}</td><td className="num">{w.overdue ? <span className="pill danger">{w.overdue}</span> : 0}</td></tr>)}
               </tbody></table></div>
           </section>
+          <ParcSummary parc={d.parc} />
         </>
       )}
     </>

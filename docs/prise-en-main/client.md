@@ -17,6 +17,12 @@ connexion, choisissez votre mot de passe et enregistrez la double authentificati
 - Les statuts : Nouveau, En évaluation (le SOC analyse), En réponse (incident confirmé, actions en cours), Clôturé,
   Retour d'expérience ; ou Faux positif (pas d'incident).
 
+## Votre parc
+
+« Mon parc » liste les machines de votre organisation surveillées par le SOC : celles qui sont actives, celles qui ne
+répondent plus et depuis quand, celles dont l'agent Wazuh est en retard de version. Une machine hors ligne n'envoie
+plus rien au SOC : si elle doit fonctionner, prévenez votre équipe informatique.
+
 ## Répondre au SOC
 
 - Écrivez dans « Votre réponse », puis « Publier ». Votre message est lu par l'équipe qui suit l'incident.

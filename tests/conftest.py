@@ -102,7 +102,7 @@ def settings(tmp_path):
         url, drop = _pg_database()
     yield Settings(database_url=url, cookie_secure=False, auto_create_schema=True, public_url="https://keryx.local",
                    secret_key=SECRET_KEY, attachments_dir=str(tmp_path / "pj"), smtp_host=None,
-                   clamav_host=None, web_dist=str(tmp_path / "no_web"))
+                   clamav_host=None, web_dist=str(tmp_path / "no_web"), wazuh_agents_poll_s=0)
     if drop:
         import gc
         gc.collect()  # libère les moteurs avant de supprimer la base

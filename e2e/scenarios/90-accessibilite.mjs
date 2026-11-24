@@ -6,8 +6,8 @@ const axeSource = readFileSync(createRequire(import.meta.url).resolve('axe-core/
 
 const PAGES = {
   admin: ['/admin/comptes', '/admin/clients', '/admin/cles', '/admin/mitre', '/admin/revue', '/admin/audit', '/admin/systeme', '/profil'],
-  manager: ['/tickets', '/kanban', '/pilotage', '/rapports', '/tickets/ACME-1', '/tickets/ACME-1/rapport', '/mitre', '/audit', '/profil'],
-  client: ['/tickets', '/tickets/ACME-1'],
+  manager: ['/tickets', '/kanban', '/parc?client=ACME', '/pilotage', '/rapports', '/tickets/ACME-1', '/tickets/ACME-1/rapport', '/mitre', '/audit', '/profil'],
+  client: ['/tickets', '/parc', '/tickets/ACME-1'],
 }
 
 export default async ({ BASE, check, login }) => {

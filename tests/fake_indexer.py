@@ -83,6 +83,8 @@ def wazuh_time(when: dt.datetime) -> str:
 
 
 def parse_time(value: str) -> dt.datetime:
+    if value.startswith("now-") and value.endswith("d"):       # date relative émise par le parc d'agents (ADR-0030)
+        return dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=int(value[4:-1]))
     v = value[:-1] + "+00:00" if value.endswith("Z") else value
     if len(v) > 5 and v[-5] in "+-" and v[-4:].isdigit():
         v = v[:-2] + ":" + v[-2:]
@@ -150,6 +152,10 @@ def search(docs: list[dict], index_pattern: str, body: dict, ignore_agent: bool 
             (path, wanted), = f["term"].items()
             if not (ignore_agent and path == "agent.id"):
                 hits = [d for d in hits if _get(d["_source"], path) == wanted]
+        elif "terms" in f:
+            (path, wanted), = f["terms"].items()
+            if not (ignore_agent and path == "agent.id"):
+                hits = [d for d in hits if _get(d["_source"], path) in wanted]
         elif "range" in f:
             (field, bounds), = f["range"].items()
             for op, value in bounds.items():
@@ -160,6 +166,19 @@ def search(docs: list[dict], index_pattern: str, body: dict, ignore_agent: bool 
                 hits = [d for d in hits if keep(parse_time(_get(d["_source"], field)))]
         else:
             raise ValueError("filtre non pris en charge par le faux indexeur")
+    if "aggs" in body:
+        # Agrégation « dernier événement par agent » du parc d'agents : terms sur agent.id, max sur le champ de date.
+        spec = body["aggs"]["agents"]
+        tfield, mfield = spec["terms"]["field"], spec["aggs"]["last"]["max"]["field"]
+        last: dict = {}
+        for d in hits:
+            key, when = _get(d["_source"], tfield), parse_time(_get(d["_source"], mfield))
+            if key is not None and (key not in last or when > last[key]):
+                last[key] = when
+        buckets = [{"key": k, "doc_count": 1, "last": {"value": v.timestamp() * 1000,
+                    "value_as_string": v.isoformat().replace("+00:00", "Z")}} for k, v in sorted(last.items())]
+        return {"took": 1, "timed_out": False, "hits": {"hits": []},
+                "aggregations": {"agents": {"buckets": buckets[: int(spec["terms"].get("size", 10))]}}}
     (sort_field, sort_spec), = body["sort"][0].items()
     hits.sort(key=lambda d: parse_time(_get(d["_source"], sort_field)), reverse=sort_spec["order"] == "desc")
     hits = hits[: int(body.get("size", 10))]

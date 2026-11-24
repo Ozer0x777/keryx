@@ -10,9 +10,12 @@ et exploitation, PDIS IV.3.9).
 2. **Clients** : créer chaque client (clé courte, ex. `ACME`), puis « Paramétrer » : grille de gravité et délais
    cibles de qualification et de résolution s'ils diffèrent des valeurs par défaut, contacts de notification,
    rétention des alertes brutes, taille maximale d'une pièce, et le cas échéant la lecture de son indexeur Wazuh.
-3. **Clés d'API** : une clé d'ingestion par client, affichée une seule fois, à coller dans le bloc `<integration>`
+3. **Parc d'agents** (facultatif) : dans « Paramétrer », l'adresse de l'API du manager Wazuh, le groupe Wazuh du
+   client et un compte de lecture de l'API (création côté Wazuh : `integrations/wazuh/README.md`, section 6).
+   L'équipe et le client voient alors l'état des agents ; vous voyez seulement si le relevé réussit.
+4. **Clés d'API** : une clé d'ingestion par client, affichée une seule fois, à coller dans le bloc `<integration>`
    du manager Wazuh (voir `integrations/wazuh/README.md` ; en cluster, sur chaque nœud qui analyse des agents).
-4. **Comptes** : créer les analystes et managers (rattachés aux clients qu'ils suivent) et les comptes clients
+5. **Comptes** : créer les analystes et managers (rattachés aux clients qu'ils suivent) et les comptes clients
    (rattachés à un seul client). Chacun reçoit un code d'activation et enregistre lui-même sa double
    authentification.
 

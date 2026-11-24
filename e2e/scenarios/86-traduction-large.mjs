@@ -17,12 +17,12 @@ export default async ({ BASE, check, login }) => {
     check(leaks.length === 0, `aucun texte français restant (${label})${leaks.length ? ' — ' + [...new Set(leaks)].slice(0, 6).join(' ;; ') : ''}`)
   }
   const m = await login('manager')
-  await scanAll(m, ['/tickets', '/kanban', '/pilotage', '/rapports', '/tickets/ACME-1', '/tickets/ACME-1/rapport', '/mitre', '/audit', '/profil'], 'manager')
+  await scanAll(m, ['/tickets', '/kanban', '/parc?client=ACME', '/pilotage', '/rapports', '/tickets/ACME-1', '/tickets/ACME-1/rapport', '/mitre', '/audit', '/profil'], 'manager')
   await m.context().close()
   const a = await login('admin')
   await scanAll(a, ['/admin/comptes', '/admin/clients', '/admin/cles', '/admin/mitre', '/admin/revue', '/admin/audit', '/admin/systeme'], 'admin')
   await a.context().close()
   const c = await login('client')
-  await scanAll(c, ['/tickets', '/tickets/ACME-1'], 'client')
+  await scanAll(c, ['/tickets', '/parc', '/tickets/ACME-1'], 'client')
   await c.context().close()
 }

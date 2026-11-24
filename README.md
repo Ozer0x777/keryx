@@ -91,6 +91,8 @@ Détail, file d'attente locale si Keryx est injoignable : [`integrations/wazuh/R
 
 **Enrichir** (facultatif)
 - Contexte Wazuh : lien vers l'alerte et lecture des événements voisins du même agent dans l'indexeur.
+- Parc d'agents Wazuh : état, version, disponibilité et historique des agents de chaque client, lus en lecture seule
+  dans l'API du manager ; visible de l'équipe et du client.
 - Recherche d'une empreinte sur VirusTotal avec la clé de l'analyste. Seule l'empreinte sort, jamais un fichier.
   C'est un service externe hors UE : voir l'ADR-0022 avant de l'activer.
 
@@ -169,6 +171,7 @@ cd e2e && npm ci && node run.mjs        # CHROME_PATH et KERYX_PYTHON si besoin
 - PostgreSQL 16 : la suite complète passe (402 tests réussis, 9 ignorés, sous PostgreSQL 16.2 le 24/11/2026, dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore ; `add-user --activation` a aussi été exercé sous PostgreSQL 16.16 par le déploiement Docker d'essai). Non testé : haute disponibilité, réplication, très gros volumes.
 - Ingestion testée contre un vrai manager Wazuh de préproduction (188 alertes envoyées, 188 reçues, aucune perte), en plus du serveur simulé des tests. Le contexte de l'indexeur et le lien vers le tableau de bord n'ont pas été éprouvés (voir ci-dessous).
 - Déploiement Docker (ADR-0023) : essayé en mode local avec tous les profils ; le mode ACME, un vrai certificat fourni et les réglages du démon Docker (`userns-remap`, `bridge: none`, export des journaux) ne l'ont pas été. Ce n'est pas le cloisonnement en zones de PDIS IV.3.8.b, et Keryx ne sait pas encore séparer son portail client de sa console d'analyse (PDIS IV.3.13.b).
+- Parc d'agents Wazuh (ADR-0030) : jamais testé contre un vrai manager, seulement contre le faux manager des tests. À valider avant usage : noms des champs de `/agents`, permissions RBAC du compte de lecture, certificat de l'API.
 - Contexte Wazuh (ADR-0021) : jamais testé contre un vrai indexeur ni un vrai tableau de bord Wazuh, seulement contre le faux indexeur des tests. À valider avant usage : champ de date, type du champ `agent.id`, motif d'index, droits du compte de lecture, certificat, modèle d'URL.
 - Recherche VirusTotal (ADR-0022) : jamais testée contre le vrai VirusTotal, seulement contre le faux serveur des tests. À valider avant usage : forme des réponses et des erreurs, forme des clés, quotas, conditions d'utilisation de l'API (à vérifier par l'exploitant). Keryx n'envoie aucun fichier à VirusTotal.
 - Interface testée dans Chrome sans tête (parcours de chaque rôle) et contrôlée avec axe-core (WCAG 2.1 A/AA) ; pas d'audit RGAA complet ni de test d'intrusion.

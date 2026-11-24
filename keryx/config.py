@@ -121,6 +121,9 @@ class Settings:
     # Récupérations de contexte par minute : par analyste, et par client (protège l'indexeur).
     wazuh_context_user_limit: int = field(default_factory=lambda: _int("KERYX_WAZUH_CONTEXT_USER_LIMIT", 20))
     wazuh_context_client_limit: int = field(default_factory=lambda: _int("KERYX_WAZUH_CONTEXT_CLIENT_LIMIT", 60))
+    # Parc d'agents (ADR-0030) : intervalle du relevé de l'API Wazuh de chaque client, en secondes (0 : relevé manuel
+    # seulement). Avec plusieurs processus, chacun relèverait : un seul processus doit l'avoir non nul.
+    wazuh_agents_poll_s: int = field(default_factory=lambda: _int("KERYX_WAZUH_AGENTS_POLL_S", 300))
 
     # Recherche d'empreinte sur VirusTotal (ADR-0022) : DÉROGATION à « aucun service externe ». Seule une empreinte
     # (SHA-256 ou SHA-1) sort, avec la clé d'API de l'utilisateur qui lance la recherche (saisie dans son profil).

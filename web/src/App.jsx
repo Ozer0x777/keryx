@@ -11,6 +11,7 @@ import Dashboard from './pages/Dashboard.jsx'
 import Kanban from './pages/Kanban.jsx'
 import Login from './pages/Login.jsx'
 import MitrePage from './pages/MitrePage.jsx'
+import Parc from './pages/Parc.jsx'
 import Profile from './pages/Profile.jsx'
 import Reports from './pages/Reports.jsx'
 import Ticket from './pages/Ticket.jsx'
@@ -81,6 +82,7 @@ export default function App() {
         <Route element={me ? <Layout /> : <Navigate to="/connexion" replace />}>
           <Route path="/tickets" element={<Tickets />} />
           <Route path="/kanban" element={<Kanban />} />
+          <Route path="/parc" element={<Parc />} />
           <Route path="/tickets/:ref" element={<TicketRoute />} />
           <Route path="/tickets/:ref/rapport" element={<TicketReport />} />
           <Route path="/admin/*" element={<Admin />} />

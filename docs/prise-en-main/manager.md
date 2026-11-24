@@ -5,6 +5,8 @@ Le manager fait tout ce que fait l'analyste (voir [`analyste.md`](analyste.md)),
 ## Piloter l'équipe
 
 - **Pilotage** : tickets par statut et par gravité, charge par analyste, respect des échéances sur la période.
+- **Parc d'agents** : le pilotage et le rapport périodique donnent l'état du parc et la disponibilité moyenne sur la
+  période ; l'export CSV de la page « Parc Wazuh » sert aux revues avec le client.
 - **Rapports** : rapport périodique d'un client (imprimable en PDF par le navigateur) et export du registre en CSV.
 - Affecter un ou plusieurs tickets d'un coup : cocher les lignes de la file, puis « Affecter à ».
 - Les cartes « Critiques non assignés » et « Dossiers incomplets » sont faites pour la revue quotidienne.

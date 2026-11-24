@@ -70,6 +70,18 @@ apparaît bien à cet emplacement dans le JSON des alertes.
 Définir `KERYX_SYSLOG_HOST` et `KERYX_SYSLOG_PORT` sur le serveur Keryx : chaque entrée du
 journal d'audit est envoyée en syslog RFC 5424, ce qui permet au SOC de superviser son propre outil.
 
+## 6. (Optionnel) Parc d'agents : compte de lecture de l'API du manager
+
+Le tableau de bord « Parc Wazuh » de Keryx lit l'état des agents dans l'API REST du manager (port 55000 par défaut),
+en lecture seule (ADR-0030). Créer côté Wazuh un utilisateur d'API dédié, limité à la lecture des agents du client :
+une politique RBAC avec l'action `agent:read` sur la ressource `agent:group:<groupe du client>` (ou `agent:id:*` si
+le manager ne sert qu'un client), rattachée à un rôle donné à cet utilisateur. Les noms exacts des actions et des
+ressources dépendent de la version de Wazuh : **à vérifier dans sa documentation RBAC** avant de créer le compte.
+
+Puis, dans Keryx (Admin, Administration > Clients > Paramétrer > Parc d'agents Wazuh) : adresse de l'API, groupe
+Wazuh des agents du client (obligatoire si le manager sert plusieurs clients), identifiant et mot de passe. La même
+autorité de certification que pour l'indexeur est utilisée. Keryx doit pouvoir joindre le manager (sortie réseau).
+
 ## Rétention des alertes côté Wazuh : 12 mois (à relever)
 
 Le plan de projet fixe 12 mois pour les index `wazuh-alerts-*` (PDIS IV.2.2.w : 6 mois minimum ; PDIS IV.2.1.ee : analyse rétroactive sur 6 mois à la demande). Les exemples de la documentation Wazuh sont à 90 jours : à relever. Exemple de politique ISM (Wazuh indexer, onglet Dev Tools) :
