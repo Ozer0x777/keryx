@@ -16,8 +16,10 @@ export default async ({ stack, BASE, check, login }) => {
   await until(async () => !(await carte.locator('strong').innerText()).includes('…'), 'compteur chargé')
   check(Number(await carte.locator('strong').innerText()) >= 1, 'critiques non assignés : le compteur compte le ticket critique')
   await carte.click()
-  await m.waitForFunction(() => location.search.includes('assignee=none') && location.search.includes('severity=Critique'))
-  check(await carte.getAttribute('aria-pressed') === 'true', 'critiques non assignés : carte enfoncée, filtres dans l\'URL')
+  await m.waitForFunction(() => location.search.includes('critical_unassigned=1') && !location.search.includes('assignee') && !location.search.includes('severity'))
+  check(await carte.getAttribute('aria-pressed') === 'true', 'critiques non assignés : carte enfoncée, critère propre dans l\'URL, vue d\'assigné intacte')
+  const ouverts = m.locator('.stats .stat-filter', { hasText: 'Critiques ouverts' })
+  check(await ouverts.getAttribute('aria-pressed') === 'false', 'critiques non assignés : « Critiques ouverts » n\'est pas enfoncée en même temps')
   await until(async () => (await m.locator('tbody tr').count()) >= 1 && (await m.locator('tbody').innerText()).includes(made.ticket), 'la liste montre le ticket critique')
   // Une autre vue remplace celle-ci : plus d'assigné ni de gravité cachés
   const attente = m.locator('.stats-priority .stat-filter', { hasText: 'En attente du client' })
@@ -27,4 +29,10 @@ export default async ({ stack, BASE, check, login }) => {
   await attente.click()
   await m.waitForFunction(() => !location.search.includes('awaiting_client'))
   check(await attente.getAttribute('aria-pressed') === 'false', 'un second clic retire la vue')
+  // Second clic sur « Critiques non assignés » : plus aucun filtre derrière
+  await carte.click()
+  await m.waitForFunction(() => location.search.includes('critical_unassigned=1'))
+  await carte.click()
+  await m.waitForFunction(() => location.search === '')
+  check(await carte.getAttribute('aria-pressed') === 'false', 'second clic sur « Critiques non assignés » : URL vide, aucun filtre caché')
 }

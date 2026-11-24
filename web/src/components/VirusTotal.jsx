@@ -7,6 +7,7 @@ import { isHash, lastFor, normalizeHash, shortHash, verdict, vtLink } from '../v
 import { ActionStatus, useActionStatus } from './ActionStatus.jsx'
 import { useConfirm } from './Confirm.jsx'
 import Section from './Section.jsx'
+import { useUnsaved } from './Unsaved.jsx'
 
 // Recherche d'une empreinte sur VirusTotal (ADR-0022). Seule l'empreinte part, jamais le fichier ; la clé d'API est
 // celle de l'utilisateur (profil). Réservé à l'analyste et au manager : rien de ce fichier n'est monté pour le client
@@ -177,6 +178,7 @@ export function VirusTotalPanel({ t, enc, vt }) {
   const [cands, setCands] = useState(null)            // { alerts } une fois lus
   const [candError, setCandError] = useState('')
   const [value, setValue] = useState('')
+  useUnsaved('virustotal', tr('recherche VirusTotal'), !!value.trim())
   const [invalid, setInvalid] = useState(false)
   const hintId = useId()
   const input = useRef(null)

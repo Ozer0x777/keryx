@@ -20,6 +20,7 @@ import {
 } from '../components/Unsaved.jsx'
 import { isoToUtcInput, untilUtc, utcClock, utcInputNow, utcInputToIso } from '../dates.js'
 import { queuePath } from '../queue.js'
+import { confirmTransition, needsConfirm } from '../transitions.jsx'
 import {
   DOMMAGES, formatUtc, IMPORTANCES, LIFECYCLE, MITRE_SOURCE, SCAN, STATUS, TLPS, TRANSITIONS, VERDICTS,
 } from '../labels.js'
@@ -42,16 +43,14 @@ function alertInDescription(t) {
 // Étape suivante normale du cycle de vie : c'est le seul bouton primaire de l'en-tête, les autres sont secondaires.
 // Onglets de la fiche pour l'équipe (ADR-0026). `zones` : les zones de saisie (components/Unsaved.jsx) qui s'y trouvent.
 const TABS = [
-  { id: 'general', label: 'Vue générale', zones: ['description', 'qualification'] },
-  { id: 'investigation', label: 'Investigation', zones: [] },
-  { id: 'preuves', label: 'Preuves', zones: [] },
+  { id: 'general', label: 'Vue générale', zones: ['description', 'qualification', 'lien', 'crise'] },
+  { id: 'investigation', label: 'Investigation', zones: ['mitre', 'isi'] },
+  { id: 'preuves', label: 'Preuves', zones: ['piece', 'preuve-externe', 'virustotal'] },
   { id: 'communication', label: 'Communication', zones: ['commentaire'] },
   { id: 'rex', label: 'REX', zones: ['synthese'] },
 ]
 const TAB_IDS = TABS.map((x) => x.id)
 
-// Étapes qui demandent une confirmation explicite avant d'être franchies.
-const CONFIRMED_STEPS = ['en_reponse', 'cloture', 'retour_experience']
 const MAIN_NEXT = { nouveau: 'en_evaluation', en_evaluation: 'en_reponse', en_reponse: 'cloture', cloture: 'retour_experience' }
 
 // Échéance de l'en-tête : la date (UTC) et le temps restant ou dépassé, recalculé chaque minute.
@@ -153,40 +152,15 @@ export default function Ticket() {
 
   const setStatus = (s) => () => run(() => api(`/tickets/${enc}/status`, { method: 'POST', json: { status: s } }), tr('Statut : {s}.', { s: STATUS[s].label }))
   const transition = async (s) => {
-    if (s === 'faux_positif') {
-      // État terminal : la conséquence est écrite, le motif est interne (jamais montré au client), l'échec s'affiche dans le dialogue.
-      const r = await ask({
-        title: tr('Clore {ref} comme faux positif ?', { ref: t.ref }),
-        body: <>
-          <p>{tr("« Faux positif » est un état final : le ticket est clos, il ne pourra plus changer de statut ni être requalifié. Le verdict « Faux positif » doit avoir été enregistré dans la qualification.")}</p>
-          <p>{tr("Le client {client} verra le changement de statut, mais pas le motif ci-dessous : il reste interne et figure au registre des actions.", { client: t.client })}</p>
-        </>,
-        fields: [{ name: 'reason', type: 'textarea', label: tr('Motif du faux positif (interne)'), minLength: 10, maxLength: 1000,
-          hint: tr("Pourquoi l'alerte n'est pas un incident : ce qui a été vérifié et la conclusion.") }],
-        confirm: tr('Clore comme faux positif'), danger: true,
-        action: ({ reason }) => run(() => api(`/tickets/${enc}/status`, { method: 'POST', json: { status: s, reason } }), tr('Statut : {s}.', { s: STATUS[s].label })),
-      })
-      if (r) trackHead(async () => {}, tr('Statut : {s}.', { s: STATUS[s].label }))
-      return
-    }
-    if (CONFIRMED_STEPS.includes(s)) {
-      // Étapes qui engagent le client ou ferment le dossier : confirmation explicite, qui nomme le client.
-      const r = await ask({
-        title: tr('Passer {ref} au statut « {s} » ?', { ref: t.ref, s: STATUS[s].label }),
-        body: <>
-          <p>{tr('Le client {client} voit ce changement de statut dans son portail.', { client: t.client })}</p>
-          {s === 'en_reponse' && <p>{tr("Le ticket passe en phase de réponse : confinement, éradication et rétablissement. Le verdict ne pourra plus changer.")}</p>}
-          {s === 'cloture' && <p>{tr("Le ticket sort de la phase de réponse : seule l'étape du retour d'expérience peut suivre, et un incident Élevé ou Critique reste en attente de ce retour d'expérience tant qu'il n'est pas rédigé.")}</p>}
-          {s === 'retour_experience' && <p>{tr("Le retour d'expérience est l'étape finale : le ticket sera figé.")}</p>}
-        </>,
-        confirm: tr('Passer au statut « {s} »', { s: STATUS[s].label }), danger: s !== 'en_reponse',
-        action: setStatus(s),
-      })
-      if (r) trackHead(async () => {}, tr('Statut : {s}.', { s: STATUS[s].label }))
-      return
-    }
-    trackHead(setStatus(s), tr('Statut : {s}.', { s: STATUS[s].label }))
+    const msg = tr('Statut : {s}.', { s: STATUS[s].label })
+    if (!needsConfirm(s)) { trackHead(setStatus(s), msg); return }
+    const done = await confirmTransition(ask, {
+      ref: t.ref, client: t.client, target: s,
+      send: (reason) => run(() => api(`/tickets/${enc}/status`, { method: 'POST', json: reason ? { status: s, reason } : { status: s } }), msg),
+    })
+    if (done) trackHead(async () => {}, msg)
   }
+
 
   return (
     <>
@@ -301,6 +275,8 @@ export default function Ticket() {
         </>
       ) : (
         // Portail client : peu de contenu, une seule page, sans onglets.
+        <>
+        <div className="head-status"><UnsavedSummary labels={unsaved.labels} /></div>
         <div className="ticket-layout ticket-client">
           <div className="ticket-main">
             <Description t={t} enc={enc} canEdit={false} run={run} onImage={uploadImage} alertMerged={false} />
@@ -309,6 +285,7 @@ export default function Ticket() {
             <Comments t={t} enc={enc} isClient={isClient} me={me} run={run} onImage={uploadImage} templates={templates('commentaire')} />
           </div>
         </div>
+        </>
       )}
       </UnsavedProvider>
       </PhaseContext.Provider>
@@ -396,8 +373,15 @@ function AlertBlock({ t }) {
 function Attachments({ t, enc, me, run, vt }) {
   const isClient = me.role === 'client'
   const isTeam = !isClient
-  const [form, setForm] = useState(null)
-  const [ext, setExt] = useState(null)
+  const [form, setFormState] = useState(null)
+  const [ext, setExtState] = useState(null)
+  // Formulaires non contrôlés : « modifié » dès la première saisie, remis à zéro à l'ouverture, à l'annulation et au succès.
+  const [formDirty, setFormDirty] = useState(false)
+  const [extDirty, setExtDirty] = useState(false)
+  const setForm = (v) => { setFormState(v); setFormDirty(false) }
+  const setExt = (v) => { setExtState(v); setExtDirty(false) }
+  useUnsaved('piece', tr('dépôt de pièce'), !!form && formDirty)
+  useUnsaved('preuve-externe', tr('preuve externe'), !!ext && extDirty)
   const [status, track] = useActionStatus()          // dépôt et déclaration : à côté du bouton du formulaire
   const [rowStatus, setRowStatus] = useState(null)   // { id, ok | error } : dans la ligne de la pièce concernée
   const [ask, dialog] = useConfirm()
@@ -461,12 +445,12 @@ function Attachments({ t, enc, me, run, vt }) {
   }
 
   return (
-    <Section id="preuves" title={isClient ? tr('Éléments déposés') : tr('Registre des preuves')} summary={t.attachments.length || null} tools={<>
+    <Section id="preuves" title={isClient ? tr('Éléments déposés') : tr('Registre des preuves')} summary={<>{t.attachments.length || null}<UnsavedBadge show={(!!form && formDirty) || (!!ext && extDirty)} /></>} tools={<>
         {isTeam && <button type="button" onClick={() => { setExt(true); setForm(null) }}>{tr("Déclarer une preuve externe")}</button>}
         <button type="button" className="dark" onClick={() => { setForm(true); setExt(null) }}>{tr('Déposer un fichier ({n} Mo max)', { n: t.attachment_max_mb ?? 20 })}</button>
       </>}>
       {form && (
-        <form className="subform" onSubmit={submit}>
+        <form className="subform" onSubmit={submit} onInput={() => setFormDirty(true)}>
           <label>{tr("Fichier (archive ZIP, PNG, JPEG ou WebP)")}<input type="file" name="file" accept=".zip,image/png,image/jpeg,image/webp" required /></label>
           <label>{tr("Description (obligatoire)")}<input name="description" minLength={3} required /></label>
           <div className="grid2">
@@ -481,7 +465,7 @@ function Attachments({ t, enc, me, run, vt }) {
         </form>
       )}
       {ext && (
-        <form className="subform" onSubmit={submitExt}>
+        <form className="subform" onSubmit={submitExt} onInput={() => setExtDirty(true)}>
           <p className="muted small">{tr('Pour une preuve de plus de {n} Mo (image disque, dump mémoire, pcap) conservée hors de Keryx, sur un support hors ligne.', { n: t.attachment_max_mb ?? 20 })}</p>
           <label>{tr("Nom")}<input name="filename" required /></label>
           <label>{tr("Description")}<input name="description" minLength={3} required /></label>
@@ -723,6 +707,9 @@ function Qualification({ t, enc, run, open }) {
 
 function Mitre({ t, enc, run, open }) {
   const [text, setText] = useState(t.mitre.join(', '))
+  const canon = (x) => x.split(/[\s,;]+/).filter(Boolean).map((y) => y.toUpperCase()).join(',')
+  const mitreDirty = open && canon(text) !== canon(t.mitre.join(','))
+  useUnsaved('mitre', tr('MITRE'), mitreDirty)
   const [q, setQ] = useState('')
   const [found, setFound] = useState([])
   const [status, track] = useActionStatus()
@@ -732,7 +719,7 @@ function Mitre({ t, enc, run, open }) {
     return () => clearTimeout(h)
   }, [q])
   return (
-    <Section id="mitre" title={tr("MITRE ATT&CK")} summary={t.mitre.length ? <span className="mono">{t.mitre.join(', ')}</span> : tr("À compléter.")}>
+    <Section id="mitre" title={tr("MITRE ATT&CK")} summary={<>{t.mitre.length ? <span className="mono">{t.mitre.join(', ')}</span> : tr("À compléter.")}<UnsavedBadge show={mitreDirty} /></>}>
       {t.mitre_detail.length === 0 && <p className="muted">{tr("À compléter.")}</p>}
       {t.mitre_detail.map((m) => (
         <div key={m.id} className="mitre">
@@ -791,6 +778,8 @@ function Links({ t, enc, run, open }) {
   const [kind, setKind] = useState('lie')
   const [ref, setRef] = useState('')
   const [err, setErr] = useState('')
+  const linkDirty = open && !!ref.trim()
+  useUnsaved('lien', tr('lien'), linkDirty)
   const load = useCallback(() => api(`/tickets/${enc}/links`).then((r) => setItems(r.items)).catch(() => {}), [enc])
   useEffect(() => { load() }, [load, t.status])
   const add = async (e) => {
@@ -815,7 +804,7 @@ function Links({ t, enc, run, open }) {
     if (r) setStatus({ ok: tr('Ticket fusionné dans {ref} à {h}', { ref: r.values.into.toUpperCase(), h: utcClock() }) })
   }
   return (
-    <Section id="liens" title={tr("Tickets liés")} summary={items.length || null}>
+    <Section id="liens" title={tr("Tickets liés")} summary={<>{items.length || null}<UnsavedBadge show={linkDirty} /></>}>
       {items.length === 0 && <p className="muted small">{tr("Aucun lien.")}</p>}
       <ul className="linklist">
         {items.map((l) => (

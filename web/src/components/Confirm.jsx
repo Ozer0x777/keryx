@@ -1,5 +1,6 @@
 import { useCallback, useId, useLayoutEffect, useRef, useState } from 'react'
 import { t as tr } from '../i18n.js'
+import { useUnsaved } from './Unsaved.jsx'
 
 // Dialogue de confirmation et de saisie : remplace window.prompt / window.confirm.
 // <dialog> natif ouvert par showModal() : le reste de la page est inerte (focus piégé par le navigateur), Échap ferme,
@@ -61,6 +62,9 @@ function ConfirmDialog({ title, body, fields = [], confirm, cancel, danger = fal
   const form = useRef(null)
   const uid = useId()
   const [values, setValues] = useState(() => Object.fromEntries(fields.map((f) => [f.name, f.initial ?? ''])))
+  // Saisie dans la fenêtre (motif, nom…) : comptée dans les saisies non enregistrées de la fiche ticket (ADR-0024).
+  // Hors de la fiche, le registre n'existe pas et rien ne se passe.
+  useUnsaved(`dialogue-${uid}`, tr('fenêtre de saisie'), fields.some((f) => (values[f.name] ?? '') !== (f.initial ?? '')))
   const [errors, setErrors] = useState({})
   const [failure, setFailure] = useState('')
   const [busy, setBusy] = useState(false)

@@ -22,10 +22,10 @@ def test_critiques_non_assignes(app, db, world, alert):
     trois_tickets(app, world, alert)
     a = login(app, db, "analyst_acme")
     assert a.get("/api/v1/tickets/counts").json()["critical_unassigned"] == 1
-    assert refs(a, status="nouveau,en_evaluation,en_reponse", severity="Critique", assignee="none") == ["ACME-3"]
+    assert refs(a, critical_unassigned="true") == ["ACME-3"]
     assert a.post("/api/v1/tickets/ACME-3/assign", json={"username": "analyst_acme"}).status_code == 200
     assert a.get("/api/v1/tickets/counts").json()["critical_unassigned"] == 0
-    assert refs(a, status="nouveau,en_evaluation,en_reponse", severity="Critique", assignee="none") == []
+    assert refs(a, critical_unassigned="true") == []
 
 
 def test_en_attente_du_client(app, db, world, alert):
@@ -67,6 +67,11 @@ def test_dossiers_incomplets(app, db, world, alert):
     assert refs(a, incomplete="true") == ["ACME-1"]                    # synthèse encore vide
     a.put("/api/v1/tickets/ACME-1/synthese", json={"chronologie": "<p>c</p>", "mode_operatoire": "<p>m</p>"})
     assert refs(a, incomplete="true") == ["ACME-1"]                    # il manque le périmètre
+    # Un champ seulement « vide à l'écran » (saut de ligne, espaces) ne compte pas comme rempli
+    a.put("/api/v1/tickets/ACME-1/synthese", json={"chronologie": "<p>c</p>", "mode_operatoire": "<p>m</p>", "perimetre": "<p><br></p>"})
+    assert refs(a, incomplete="true") == ["ACME-1"]
+    a.put("/api/v1/tickets/ACME-1/synthese", json={"chronologie": "<p>c</p>", "mode_operatoire": "<p>m</p>", "perimetre": "<p>&nbsp; </p>"})
+    assert refs(a, incomplete="true") == ["ACME-1"]
     a.put("/api/v1/tickets/ACME-1/synthese", json={"chronologie": "<p>c</p>", "mode_operatoire": "<p>m</p>", "perimetre": "<p>p</p>"})
     assert refs(a, incomplete="true") == []
     assert a.get("/api/v1/tickets/counts").json()["incomplete"] == 0
@@ -77,4 +82,5 @@ def test_vues_reservees_a_l_equipe(app, db, world, alert):
     c = login(app, db, "client_acme")
     assert c.get("/api/v1/tickets", params={"awaiting_client": "true"}).status_code == 403
     assert c.get("/api/v1/tickets", params={"incomplete": "true"}).status_code == 403
+    assert c.get("/api/v1/tickets", params={"critical_unassigned": "true"}).status_code == 403
     assert c.get("/api/v1/tickets").status_code == 200

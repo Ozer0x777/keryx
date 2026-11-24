@@ -5,6 +5,7 @@ import { Severity, Tlp } from '../components/Badges.jsx'
 import { useConfirm } from '../components/Confirm.jsx'
 import { t as tr } from '../i18n.js'
 import { KANBAN_COLUMNS, STATUS, TRANSITIONS } from '../labels.js'
+import { confirmTransition, needsConfirm } from '../transitions.jsx'
 
 export default function Kanban() {
   const [items, setItems] = useState([])
@@ -26,16 +27,12 @@ export default function Kanban() {
       setRefused({ ref: ticket.ref, text: tr('Passage impossible : {a} → {b}.', { a: STATUS[ticket.status].label, b: STATUS[target].label }) })
       return
     }
-    const send = () => api(`/tickets/${encodeURIComponent(ticket.ref)}/status`, { method: 'POST', json: { status: target } })
+    const send = (reason) => api(`/tickets/${encodeURIComponent(ticket.ref)}/status`, { method: 'POST', json: reason ? { status: target, reason } : { status: target } })
     try {
-      if (target === 'faux_positif') {
-        // État terminal : confirmation avec la conséquence écrite ; un refus du serveur s'affiche dans le dialogue.
-        const r = await ask({
-          title: tr('Clore {ref} comme faux positif ?', { ref: ticket.ref }),
-          body: <p>{tr("« Faux positif » est un état final : le ticket est clos, il ne pourra plus changer de statut ni être requalifié. Le verdict « Faux positif » doit avoir été enregistré dans la qualification.")}</p>,
-          confirm: tr('Clore comme faux positif'), danger: true, action: send,
-        })
-        if (!r) return
+      // Mêmes confirmations que la fiche ticket (motif du faux positif, étapes qui engagent le client) ; un refus du
+      // serveur s'affiche dans le dialogue.
+      if (needsConfirm(target)) {
+        if (!(await confirmTransition(ask, { ref: ticket.ref, client: ticket.client, target, send }))) return
       } else await send()
       setMessage(`${ticket.ref} : ${STATUS[target].label}.`)
       await load()

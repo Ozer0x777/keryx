@@ -4,6 +4,7 @@ import { api } from '../api.js'
 import { utcInputToIso } from '../dates.js'
 import { formatUtc } from '../labels.js'
 import { useConfirm } from './Confirm.jsx'
+import { UnsavedBadge, useUnsaved } from './Unsaved.jsx'
 
 const KINDS = { decision: tr('Décisions'), action: tr("Plan d'action"), synthese: tr('Synthèse de crise') }
 
@@ -30,13 +31,20 @@ export default function Crisis({ t, enc, isManager, open, onChange }) {
     })
     if (r) { setC(r.result); onChange?.() }
   }
+  // Formulaire d'entrée non contrôlé : « modifié » dès qu'un champ texte est rempli, remis à zéro après l'ajout.
+  const [entryDirty, setEntryDirty] = useState(false)
+  useUnsaved('crise', tr('entrée de crise'), open && entryDirty)
+  const onEntryInput = (e) => {
+    const fd = new FormData(e.currentTarget)
+    setEntryDirty(['body', 'owner', 'due_at'].some((k) => String(fd.get(k) || '').trim()))
+  }
   const add = async (e) => {
     e.preventDefault()
     const form = e.target
     const fd = new FormData(form)
     const due = fd.get('due_at')
     // Le formulaire n'est vidé qu'après succès : en cas de refus, la saisie reste à l'écran.
-    if (await call(() => api(`/tickets/${enc}/crisis/entries`, { method: 'POST', json: { kind, body: fd.get('body'), owner: fd.get('owner') || null, due_at: utcInputToIso(due) } }))) form.reset()
+    if (await call(() => api(`/tickets/${enc}/crisis/entries`, { method: 'POST', json: { kind, body: fd.get('body'), owner: fd.get('owner') || null, due_at: utcInputToIso(due) } }))) { form.reset(); setEntryDirty(false) }
   }
   if (!c) return error ? <p className="error" role="alert">{error}</p> : null
   if (!c.active) {
@@ -75,7 +83,8 @@ export default function Crisis({ t, enc, isManager, open, onChange }) {
         </div>
       ))}
       {open && (
-        <form className="subform" onSubmit={add}>
+        <form className="subform" onSubmit={add} onInput={onEntryInput}>
+          <UnsavedBadge show={entryDirty} />
           <div className="grid2">
             <label>{tr("Type")}<select value={kind} onChange={(e) => setKind(e.target.value)}>{Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
             {kind === 'action' && <label>{tr("Responsable")}<input name="owner" maxLength={120} /></label>}

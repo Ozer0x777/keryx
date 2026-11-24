@@ -52,7 +52,7 @@ from .sanitize import clean_html
 from .sla import state as sla_state
 from .severity import DOMMAGES, IMPORTANCES, gravite, is_rex_required
 from .models import TERMINAL_STATUSES as TERMINAL
-from .workflow import TransitionError, check_transition, rex_pending
+from .workflow import TransitionError, _visible_text, check_transition, rex_pending
 
 SESSION_COOKIE = "keryx_session"
 CSRF_COOKIE = "keryx_csrf"
@@ -704,6 +704,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     OPEN_STATUSES = ("nouveau", "en_evaluation", "en_reponse")
 
+    def critical_unassigned_cond():
+        """Ticket ouvert, gravité qualifiée ou à défaut criticité initiale Critique, sans assigné."""
+        return and_(Ticket.status.in_(OPEN_STATUSES), Ticket.assignee_id.is_(None),
+                    func.coalesce(Ticket.gravite, Ticket.criticite_initiale) == "Critique")
+
     def awaiting_client_cond():
         """Ticket ouvert dont le dernier message visible du client vient de l'équipe : le client n'a pas répondu depuis.
         Un ticket sans aucun message visible du client n'en fait pas partie (rien n'a été demandé au client)."""
@@ -726,6 +731,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/v1/tickets")
     def list_tickets(status: str | None = Query(default=None, max_length=200), client: str | None = None,
                      rex_en_attente: bool = False, awaiting_client: bool = False, incomplete: bool = False,
+                     critical_unassigned: bool = False,
                      q: str | None = Query(default=None, max_length=200), assignee: str | None = None,
                      overdue: bool = False, crisis: bool = False, severity: str | None = Query(default=None, max_length=20),
                      sort: str = "created", order: str = "desc",
@@ -734,11 +740,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         """File des tickets. `status` accepte plusieurs statuts séparés par des virgules (« à qualifier » = nouveau et
         en évaluation) ; `severity` filtre sur la gravité qualifiée ou, à défaut, sur la criticité initiale ; les tris
         `criticite` et `gravite` suivent l'ordre métier Critique > Élevée > Moyenne > Faible, pas l'ordre alphabétique.
-        `awaiting_client` et `incomplete` : vues de priorisation de l'équipe (ADR-0025), refusées au client."""
+        `critical_unassigned`, `awaiting_client` et `incomplete` : vues de priorisation de l'équipe (ADR-0025), refusées
+        au client."""
         limit, offset = max(1, min(limit, 500)), max(0, offset)
         if user.role == "admin":
             raise HTTPException(403, "Le rôle Admin n'a pas accès au contenu des tickets.")
-        if (awaiting_client or incomplete) and user.role == "client":
+        if (awaiting_client or incomplete or critical_unassigned) and user.role == "client":
             raise HTTPException(403, "Ces vues sont réservées à l'équipe du SOC.")
         tenants = {t.id: t for t in user.tenants}
         ids = list(tenants)
@@ -765,6 +772,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             query = query.where(Ticket.status == "cloture", Ticket.rex_required.is_(True))
         if crisis:
             query = query.where(Ticket.crisis.is_(True))
+        if critical_unassigned:
+            query = query.where(critical_unassigned_cond())
         if awaiting_client:
             query = query.where(awaiting_client_cond())
         if incomplete:
@@ -820,8 +829,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                                                                        Ticket.rex_required.is_(True))) or 0
         overdue = sum(1 for t in db.scalars(select(Ticket).where(mine, Ticket.status.in_(open_statuses)))
                       if sla_state(t, tenants.get(t.tenant_id))["overdue"])
-        critical_unassigned = db.scalar(select(func.count()).select_from(Ticket).where(
-            mine, Ticket.status.in_(open_statuses), severity == "Critique", Ticket.assignee_id.is_(None))) or 0
+        critical_unassigned = db.scalar(select(func.count()).select_from(Ticket).where(mine, critical_unassigned_cond())) or 0
         awaiting = db.scalar(select(func.count()).select_from(Ticket).where(mine, awaiting_client_cond())) or 0
         incomplete_n = db.scalar(select(func.count()).select_from(Ticket).where(mine, incomplete_cond())) or 0
         return {"total": sum(by_status.values()), "by_status": {s: by_status.get(s, 0) for s in STATUSES},
@@ -1063,8 +1071,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         sent = body.model_fields_set
         for f in ("chronologie", "mode_operatoire", "perimetre", "rex_html"):
             if f in sent:
-                v = getattr(body, f)
-                setattr(t, f, clean_html(v) if v else None)
+                v = clean_html(getattr(body, f)) if getattr(body, f) else ""
+                # Un champ sans texte visible (« <p><br></p> », espaces) est vide : il ne doit pas faire sortir le ticket
+                # des dossiers incomplets (ADR-0025). Une image seule reste un contenu.
+                setattr(t, f, v if (_visible_text(v) or "<img" in v) else None)
         if "compromission_initiale" in sent:
             t.compromission_initiale = input_date(body.compromission_initiale, "Date de compromission initiale")
         t.updated_at = utcnow()

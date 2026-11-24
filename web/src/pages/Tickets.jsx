@@ -24,12 +24,12 @@ const CARDS = [
   { label: 'En retard', hint: 'échéance dépassée', patch: { overdue: true }, count: (c) => c.overdue },
   { label: 'REX en attente', hint: 'obligatoire si Élevée ou Critique', patch: { rex_en_attente: true }, count: (c) => c.rex_en_attente },
 ]
-// Vues de priorisation (ADR-0025) : ce qui demande une action de l'équipe. Chacune fixe aussi l'assigné, pour ne pas
-// garder à l'insu de l'analyste la vue « Mes tickets » ou « Non assignés » d'une autre carte.
+// Vues de priorisation (ADR-0025) : ce qui demande une action de l'équipe. Chacune a son propre critère, calculé par le
+// serveur ; aucune ne modifie la vue d'assigné (Tous, Mes tickets, Non assignés).
 const PRIORITIES = [
-  { label: 'Critiques non assignés', hint: 'ouverts, personne dessus', patch: { status: OPEN_STATUSES, severity: 'Critique', assignee: 'none' }, count: (c) => c.critical_unassigned },
-  { label: 'En attente du client', hint: 'sa réponse n\'est pas arrivée', patch: { awaiting_client: true, assignee: '' }, count: (c) => c.awaiting_client },
-  { label: 'Dossiers incomplets', hint: 'gravité, assigné ou synthèse manquants', patch: { incomplete: true, assignee: '' }, count: (c) => c.incomplete },
+  { label: 'Critiques non assignés', hint: 'ouverts, personne dessus', patch: { critical_unassigned: true }, count: (c) => c.critical_unassigned },
+  { label: 'En attente du client', hint: 'sa réponse n\'est pas arrivée', patch: { awaiting_client: true }, count: (c) => c.awaiting_client },
+  { label: 'Dossiers incomplets', hint: 'gravité, assigné ou synthèse manquants', patch: { incomplete: true }, count: (c) => c.incomplete },
 ]
 
 // Date de détection sans le suffixe « UTC » (il est dans l'en-tête de colonne) : la colonne reste étroite.
@@ -90,7 +90,8 @@ export default function Tickets() {
   const params = useMemo(() => {
     const f = filtersFromSearch(key)
     return { ...f, rex_en_attente: f.rex_en_attente || undefined, overdue: f.overdue || undefined,
-      awaiting_client: f.awaiting_client || undefined, incomplete: f.incomplete || undefined, limit: 200 }
+      critical_unassigned: f.critical_unassigned || undefined, awaiting_client: f.awaiting_client || undefined,
+      incomplete: f.incomplete || undefined, limit: 200 }
   }, [key])
 
   // Relevé de la liste (premier affichage, changement de filtre, bouton, minuterie). La liste affichée reste en place

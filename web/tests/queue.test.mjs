@@ -28,18 +28,23 @@ test('cartes-filtres : une carte est enfoncée quand ses critères d’état son
   assert.equal(f.q, 'srv'); assert.equal(f.assignee, 'me')              // recherche et vue conservées
   assert.ok(!cardActive({ ...f, overdue: true }, critiques))              // un critère d'état en plus : ce n'est plus cette carte
   assert.ok(!cardActive(f, { overdue: true }))
-  assert.deepEqual(cardPatch({ overdue: true }), { status: '', severity: '', overdue: true, rex_en_attente: false, awaiting_client: false, incomplete: false })
+  assert.deepEqual(cardPatch({ overdue: true }), { status: '', severity: '', overdue: true, rex_en_attente: false, critical_unassigned: false, awaiting_client: false, incomplete: false })
 })
 
-test('vues de priorisation : elles fixent leurs propres critères, y compris l\'assigné, et se désactivent entre elles', () => {
-  const critiquesLibres = { status: OPEN_STATUSES, severity: 'Critique', assignee: 'none' }
-  const attenteClient = { awaiting_client: true, assignee: '' }
-  const f = { ...DEFAULTS, q: 'srv', ...cardPatch(critiquesLibres) }
-  assert.ok(cardActive(f, critiquesLibres) && f.assignee === 'none' && f.q === 'srv')
-  const g = { ...f, ...cardPatch(attenteClient) }
-  assert.ok(cardActive(g, attenteClient) && !cardActive(g, critiquesLibres))
-  assert.equal(g.assignee, '')                      // plus d'assigné caché de la vue précédente
-  assert.equal(g.severity, '')                      // ni de gravité
-  const qs = new URLSearchParams(filtersToSearch(g)).toString()
-  assert.deepEqual(filtersFromSearch(`?${qs}`), g)  // l'URL restitue la vue
+test('vues de priorisation : un critère propre à chacune, jamais d\'assigné caché, second clic sans reste', () => {
+  const critiquesLibres = { critical_unassigned: true }
+  const critiquesOuverts = { status: OPEN_STATUSES, severity: 'Critique' }
+  const attenteClient = { awaiting_client: true }
+  const f = { ...DEFAULTS, q: 'srv', assignee: 'me', ...cardPatch(critiquesLibres) }
+  assert.ok(cardActive(f, critiquesLibres) && !cardActive(f, critiquesOuverts))   // une seule carte enfoncée
+  assert.equal(f.assignee, 'me')                                                   // la vue choisie reste
+  const off = { ...f, ...cardPatch({}) }                                           // second clic : la carte se retire
+  assert.deepEqual({ ...off, q: DEFAULTS.q, assignee: DEFAULTS.assignee }, DEFAULTS) // sans rien laisser derrière
+  const g = { ...DEFAULTS, ...cardPatch(critiquesLibres) }
+  const h = { ...g, ...cardPatch({ overdue: true }) }                              // une autre carte la remplace
+  assert.ok(!h.critical_unassigned && h.overdue && h.assignee === '')
+  const k = { ...h, ...cardPatch(attenteClient) }
+  assert.ok(cardActive(k, attenteClient) && !k.overdue)
+  const qs = new URLSearchParams(filtersToSearch(k)).toString()
+  assert.deepEqual(filtersFromSearch(`?${qs}`), k)                                 // l'URL restitue la vue
 })

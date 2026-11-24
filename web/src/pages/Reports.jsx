@@ -43,7 +43,7 @@ export default function Reports() {
           <p className="muted">{tr('Période du {from} au {to} · généré le {when} · TLP:AMBER', { from: r.period.from, to: r.period.to, when: formatUtc(r.generated_at) })}</p>
           <h2>{tr("Synthèse")}</h2>
           <dl className="kv"><dt>{tr("Incidents créés")}</dt><dd>{r.totals.created}</dd><dt>{tr("Incidents clos")}</dt><dd>{r.totals.closed}</dd>
-            <dt>{tr("Ouverts à ce jour")}</dt><dd>{r.totals.open}</dd><dt>{tr("Échéances tenues")}</dt><dd>{r.sla.rate_percent == null ? '—' : `${r.sla.rate_percent} % (${r.sla.resolution_within_target} sur ${r.sla.closed})`}</dd>
+            <dt>{tr("Ouverts à ce jour")}</dt><dd>{r.totals.open}</dd><dt>{tr("Échéances tenues")}</dt><dd>{r.sla.rate_percent == null ? '—' : tr('{p} % ({a} sur {b})', { p: r.sla.rate_percent, a: r.sla.resolution_within_target, b: r.sla.closed })}</dd>
             <dt>{tr("Délai moyen de résolution")}</dt><dd>{r.delays.resolution_hours_avg == null ? '—' : `${r.delays.resolution_hours_avg} h`}</dd></dl>
           <h2>{tr("Incidents de la période")}</h2>
           <div className="table-wrap"><table className="grid">

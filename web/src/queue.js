@@ -1,7 +1,7 @@
 // File de triage : l'état de la liste (filtres, tri, vue) vit dans l'URL (?status=…&sort=…), pour qu'il soit restauré
 // au retour d'un ticket, partageable et conservé au rechargement. Fonctions pures, testées par npm test.
-export const DEFAULTS = { status: '', severity: '', client: '', rex_en_attente: false, awaiting_client: false, incomplete: false, q: '', assignee: '', overdue: false, sort: 'created', order: 'desc' }
-const BOOLEANS = ['rex_en_attente', 'overdue', 'awaiting_client', 'incomplete']
+export const DEFAULTS = { status: '', severity: '', client: '', rex_en_attente: false, critical_unassigned: false, awaiting_client: false, incomplete: false, q: '', assignee: '', overdue: false, sort: 'created', order: 'desc' }
+const BOOLEANS = ['rex_en_attente', 'overdue', 'critical_unassigned', 'awaiting_client', 'incomplete']
 export const SORTS = ['created', 'updated', 'detected', 'ref', 'status', 'occurrences', 'criticite', 'gravite']
 export const SEVERITIES = ['Critique', 'Élevée', 'Moyenne', 'Faible']   // ordre de tri métier, du plus grave au moins grave
 export const OPEN_STATUSES = 'nouveau,en_evaluation,en_reponse'
@@ -33,10 +33,11 @@ export function filtersToSearch(filters) {
   return out
 }
 
-// Cartes de chiffres = filtres rapides. Chacune fixe les six critères d'état ; les autres (recherche, client,
-// assigné, tri) sont conservés, sauf si la carte fixe elle-même l'assigné (vues de priorisation, ADR-0025).
-// Une carte est « enfoncée » quand ses critères valent exactement les siens.
-const CARD_RESET = { status: '', severity: '', overdue: false, rex_en_attente: false, awaiting_client: false, incomplete: false }
+// Cartes de chiffres = filtres rapides. Chacune fixe les sept critères d'état ; les autres (recherche, client,
+// assigné, tri) sont conservés. Aucune carte ne touche à l'assigné : les vues de priorisation (ADR-0025) ont chacune
+// leur propre critère, pour ne jamais laisser un filtre d'assigné caché derrière une carte.
+// Une carte est « enfoncée » quand ces critères valent exactement les siens.
+const CARD_RESET = { status: '', severity: '', overdue: false, rex_en_attente: false, critical_unassigned: false, awaiting_client: false, incomplete: false }
 export const cardPatch = (patch) => ({ ...CARD_RESET, ...patch })
 export const cardActive = (filters, patch) => Object.entries(cardPatch(patch)).every(([k, v]) => filters[k] === v)
 
