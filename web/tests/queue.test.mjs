@@ -28,5 +28,18 @@ test('cartes-filtres : une carte est enfoncée quand ses critères d’état son
   assert.equal(f.q, 'srv'); assert.equal(f.assignee, 'me')              // recherche et vue conservées
   assert.ok(!cardActive({ ...f, overdue: true }, critiques))              // un critère d'état en plus : ce n'est plus cette carte
   assert.ok(!cardActive(f, { overdue: true }))
-  assert.deepEqual(cardPatch({ overdue: true }), { status: '', severity: '', overdue: true, rex_en_attente: false })
+  assert.deepEqual(cardPatch({ overdue: true }), { status: '', severity: '', overdue: true, rex_en_attente: false, awaiting_client: false, incomplete: false })
+})
+
+test('vues de priorisation : elles fixent leurs propres critères, y compris l\'assigné, et se désactivent entre elles', () => {
+  const critiquesLibres = { status: OPEN_STATUSES, severity: 'Critique', assignee: 'none' }
+  const attenteClient = { awaiting_client: true, assignee: '' }
+  const f = { ...DEFAULTS, q: 'srv', ...cardPatch(critiquesLibres) }
+  assert.ok(cardActive(f, critiquesLibres) && f.assignee === 'none' && f.q === 'srv')
+  const g = { ...f, ...cardPatch(attenteClient) }
+  assert.ok(cardActive(g, attenteClient) && !cardActive(g, critiquesLibres))
+  assert.equal(g.assignee, '')                      // plus d'assigné caché de la vue précédente
+  assert.equal(g.severity, '')                      // ni de gravité
+  const qs = new URLSearchParams(filtersToSearch(g)).toString()
+  assert.deepEqual(filtersFromSearch(`?${qs}`), g)  // l'URL restitue la vue
 })

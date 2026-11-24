@@ -24,6 +24,13 @@ const CARDS = [
   { label: 'En retard', hint: 'échéance dépassée', patch: { overdue: true }, count: (c) => c.overdue },
   { label: 'REX en attente', hint: 'obligatoire si Élevée ou Critique', patch: { rex_en_attente: true }, count: (c) => c.rex_en_attente },
 ]
+// Vues de priorisation (ADR-0025) : ce qui demande une action de l'équipe. Chacune fixe aussi l'assigné, pour ne pas
+// garder à l'insu de l'analyste la vue « Mes tickets » ou « Non assignés » d'une autre carte.
+const PRIORITIES = [
+  { label: 'Critiques non assignés', hint: 'ouverts, personne dessus', patch: { status: OPEN_STATUSES, severity: 'Critique', assignee: 'none' }, count: (c) => c.critical_unassigned },
+  { label: 'En attente du client', hint: 'sa réponse n\'est pas arrivée', patch: { awaiting_client: true, assignee: '' }, count: (c) => c.awaiting_client },
+  { label: 'Dossiers incomplets', hint: 'gravité, assigné ou synthèse manquants', patch: { incomplete: true, assignee: '' }, count: (c) => c.incomplete },
+]
 
 // Date de détection sans le suffixe « UTC » (il est dans l'en-tête de colonne) : la colonne reste étroite.
 const utcShort = (iso) => (iso ? iso.replace('T', ' ').slice(0, 16) : '—')
@@ -37,6 +44,19 @@ function SortHeader({ label, col, filters, set, className }) {
         {label}<span className="sort-mark" aria-hidden="true">{on ? (filters.order === 'asc' ? '▲' : '▼') : ''}</span>
       </button>
     </th>
+  )
+}
+
+// Carte de chiffre = filtre rapide : enfoncée quand ses critères sont appliqués, un second clic les retire.
+function StatCard({ c, counts, filters, set }) {
+  const on = cardActive(filters, c.patch)
+  return (
+    <button type="button" className={`card stat stat-filter${on ? ' on' : ''}`} aria-pressed={on}
+      onClick={() => set(cardPatch(on ? {} : c.patch))}>
+      <span className="stat-label">{tr(c.label)}</span>
+      <strong>{counts ? c.count(counts) : '…'}</strong>
+      <span className="stat-hint small">{on ? tr('filtre actif') : tr(c.hint)}</span>
+    </button>
   )
 }
 
@@ -69,7 +89,8 @@ export default function Tickets() {
   const key = search.toString()
   const params = useMemo(() => {
     const f = filtersFromSearch(key)
-    return { ...f, rex_en_attente: f.rex_en_attente || undefined, overdue: f.overdue || undefined, limit: 200 }
+    return { ...f, rex_en_attente: f.rex_en_attente || undefined, overdue: f.overdue || undefined,
+      awaiting_client: f.awaiting_client || undefined, incomplete: f.incomplete || undefined, limit: 200 }
   }, [key])
 
   // Relevé de la liste (premier affichage, changement de filtre, bouton, minuterie). La liste affichée reste en place
@@ -181,19 +202,14 @@ export default function Tickets() {
       </header>
 
       {!isClient && (
-        <section className="stats" aria-label={tr('Synthèse : filtres rapides')}>
-          {CARDS.map((c) => {
-            const on = cardActive(filters, c.patch)
-            return (
-              <button type="button" className={`card stat stat-filter${on ? ' on' : ''}`} key={c.label} aria-pressed={on}
-                onClick={() => set(cardPatch(on ? {} : c.patch))}>
-                <span className="stat-label">{tr(c.label)}</span>
-                <strong>{counts ? c.count(counts) : '…'}</strong>
-                <span className="stat-hint small">{on ? tr('filtre actif') : tr(c.hint)}</span>
-              </button>
-            )
-          })}
-        </section>
+        <>
+          <section className="stats" aria-label={tr('Synthèse : filtres rapides')}>
+            {CARDS.map((c) => <StatCard key={c.label} c={c} counts={counts} filters={filters} set={set} />)}
+          </section>
+          <section className="stats stats-priority" aria-label={tr('À traiter en priorité')}>
+            {PRIORITIES.map((c) => <StatCard key={c.label} c={c} counts={counts} filters={filters} set={set} />)}
+          </section>
+        </>
       )}
 
       {!isClient && (

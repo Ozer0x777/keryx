@@ -27,7 +27,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import case, delete, false, func, or_, select, update
+from sqlalchemy import and_, case, delete, false, func, or_, select, update
 from sqlalchemy.orm import Session as DbSession
 from starlette.background import BackgroundTask
 
@@ -702,9 +702,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "rex_en_attente": rex_pending(t.status, t.rex_required), "crisis": t.crisis,
         }
 
+    OPEN_STATUSES = ("nouveau", "en_evaluation", "en_reponse")
+
+    def awaiting_client_cond():
+        """Ticket ouvert dont le dernier message visible du client vient de l'équipe : le client n'a pas répondu depuis.
+        Un ticket sans aucun message visible du client n'en fait pas partie (rien n'a été demandé au client)."""
+        last_author = (select(Comment.author_id)
+                       .where(Comment.ticket_id == Ticket.id, Comment.visible_client.is_(True))
+                       .order_by(Comment.created_at.desc(), Comment.id.desc()).limit(1).correlate(Ticket).scalar_subquery())
+        last_role = select(User.role).where(User.id == last_author).scalar_subquery()
+        return and_(Ticket.status.in_(OPEN_STATUSES), last_role != "client")
+
+    def incomplete_cond():
+        """Dossier incomplet : en réponse ou clôturé (avant retour d'expérience), il manque la gravité qualifiée, un
+        assigné ou l'un des trois champs de la synthèse (chronologie, mode opératoire, périmètre). Le verdict ne compte
+        pas : le passage en réponse l'exige déjà. Les statuts « nouveau » et « en évaluation » en sont exclus, leur
+        dossier est en cours de constitution par nature."""
+        vide = lambda col: or_(col.is_(None), col == "")  # noqa: E731
+        return and_(Ticket.status.in_(("en_reponse", "cloture")),
+                    or_(Ticket.dommages.is_(None), Ticket.assignee_id.is_(None), vide(Ticket.chronologie),
+                        vide(Ticket.mode_operatoire), vide(Ticket.perimetre)))
+
     @app.get("/api/v1/tickets")
     def list_tickets(status: str | None = Query(default=None, max_length=200), client: str | None = None,
-                     rex_en_attente: bool = False,
+                     rex_en_attente: bool = False, awaiting_client: bool = False, incomplete: bool = False,
                      q: str | None = Query(default=None, max_length=200), assignee: str | None = None,
                      overdue: bool = False, crisis: bool = False, severity: str | None = Query(default=None, max_length=20),
                      sort: str = "created", order: str = "desc",
@@ -712,10 +733,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                      user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         """File des tickets. `status` accepte plusieurs statuts séparés par des virgules (« à qualifier » = nouveau et
         en évaluation) ; `severity` filtre sur la gravité qualifiée ou, à défaut, sur la criticité initiale ; les tris
-        `criticite` et `gravite` suivent l'ordre métier Critique > Élevée > Moyenne > Faible, pas l'ordre alphabétique."""
+        `criticite` et `gravite` suivent l'ordre métier Critique > Élevée > Moyenne > Faible, pas l'ordre alphabétique.
+        `awaiting_client` et `incomplete` : vues de priorisation de l'équipe (ADR-0025), refusées au client."""
         limit, offset = max(1, min(limit, 500)), max(0, offset)
         if user.role == "admin":
             raise HTTPException(403, "Le rôle Admin n'a pas accès au contenu des tickets.")
+        if (awaiting_client or incomplete) and user.role == "client":
+            raise HTTPException(403, "Ces vues sont réservées à l'équipe du SOC.")
         tenants = {t.id: t for t in user.tenants}
         ids = list(tenants)
         if client:
@@ -741,6 +765,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             query = query.where(Ticket.status == "cloture", Ticket.rex_required.is_(True))
         if crisis:
             query = query.where(Ticket.crisis.is_(True))
+        if awaiting_client:
+            query = query.where(awaiting_client_cond())
+        if incomplete:
+            query = query.where(incomplete_cond())
         if assignee == "me":
             query = query.where(Ticket.assignee_id == user.id)
         elif assignee == "none":
@@ -792,9 +820,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                                                                        Ticket.rex_required.is_(True))) or 0
         overdue = sum(1 for t in db.scalars(select(Ticket).where(mine, Ticket.status.in_(open_statuses)))
                       if sla_state(t, tenants.get(t.tenant_id))["overdue"])
+        critical_unassigned = db.scalar(select(func.count()).select_from(Ticket).where(
+            mine, Ticket.status.in_(open_statuses), severity == "Critique", Ticket.assignee_id.is_(None))) or 0
+        awaiting = db.scalar(select(func.count()).select_from(Ticket).where(mine, awaiting_client_cond())) or 0
+        incomplete_n = db.scalar(select(func.count()).select_from(Ticket).where(mine, incomplete_cond())) or 0
         return {"total": sum(by_status.values()), "by_status": {s: by_status.get(s, 0) for s in STATUSES},
                 "open_by_severity": {s: by_severity.get(s, 0) for s in SEVERITIES},
-                "overdue": overdue, "rex_en_attente": rex}
+                "overdue": overdue, "rex_en_attente": rex, "critical_unassigned": critical_unassigned,
+                "awaiting_client": awaiting, "incomplete": incomplete_n}
 
     def attachment_view(a: Attachment) -> dict:
         return {"id": a.id, "kind": a.kind, "filename": a.filename, "content_type": a.content_type, "size": a.size,

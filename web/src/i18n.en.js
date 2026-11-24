@@ -792,4 +792,11 @@ export default {
   "Ce commentaire sera lu par les utilisateurs du client {client}. Il ne pourra plus être modifié ni retiré. Pour un échange interne, décocher « Visible par le client ».": "This comment will be read by the users of the client {client}. It can no longer be edited or removed. For an internal exchange, untick “Visible to the client”.",
   "Publier au client {client}": "Publish to the client {client}",
   "Brouillon retrouvé : il n'a pas été publié. Il reste dans cet onglet seulement.": "Draft found: it has not been published. It stays in this tab only.",
+  "À traiter en priorité": "To handle first",
+  "Critiques non assignés": "Critical, unassigned",
+  "ouverts, personne dessus": "open, nobody on it",
+  "En attente du client": "Awaiting the client",
+  "sa réponse n'est pas arrivée": "no reply yet",
+  "Dossiers incomplets": "Incomplete files",
+  "gravité, assigné ou synthèse manquants": "severity, assignee or summary missing",
 }
