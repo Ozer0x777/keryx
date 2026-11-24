@@ -17,6 +17,7 @@
 #   KERYX_SORTIES      oui | non : sorties de Keryx (SMTP, horodatage, indexeur Wazuh, syslog, VirusTotal) (défaut : non)
 #   KERYX_PROJECT      nom du projet compose                       (défaut : keryx)
 #   KERYX_ADMIN_USER   identifiant du premier compte Admin         (défaut : admin)
+#   KERYX_IMAGE        image publiée à récupérer au lieu de construire (ex. ghcr.io/ozer0x777/keryx)
 set -eu
 
 ICI=$(cd "$(dirname "$0")" && pwd)
@@ -116,7 +117,7 @@ D_ACME_CA=${KERYX_ACME_CA:-}; D_ACME_EMAIL=${KERYX_ACME_EMAIL:-}
 D_EAB_KID=${KERYX_ACME_EAB_KID:-}; D_EAB_HMAC=${KERYX_ACME_EAB_HMAC:-}
 D_HTTP=${KERYX_HTTP_PORT:-}; D_HTTPS=${KERYX_HTTPS_PORT:-}; D_ECOUTE=${KERYX_LISTEN_ADDR:-}
 D_SORTIES=${KERYX_SORTIES:-}; D_PROJET=${KERYX_PROJECT:-keryx}; D_ADMIN=${KERYX_ADMIN_USER:-admin}
-D_CAPACITE=${KERYX_GARAGE_CAPACITY:-10G}
+D_CAPACITE=${KERYX_GARAGE_CAPACITY:-10G}; D_IMAGE=${KERYX_IMAGE:-}
 for v in $(env | sed -n -e 's/^\(KERYX_[A-Za-z0-9_]*\)=.*/\1/p' -e 's/^\(POSTGRES_[A-Za-z0-9_]*\)=.*/\1/p' \
                        -e 's/^\(KEYCLOAK_[A-Za-z0-9_]*\)=.*/\1/p' -e 's/^\(GARAGE_[A-Za-z0-9_]*\)=.*/\1/p' \
                        -e 's/^\(COMPOSE_[A-Za-z0-9_]*\)=.*/\1/p'); do
@@ -222,15 +223,30 @@ SUFFIXE=""; [ -z "$PORT_HTTPS" ] || SUFFIXE=":$PORT_HTTPS"
 URL="https://$DOMAINE$SUFFIXE"
 
 # ------------------------------------------------------------------------------------------------ image
-titre "Construction de l'image de Keryx"
+titre "Image de Keryx"
+# Image publiée (KERYX_IMAGE) : récupérée, et sa signature vérifiée si cosign est installé ; sinon construite ici.
 # Les deux variables exigées par docker-compose.yml n'existent pas encore à la première installation.
-if [ "$NOUVEAU" = 1 ]; then
-    env KERYX_SECRET_KEY=construction POSTGRES_PASSWORD=construction docker compose build keryx
-    IMAGE=$(env KERYX_SECRET_KEY=construction POSTGRES_PASSWORD=construction docker compose config --images | grep '^keryx:' | head -n 1)
-    [ -n "$IMAGE" ] || erreur "nom de l'image de Keryx introuvable (docker compose config --images)."
+if [ "$NOUVEAU" = 1 ]; then PUBLIEE=$D_IMAGE; else PUBLIEE=$(env_lire KERYX_IMAGE); fi
+dc_init() { if [ "$NOUVEAU" = 1 ]; then env KERYX_SECRET_KEY=construction POSTGRES_PASSWORD=construction KERYX_IMAGE="$PUBLIEE" docker compose "$@"; else dc "$@"; fi; }
+if [ -n "$PUBLIEE" ]; then
+    case "$PUBLIEE" in *[!A-Za-z0-9./_-]*) erreur "KERYX_IMAGE invalide : « $PUBLIEE »." ;; esac
+    dc_init pull keryx
+    IMAGE=$(dc_init config --images | grep -E '(^|/)keryx:' | head -n 1)
+    if command -v cosign >/dev/null 2>&1; then
+        DEPOT=$(printf '%s' "$PUBLIEE" | sed -n 's#^ghcr\.io/\([^/]*\)/\([^/]*\)$#\1/\2#p')
+        [ -n "$DEPOT" ] || erreur "vérification de signature prévue pour une image ghcr.io/<compte>/<dépôt> seulement : « $PUBLIEE »."
+        cosign verify "$IMAGE" --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp "(?i)^https://github.com/$DEPOT/\.github/workflows/publication\.yml@refs/tags/v" >/dev/null \
+            || erreur "signature de $IMAGE invalide ou absente : image refusée."
+        dire "   signature de $IMAGE vérifiée (publiée par le dépôt $DEPOT)."
+    else
+        dire "   cosign absent : signature NON vérifiée. Pour la vérifier : voir docs/publication.md."
+    fi
 else
-    dc build keryx
+    dc_init build keryx
+    IMAGE=$(dc_init config --images | grep -E '(^|/)keryx:' | head -n 1)
 fi
+[ -n "$IMAGE" ] || erreur "nom de l'image de Keryx introuvable (docker compose config --images)."
 
 # ------------------------------------------------------------------------------------------------ .env
 if [ "$NOUVEAU" = 1 ]; then
@@ -281,6 +297,7 @@ EOF
         [ -z "$D_ACME_EMAIL" ] || printf 'KERYX_ACME_EMAIL=%s\n' "$D_ACME_EMAIL" >> "$TMP"
         [ -z "$D_EAB_KID" ] || printf 'KERYX_ACME_EAB_KID=%s\nKERYX_ACME_EAB_HMAC=%s\n' "$D_EAB_KID" "$D_EAB_HMAC" >> "$TMP"
     fi
+    [ -z "$PUBLIEE" ] || printf '# Image publiée de Keryx (récupérée, non construite ici)\nKERYX_IMAGE=%s\n' "$PUBLIEE" >> "$TMP"
     # Jamais d'écrasement : si un .env est apparu entre-temps, on s'arrête.
     if ! ln "$TMP" "$ENVF" 2>/dev/null; then
         rm -f "$TMP"
@@ -315,7 +332,14 @@ PORT_HTTPS=${PORT_HTTPS:-443}
 
 # ------------------------------------------------------------------------------------------------ démarrage
 titre "Construction des autres images et démarrage"
-dc build
+if [ -n "$PUBLIEE" ]; then
+    # keryx et sauvegarde viennent de l'image publiée : seules les images propres au kit sont construites.
+    for svc in $(dc config --services); do
+        case "$svc" in keycloak|garage) dc build "$svc" ;; esac
+    done
+else
+    dc build
+fi
 dc up -d postgres keryx caddy
 attendre "Keryx (migrations, /healthz)" 180 sain keryx || { dc logs --tail 40 keryx; erreur "Keryx ne démarre pas (journal ci-dessus)."; }
 

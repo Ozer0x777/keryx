@@ -7,7 +7,7 @@ body:
       value: "Une vulnérabilité ne se signale pas ici : voir SECURITY.md (signalement privé). Ne collez aucune donnée réelle de client, aucune alerte réelle, aucun secret."
   - type: input
     id: version
-    attributes: { label: "Version ou commit", placeholder: "0.2.0, ou les 7 premiers caractères du commit" }
+    attributes: { label: "Version ou commit", placeholder: "0.8.0, ou les 7 premiers caractères du commit" }
     validations: { required: true }
   - type: dropdown
     id: deploiement

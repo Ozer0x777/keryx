@@ -1,0 +1,90 @@
+# Publication d'une version : à chaque étiquette vX.Y.Z poussée sur le dépôt.
+# Construit l'image de Keryx, la publie sur le registre GitHub (ghcr.io/<compte>/keryx), joint une attestation de
+# provenance et une SBOM, signe l'image (cosign, signature sans clé liée à ce workflow), puis crée la version GitHub
+# avec la section du CHANGELOG et la SBOM CycloneDX. Vérifier une image : docs/publication.md.
+name: Publication
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+jobs:
+  publier:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # créer la version GitHub
+      packages: write        # pousser l'image sur ghcr.io
+      id-token: write        # signature sans clé (Sigstore) et attestations
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version cohérente (étiquette, keryx/__init__.py, web/package.json, CHANGELOG)
+        id: version
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          PY=$(python3 -c "import re;print(re.search(r'__version__ = \"([^\"]+)\"', open('keryx/__init__.py').read()).group(1))")
+          JS=$(python3 -c "import json;print(json.load(open('web/package.json'))['version'])")
+          [ "$V" = "$PY" ] && [ "$V" = "$JS" ] || { echo "Étiquette $V, Python $PY, interface $JS : à aligner."; exit 1; }
+          grep -q "^## \[$V\]" CHANGELOG.md || { echo "Pas de section [$V] dans CHANGELOG.md."; exit 1; }
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/keryx" >> "$GITHUB_OUTPUT"
+
+      - name: Contrôles du dépôt
+        run: python3 scripts/verif_depot.py
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Construire et publier l'image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.version.outputs.image }}:${{ steps.version.outputs.version }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=MIT
+          provenance: mode=max
+          sbom: true
+
+      - name: Attestation de provenance (GitHub)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ steps.version.outputs.image }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - uses: sigstore/cosign-installer@v3
+      - name: Signer l'image (par empreinte, jamais par étiquette)
+        run: cosign sign --yes "${{ steps.version.outputs.image }}@${{ steps.build.outputs.digest }}"
+
+      - name: SBOM CycloneDX du dépôt
+        run: python3 scripts/sbom.py sbom.cdx.json
+
+      - name: Notes de version (section du CHANGELOG)
+        run: |
+          V="${{ steps.version.outputs.version }}"
+          awk -v v="## [$V]" 'index($0, v) == 1 {on=1; next} on && /^## / {exit} on' CHANGELOG.md > notes.md
+          {
+            echo
+            echo "Image : \`${{ steps.version.outputs.image }}:$V\`"
+            echo "Empreinte : \`${{ steps.build.outputs.digest }}\`"
+            echo
+            echo "Vérification de la signature : voir docs/publication.md."
+          } >> notes.md
+
+      - name: Créer la version GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "Keryx ${{ steps.version.outputs.version }}" --notes-file notes.md sbom.cdx.json
