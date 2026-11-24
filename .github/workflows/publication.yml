@@ -19,7 +19,7 @@ jobs:
       id-token: write        # signature sans clé (Sigstore) et attestations
       attestations: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Version cohérente (étiquette, keryx/__init__.py, web/package.json, CHANGELOG)
         id: version
