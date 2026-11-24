@@ -12,7 +12,7 @@ from .test_attachments import REGISTRY, png_with_exif, zip_bytes
 def _close_as_false_positive(a):
     a.post("/api/v1/tickets/ACME-1/status", json={"status": "en_evaluation"})
     a.post("/api/v1/tickets/ACME-1/qualification", json={"verdict": "faux_positif"})
-    assert a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif"}).status_code == 200
+    assert a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif", "reason": "Alerte sans risque, vérifiée par l analyste."}).status_code == 200
 
 
 def test_piece_refusee_sur_ticket_clos(app, db, world, alert):

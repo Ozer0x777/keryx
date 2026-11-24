@@ -635,7 +635,7 @@ def test_conservation_refusee_si_le_jeu_n_est_pas_celui_lu_par_keryx(wapp, db, w
     # ticket clos : la lecture reste possible, la conservation non (chaîne de possession figée)
     a.post("/api/v1/tickets/ACME-1/status", json={"status": "en_evaluation"})
     a.post("/api/v1/tickets/ACME-1/qualification", json={"verdict": "faux_positif"})
-    assert a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif"}).status_code == 200
+    assert a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif", "reason": "Alerte sans risque, vérifiée par l analyste."}).status_code == 200
     closed = fetch(a)
     assert closed.status_code == 200 and keep(a, closed.json()).status_code == 409
 

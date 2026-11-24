@@ -13,6 +13,10 @@ import Stamps from '../components/Stamps.jsx'
 import WazuhContext from '../components/WazuhContext.jsx'
 import { useVirusTotal, VirusTotalPanel, VtPieceButton, VtPieceState } from '../components/VirusTotal.jsx'
 import RichEditor from '../components/RichEditor.jsx'
+import {
+  draftKey, readDraft, UnsavedBadge, UnsavedProvider, UnsavedSummary, useLeaveGuard, useUnsaved,
+  useUnsavedRegistry, writeDraft,
+} from '../components/Unsaved.jsx'
 import { isoToUtcInput, untilUtc, utcClock, utcInputNow, utcInputToIso } from '../dates.js'
 import { queuePath } from '../queue.js'
 import {
@@ -35,6 +39,8 @@ function alertInDescription(t) {
 }
 
 // Étape suivante normale du cycle de vie : c'est le seul bouton primaire de l'en-tête, les autres sont secondaires.
+// Étapes qui demandent une confirmation explicite avant d'être franchies.
+const CONFIRMED_STEPS = ['en_reponse', 'cloture', 'retour_experience']
 const MAIN_NEXT = { nouveau: 'en_evaluation', en_evaluation: 'en_reponse', en_reponse: 'cloture', cloture: 'retour_experience' }
 
 // Échéance de l'en-tête : la date (UTC) et le temps restant ou dépassé, recalculé chaque minute.
@@ -85,6 +91,10 @@ export default function Ticket() {
     return out
   }
 
+  // Saisies non enregistrées : indicateur de l'en-tête et garde-fou de sortie (ADR-0024).
+  const unsaved = useUnsavedRegistry()
+  useLeaveGuard(unsaved.labels, ask)
+
   const status = t?.status
   const phase = useMemo(() => ({ status, open: isClient ? OPEN_FOR_CLIENT : OPEN_BY_STATUS[status] || null }), [status, isClient])
   const alertMerged = useMemo(() => (t ? alertInDescription(t) : false), [t])
@@ -124,14 +134,39 @@ export default function Ticket() {
 
   const setStatus = (s) => () => run(() => api(`/tickets/${enc}/status`, { method: 'POST', json: { status: s } }), tr('Statut : {s}.', { s: STATUS[s].label }))
   const transition = async (s) => {
-    if (s !== 'faux_positif') { trackHead(setStatus(s), tr('Statut : {s}.', { s: STATUS[s].label })); return }
-    // État terminal : la conséquence est écrite, l'échec (verdict manquant…) s'affiche dans le dialogue.
-    const r = await ask({
-      title: tr('Clore {ref} comme faux positif ?', { ref: t.ref }),
-      body: <p>{tr("« Faux positif » est un état final : le ticket est clos, il ne pourra plus changer de statut ni être requalifié. Le verdict « Faux positif » doit avoir été enregistré dans la qualification.")}</p>,
-      confirm: tr('Clore comme faux positif'), danger: true, action: setStatus(s),
-    })
-    if (r) trackHead(async () => {}, tr('Statut : {s}.', { s: STATUS[s].label }))
+    if (s === 'faux_positif') {
+      // État terminal : la conséquence est écrite, le motif est interne (jamais montré au client), l'échec s'affiche dans le dialogue.
+      const r = await ask({
+        title: tr('Clore {ref} comme faux positif ?', { ref: t.ref }),
+        body: <>
+          <p>{tr("« Faux positif » est un état final : le ticket est clos, il ne pourra plus changer de statut ni être requalifié. Le verdict « Faux positif » doit avoir été enregistré dans la qualification.")}</p>
+          <p>{tr("Le client {client} verra le changement de statut, mais pas le motif ci-dessous : il reste interne et figure au registre des actions.", { client: t.client })}</p>
+        </>,
+        fields: [{ name: 'reason', type: 'textarea', label: tr('Motif du faux positif (interne)'), minLength: 10, maxLength: 1000,
+          hint: tr("Pourquoi l'alerte n'est pas un incident : ce qui a été vérifié et la conclusion.") }],
+        confirm: tr('Clore comme faux positif'), danger: true,
+        action: ({ reason }) => run(() => api(`/tickets/${enc}/status`, { method: 'POST', json: { status: s, reason } }), tr('Statut : {s}.', { s: STATUS[s].label })),
+      })
+      if (r) trackHead(async () => {}, tr('Statut : {s}.', { s: STATUS[s].label }))
+      return
+    }
+    if (CONFIRMED_STEPS.includes(s)) {
+      // Étapes qui engagent le client ou ferment le dossier : confirmation explicite, qui nomme le client.
+      const r = await ask({
+        title: tr('Passer {ref} au statut « {s} » ?', { ref: t.ref, s: STATUS[s].label }),
+        body: <>
+          <p>{tr('Le client {client} voit ce changement de statut dans son portail.', { client: t.client })}</p>
+          {s === 'en_reponse' && <p>{tr("Le ticket passe en phase de réponse : confinement, éradication et rétablissement. Le verdict ne pourra plus changer.")}</p>}
+          {s === 'cloture' && <p>{tr("Le ticket sort de la phase de réponse : seule l'étape du retour d'expérience peut suivre, et un incident Élevé ou Critique reste en attente de ce retour d'expérience tant qu'il n'est pas rédigé.")}</p>}
+          {s === 'retour_experience' && <p>{tr("Le retour d'expérience est l'étape finale : le ticket sera figé.")}</p>}
+        </>,
+        confirm: tr('Passer au statut « {s} »', { s: STATUS[s].label }), danger: s !== 'en_reponse',
+        action: setStatus(s),
+      })
+      if (r) trackHead(async () => {}, tr('Statut : {s}.', { s: STATUS[s].label }))
+      return
+    }
+    trackHead(setStatus(s), tr('Statut : {s}.', { s: STATUS[s].label }))
   }
 
   return (
@@ -182,7 +217,7 @@ export default function Ticket() {
           </dl>
         )}
       </header>
-      {isTeam && <div className="head-status"><ActionStatus state={headStatus} /></div>}
+      {isTeam && <div className="head-status"><UnsavedSummary labels={unsaved.labels} /><ActionStatus state={headStatus} /></div>}
       {/* Zone live conservée pour les lecteurs d'écran ; le retour visible est au bouton de chaque section. */}
       <p className="sr-only" role="status" aria-live="polite">{notice}</p>
       {dialog}
@@ -190,6 +225,7 @@ export default function Ticket() {
 
       {t.crisis && <p className="banner danger" role="status">{tr("MODE CRISE actif sur ce ticket : toute décision et toute action sont consignées dans le registre de crise.")}</p>}
       <PhaseContext.Provider value={phase}>
+      <UnsavedProvider value={unsaved.report}>
       <div className="ticket-layout">
         <div className="ticket-main">
           {isTeam && <Crisis t={t} enc={enc} isManager={me.role === 'manager'} open={open} onChange={load} />}
@@ -200,7 +236,7 @@ export default function Ticket() {
           {vt && <VirusTotalPanel t={t} enc={enc} vt={vt} />}
           {isTeam && <Synthese t={t} enc={enc} run={run} onImage={uploadImage} templates={templates('synthese')} />}
           <Events t={t} />
-          <Comments t={t} enc={enc} isClient={isClient} run={run} onImage={uploadImage} templates={templates('commentaire')} />
+          <Comments t={t} enc={enc} isClient={isClient} me={me} run={run} onImage={uploadImage} templates={templates('commentaire')} />
         </div>
         {isTeam && (
           <aside className="ticket-aside" aria-label={tr("Pilotage du ticket")}>
@@ -213,6 +249,7 @@ export default function Ticket() {
           </aside>
         )}
       </div>
+      </UnsavedProvider>
       </PhaseContext.Provider>
     </>
   )
@@ -246,8 +283,10 @@ function Description({ t, enc, canEdit, run, onImage, alertMerged }) {
   const [showHistory, setShowHistory] = useState(false)
   const [html, setHtml] = useState(t.body_html)
   const isTeam = t.raw_alerts !== undefined
+  const dirty = editing && html !== t.body_html
+  useUnsaved('description', tr('description'), dirty)
   return (
-    <Section id="description" title={tr("Description")} tools={(isTeam || (canEdit && !editing)) && <>
+    <Section id="description" title={tr("Description")} summary={<UnsavedBadge show={dirty} />} tools={(isTeam || (canEdit && !editing)) && <>
       {isTeam && <button type="button" aria-expanded={showHistory} onClick={() => setShowHistory(!showHistory)}>{showHistory ? tr("Masquer l'historique") : tr('Historique')}</button>}
       {canEdit && !editing && <button type="button" onClick={() => { setHtml(t.body_html); setEditing(true) }}>{tr("Modifier")}</button>}</>}>
       {showHistory && <BodyHistory enc={enc} current={t.body_html} />}
@@ -443,10 +482,15 @@ function Synthese({ t, enc, run, onImage, templates }) {
   })
   const [status, track] = useActionStatus()
   const editable = !['faux_positif', 'retour_experience'].includes(t.status)
-  const save = () => track(() => run(() => api(`/tickets/${enc}/synthese`, {
-    method: 'PUT',
-    json: { ...v, compromission_initiale: utcInputToIso(v.compromission_initiale) },
-  }), tr('Synthèse enregistrée.')))
+  const [saved, setSaved] = useState(v)   // dernier état enregistré
+  const dirty = editable && JSON.stringify(v) !== JSON.stringify(saved)
+  useUnsaved('synthese', tr('synthèse'), dirty)
+  const save = async () => {
+    if (await track(() => run(() => api(`/tickets/${enc}/synthese`, {
+      method: 'PUT',
+      json: { ...v, compromission_initiale: utcInputToIso(v.compromission_initiale) },
+    }), tr('Synthèse enregistrée.')))) setSaved(v)
+  }
   const rexNote = t.rex_required ? <span className="pill warn">{tr("REX obligatoire")}</span> : null
   if (!editable) {
     return (
@@ -459,7 +503,7 @@ function Synthese({ t, enc, run, onImage, templates }) {
     )
   }
   return (
-    <Section id="synthese" title={tr("Synthèse de l'incident et retour d'expérience")} summary={rexNote}>
+    <Section id="synthese" title={tr("Synthèse de l'incident et retour d'expérience")} summary={<>{rexNote}<UnsavedBadge show={dirty} /></>}>
       <p className="muted small">{tr("PRIS VI.5.3.e · ISO 27035")}</p>
       <label>{tr("Date de compromission initiale (UTC)")}
         <input type="datetime-local" value={v.compromission_initiale} onChange={(e) => setV({ ...v, compromission_initiale: e.target.value })} />
@@ -501,14 +545,35 @@ function Events({ t }) {
   )
 }
 
-function Comments({ t, enc, isClient, run, onImage, templates }) {
-  const [html, setHtml] = useState('')
+function Comments({ t, enc, isClient, me, run, onImage, templates }) {
+  // Brouillon de la zone de saisie : sessionStorage de l'onglet seulement (ADR-0024), restauré au retour sur la fiche.
+  const key = draftKey(me.username, t.ref)
+  const [html, setHtmlState] = useState(() => readDraft(key))
+  const [restored, setRestored] = useState(() => !!readDraft(key))
+  const setHtml = (v) => { setHtmlState(v); writeDraft(key, v); setRestored(false) }
   const [visible, setVisible] = useState(isClient)
   const [status, track, setStatus] = useActionStatus()
   const [ask, dialog] = useConfirm()
+  const dirty = !!html.trim()
+  useUnsaved('commentaire', tr('commentaire'), dirty)
   const post = async () => {
     if (!html.trim()) { setStatus({ error: tr('Le commentaire est vide.') }); return }
-    if (await track(() => run(() => api(`/tickets/${enc}/comments`, { method: 'POST', json: { body_html: html, visible_client: visible } }), tr('Commentaire publié.')), tr('Publié à {h}', { h: utcClock() }))) setHtml('')
+    const send = () => run(() => api(`/tickets/${enc}/comments`, { method: 'POST', json: { body_html: html, visible_client: visible } }), tr('Commentaire publié.'))
+    let ok
+    if (!isClient && visible) {
+      // Un commentaire visible par le client ne peut ni être modifié ni être retiré : la confirmation nomme le client.
+      const r = await ask({
+        title: tr('Publier ce commentaire au client {client} ?', { client: t.client }),
+        body: <p>{tr("Ce commentaire sera lu par les utilisateurs du client {client}. Il ne pourra plus être modifié ni retiré. Pour un échange interne, décocher « Visible par le client ».", { client: t.client })}</p>,
+        confirm: tr('Publier au client {client}', { client: t.client }),
+        action: send,
+      })
+      ok = !!r
+      if (ok) track(async () => {}, tr('Publié à {h}', { h: utcClock() }))
+    } else {
+      ok = await track(send, tr('Publié à {h}', { h: utcClock() }))
+    }
+    if (ok) { writeDraft(key, ''); setHtmlState(''); setRestored(false) }
   }
   const saveTemplate = async () => {
     const r = await ask({
@@ -529,7 +594,8 @@ function Comments({ t, enc, isClient, run, onImage, templates }) {
           <Html html={c.body_html} />
         </div>
       ))}
-      <h3>{isClient ? tr('Votre réponse') : tr('Nouveau commentaire')}</h3>
+      <h3>{isClient ? tr('Votre réponse') : tr('Nouveau commentaire')} <UnsavedBadge show={dirty} /></h3>
+      {restored && <p className="muted small" role="status">{tr("Brouillon retrouvé : il n'a pas été publié. Il reste dans cet onglet seulement.")}</p>}
       <RichEditor value={html} onChange={setHtml} label={tr("Nouveau commentaire")} templates={templates} onImage={onImage} />
       <div className="row gap between">
         {!isClient ? <label className="check"><input type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)} /> {tr("Visible par le client")}</label> : <span />}
@@ -549,6 +615,10 @@ function Qualification({ t, enc, run, open }) {
   const [v, setV] = useState({ verdict: t.verdict || '', dommages: t.dommages || '', importance: t.importance, impact: t.impact || '', risque: t.risque || '', tlp: t.tlp })
   const verdictLocked = !['nouveau', 'en_evaluation'].includes(t.status)
   const [status, track] = useActionStatus()
+  // Modifié = différent de ce que la fiche affiche (rechargée après un enregistrement).
+  const dirty = open && (v.verdict !== (t.verdict || '') || v.dommages !== (t.dommages || '') || v.importance !== t.importance
+    || v.impact !== (t.impact || '') || v.risque !== (t.risque || '') || v.tlp !== t.tlp)
+  useUnsaved('qualification', tr('qualification'), dirty)
   const save = () => {
     const json = { importance: v.importance, impact: v.impact, risque: v.risque, tlp: v.tlp }
     if (v.verdict && !verdictLocked) json.verdict = v.verdict
@@ -556,7 +626,7 @@ function Qualification({ t, enc, run, open }) {
     track(() => run(() => api(`/tickets/${enc}/qualification`, { method: 'POST', json }), tr('Qualification enregistrée.')))
   }
   return (
-    <Section id="qualification" title={tr("Qualification")} summary={t.verdict ? VERDICTS[t.verdict] : <span className="pill warn">{tr("À qualifier")}</span>}>
+    <Section id="qualification" title={tr("Qualification")} summary={<>{t.verdict ? VERDICTS[t.verdict] : <span className="pill warn">{tr("À qualifier")}</span>}<UnsavedBadge show={dirty} /></>}>
       <label>{tr("Verdict")}
         <select value={v.verdict} disabled={!open || verdictLocked} onChange={(e) => setV({ ...v, verdict: e.target.value })}>
           <option value="">{tr("À qualifier")}</option>

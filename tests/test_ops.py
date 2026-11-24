@@ -98,7 +98,7 @@ def test_retention_ne_purge_que_les_tickets_clos_en_fin_de_duree(app, db, world,
     a = login(app, db, "analyst_acme")
     a.post("/api/v1/tickets/ACME-1/status", json={"status": "en_evaluation"})
     a.post("/api/v1/tickets/ACME-1/qualification", json={"verdict": "faux_positif"})
-    a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif"})
+    a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif", "reason": "Alerte sans risque, vérifiée par l analyste."})
     old = utcnow() - timedelta(days=30 * 13)
     for ra in db.scalars(select(RawAlert)).all():
         ra.received_at = old
@@ -133,7 +133,7 @@ def test_duree_de_retention_par_defaut_reglable_par_l_admin(app, db, world, aler
     a = login(app, db, "analyst_acme")
     a.post("/api/v1/tickets/ACME-1/status", json={"status": "en_evaluation"})
     a.post("/api/v1/tickets/ACME-1/qualification", json={"verdict": "faux_positif"})
-    a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif"})
+    a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif", "reason": "Alerte sans risque, vérifiée par l analyste."})
     old = utcnow() - timedelta(days=30 * 13)               # 13 mois : au-delà de 6, en deçà de 24
     for ra in db.scalars(select(RawAlert)).all():
         ra.received_at = old

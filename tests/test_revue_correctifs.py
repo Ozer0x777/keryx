@@ -100,7 +100,7 @@ def test_retention_exige_un_ticket_clos_depuis_plus_longtemps_que_la_duree(app, 
     a = login(app, db, "analyst_acme")
     a.post("/api/v1/tickets/ACME-1/status", json={"status": "en_evaluation"})
     a.post("/api/v1/tickets/ACME-1/qualification", json={"verdict": "faux_positif"})
-    a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif"})
+    a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif", "reason": "Alerte sans risque, vérifiée par l analyste."})
     old = utcnow() - timedelta(days=30 * 13)
     for ra in db.scalars(select(RawAlert)).all():
         ra.received_at = old                       # alerte ancienne…
@@ -133,5 +133,5 @@ def test_crise_refusee_sur_ticket_clos_et_desactivee_par_la_fusion(app, db, worl
     entry = m.get("/api/v1/tickets/ACME-1/crisis").json()["items"][0]
     m.post("/api/v1/tickets/ACME-1/status", json={"status": "en_evaluation"})
     m.post("/api/v1/tickets/ACME-1/qualification", json={"verdict": "faux_positif"})
-    m.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif"})
+    m.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif", "reason": "Alerte sans risque, vérifiée par l analyste."})
     assert m.patch(f"/api/v1/tickets/ACME-1/crisis/entries/{entry['id']}", json={"done": True}).status_code == 409

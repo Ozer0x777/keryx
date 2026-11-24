@@ -24,7 +24,7 @@ def test_tableau_de_bord_cloisonne_et_chiffres(app, db, world, alert):
     a.post("/api/v1/tickets/ACME-1/assign", json={"username": "analyst_acme"})
     a.post("/api/v1/tickets/ACME-1/status", json={"status": "en_evaluation"})
     a.post("/api/v1/tickets/ACME-1/qualification", json={"verdict": "faux_positif"})
-    a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif"})
+    a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif", "reason": "Alerte sans risque, vérifiée par l analyste."})
     d = a.get("/api/v1/dashboard").json()
     assert d["clients"] == ["ACME"]                      # l'analyste ne voit pas DELTA
     assert d["totals"]["created"] == 2 and d["totals"]["closed"] == 1 and d["totals"]["open"] == 1

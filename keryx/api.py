@@ -179,8 +179,12 @@ class QualificationIn(BaseModel):
     tlp: str | None = None
 
 
+MIN_REASON = 10   # longueur minimale du motif d'un faux positif
+
+
 class StatusIn(BaseModel):
     status: str
+    reason: str | None = Field(default=None, max_length=1000)   # motif interne, exigé pour « faux_positif »
 
 
 class CommentIn(BaseModel):
@@ -891,11 +895,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             check_transition(t.status, body.status, t.verdict, t.rex_required, t.rex_html)
         except TransitionError as exc:
             raise HTTPException(409, str(exc))
+        reason = (body.reason or "").strip()
+        if body.status == "faux_positif" and len(reason) < MIN_REASON:
+            raise HTTPException(422, f"Un motif d'au moins {MIN_REASON} caractères est obligatoire pour clore en faux positif.")
         old, t.status = t.status, body.status
         t.updated_at = utcnow()
         if body.status in ("faux_positif", "cloture"):
             t.closed_at = t.updated_at
+        # Le client voit le changement de statut, jamais le motif : il est consigné à part, en interne.
         event(db, t, user, "statut", {"from": old, "to": body.status}, visible_client=True)
+        if body.status == "faux_positif":
+            event(db, t, user, "motif_faux_positif", {"motif": reason})
         commit(db)
         return {"ref": t.ref, "status": t.status, "rex_required": t.rex_required}
 

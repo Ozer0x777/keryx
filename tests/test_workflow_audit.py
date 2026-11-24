@@ -42,9 +42,21 @@ def test_faux_positif(app, db, world, alert):
     ingest(app, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE))
     a = login(app, db, "analyst_acme")
     a.post("/api/v1/tickets/ACME-1/status", json={"status": "en_evaluation"})
-    assert a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif"}).status_code == 409
+    assert a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif", "reason": "Alerte sans risque, vérifiée par l analyste."}).status_code == 409
     a.post("/api/v1/tickets/ACME-1/qualification", json={"verdict": "faux_positif"})
-    assert a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif"}).status_code == 200
+    # Le motif est obligatoire (422), 10 caractères au moins ; le ticket reste ouvert tant qu'il manque
+    assert a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif"}).status_code == 422
+    assert a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif", "reason": "   court  "}).status_code == 422
+    assert a.get("/api/v1/tickets/ACME-1").json()["status"] == "en_evaluation"
+    motif = "Scan de vulnérabilités planifié par le client."
+    assert a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif", "reason": motif}).status_code == 200
+    # Interne : visible de l'équipe, jamais du client (ni dans le registre des actions, ni dans le statut)
+    equipe = a.get("/api/v1/tickets/ACME-1").json()["events"]
+    assert any(e["action"] == "motif_faux_positif" and e["details"]["motif"] == motif for e in equipe)
+    c = login(app, db, "client_acme")
+    vu = c.get("/api/v1/tickets/ACME-1").json()
+    assert not any(e["action"] == "motif_faux_positif" for e in vu["events"])
+    assert "Scan de vulnérabilités" not in str(vu)
 
 
 def test_transition_interdite(app, db, world, alert):

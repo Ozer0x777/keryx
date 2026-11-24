@@ -181,7 +181,7 @@ def test_ticket_clos_non_requalifiable(app, db, world, alert):
     a = login(app, db, "analyst_acme")
     a.post("/api/v1/tickets/ACME-1/status", json={"status": "en_evaluation"})
     a.post("/api/v1/tickets/ACME-1/qualification", json={"verdict": "faux_positif"})
-    a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif"})
+    a.post("/api/v1/tickets/ACME-1/status", json={"status": "faux_positif", "reason": "Alerte sans risque, vérifiée par l analyste."})
     assert a.post("/api/v1/tickets/ACME-1/qualification",
                   json={"verdict": "vrai_positif_avere"}).status_code == 409
 

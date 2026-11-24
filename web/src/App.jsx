@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { api } from './api.js'
 import { t } from './i18n.js'
 import Layout from './components/Layout.jsx'
+import { clearDrafts } from './components/Unsaved.jsx'
 import Admin from './pages/Admin.jsx'
 import AuditPage from './pages/AuditPage.jsx'
 import Dashboard from './pages/Dashboard.jsx'
@@ -32,7 +33,7 @@ export default function App() {
 
   useEffect(() => { refresh() }, [refresh])
   useEffect(() => {
-    const onUnauthorized = () => { setMe(null); navigate('/connexion') }
+    const onUnauthorized = () => { clearDrafts(); setMe(null); navigate('/connexion') }
     window.addEventListener('keryx:unauthorized', onUnauthorized)
     return () => window.removeEventListener('keryx:unauthorized', onUnauthorized)
   }, [navigate])
@@ -40,6 +41,7 @@ export default function App() {
   const logout = async () => {
     let target = null
     try { target = (await api('/auth/logout', { method: 'POST' })).redirect } catch { /* déjà déconnecté */ }
+    clearDrafts()   // les brouillons de commentaires ne survivent pas à la session
     setMe(null)
     if (target) { window.location.assign(target); return }  // déconnexion unique : le fournisseur d'identité ferme aussi sa session
     navigate('/connexion')
