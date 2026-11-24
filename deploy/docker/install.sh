@@ -8,7 +8,7 @@
 #
 # Variables lues (première installation) :
 #   KERYX_HTTPS_MODE   acme | fourni | local                       (défaut : local)
-#   KERYX_DOMAIN       nom de domaine                              (défaut : localhost en mode local)
+#   KERYX_DOMAIN       nom de domaine ou adresse IPv4 (IP : modes local et fourni, pas acme) (défaut : localhost en mode local)
 #   KERYX_PROFILES     antivirus,sso,objets,sauvegarde             (défaut : aucun)
 #   KERYX_SSO_DOMAIN   nom de domaine de Keycloak, profil sso      (défaut : sso.localhost en mode local)
 #   KERYX_ACME_CA      adresse de l'annuaire ACME, mode acme       (obligatoire, pas de valeur par défaut)
@@ -127,7 +127,7 @@ done
 NOUVEAU=1
 if [ -f "$ENVF" ]; then
     NOUVEAU=0
-    titre "Fichier .env existant : il est conservé tel quel"
+    titre "Fichier .env existant : il est conservé tel quel, les réponses données en variables ne le modifient pas"
     for paire in "KERYX_DOMAIN=$D_DOMAINE" "KERYX_HTTPS_MODE=$D_MODE" "KERYX_SSO_DOMAIN=$D_SSO" "KERYX_HTTP_PORT=$D_HTTP" \
                  "KERYX_HTTPS_PORT=$D_HTTPS" "KERYX_ACME_CA=$D_ACME_CA"; do
         v=${paire%%=*}; _donne=${paire#*=}; _garde=$(env_lire "$v")
@@ -150,7 +150,7 @@ else
     case "$MODE" in acme|fourni|local) ;; *) erreur "mode HTTPS inconnu : $MODE (acme, fourni ou local)." ;; esac
     DOMAINE=$D_DOMAINE
     if [ "$MODE" = local ]; then
-        demander DOMAINE "Nom de domaine de Keryx" localhost
+        demander DOMAINE "Nom de domaine ou adresse IP de Keryx" localhost
     else
         demander DOMAINE "Nom de domaine de Keryx (ex. keryx.exemple.eu)" ""
         [ -n "$DOMAINE" ] || erreur "un nom de domaine est requis en mode $MODE (KERYX_DOMAIN)."
@@ -174,6 +174,13 @@ else
 fi
 
 case "$DOMAINE" in ""|*[!A-Za-z0-9.-]*) erreur "nom de domaine invalide : « $DOMAINE »." ;; esac
+# Adresse IPv4 : accès sans nom de domaine. Pas de certificat ACME automatique pour une adresse IP ici ; en mode
+# fourni, le certificat doit porter cette adresse dans ses noms alternatifs (subjectAltName).
+case "$DOMAINE" in
+    *[!0-9.]*) ;;
+    *) [ "$MODE" != acme ] || erreur "le mode acme demande un nom de domaine, pas une adresse IP ($DOMAINE). Utiliser le mode local ou fourni."
+       dire "   Accès par adresse IP ($DOMAINE) : le certificat est vérifié contre cette adresse, pas contre un nom." ;;
+esac
 for p in $(printf '%s' "$PROFILS" | tr ',' ' '); do
     case " $PROFILS_CONNUS " in *" $p "*) ;; *) erreur "profil inconnu : $p (connus : $PROFILS_CONNUS)." ;; esac
 done

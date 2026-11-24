@@ -18,7 +18,7 @@ Le script pose quatre questions, puis construit, démarre, attend que Keryx rép
 | Question | Réponses |
 |---|---|
 | Mode HTTPS | `acme` : certificat obtenu et renouvelé automatiquement (il faut donner l'adresse de l'annuaire ACME de l'autorité choisie, il n'y a pas d'autorité par défaut). `fourni` : votre certificat, déposé avant dans `certs/keryx.crt` (chaîne complète) et `certs/keryx.key`. `local` : essai sur cette machine, certificat interne. |
-| Nom de domaine | Celui tapé dans le navigateur et dans Wazuh. `localhost` en mode `local`. |
+| Nom de domaine | Celui tapé dans le navigateur et dans Wazuh. `localhost` en mode `local`. Une adresse IPv4 est acceptée en mode `local` ou `fourni` (pas `acme`) : elle est vérifiée comme un nom, donc en mode `fourni` le certificat doit la porter dans ses noms alternatifs. |
 | Profils | Aucun, ou une liste parmi `antivirus` (ClamAV), `sso` (Keycloak), `objets` (Garage), `sauvegarde` (sauvegarde chaque jour). |
 | Sorties réseau de Keryx | `non` par défaut. `oui` s'il doit envoyer des courriels, horodater, lire un indexeur Wazuh, exporter son audit en syslog ou interroger VirusTotal. |
 
@@ -50,7 +50,7 @@ Les commandes se lancent dans `deploy/docker`.
 | État | `docker compose ps` |
 | Journaux | `docker compose logs -f keryx` (ou `caddy`, `postgres`…) |
 | Commande d'administration de Keryx | `docker compose exec keryx python -m keryx.cli verify-audit` |
-| Changer un réglage | modifier `.env`, puis `docker compose up -d` |
+| Changer un réglage | modifier `.env`, puis `docker compose up -d`. Relancer `./install.sh` ne change rien aux réglages d'un `.env` existant : une réponse donnée en variable (`KERYX_DOMAIN=…`) est signalée comme ignorée |
 | Ajouter un profil | l'ajouter à `COMPOSE_PROFILES` dans `.env`, puis `./install.sh` |
 | Mettre à jour Keryx | `git pull`, puis `./install.sh` (reconstruit, applique les migrations au démarrage) |
 | Arrêter | `./uninstall.sh` : conteneurs et réseaux retirés, **volumes et `.env` conservés** |

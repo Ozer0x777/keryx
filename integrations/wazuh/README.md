@@ -38,6 +38,10 @@ sudo chown root:wazuh /var/ossec/integrations/custom-keryx /var/ossec/integratio
 </integration>
 ```
 
+Dans un **cluster Wazuh**, ce bloc `<integration>`, le script et son wrapper vont sur **chaque nœud qui analyse des
+agents** (chaque nœud où les alertes sont produites), pas seulement sur le maître : un nœud sans le bloc n'envoie rien à
+Keryx. La configuration de `ossec.conf` n'est pas synchronisée entre nœuds par le cluster.
+
 `<level>7</level>` : seules les alertes de niveau 7 ou plus quittent le manager (même seuil que Keryx).
 
 Si le certificat de Keryx est signé par une autorité privée (mode `local` ou `fourni` du déploiement Docker), le script

@@ -149,6 +149,12 @@ class LoginIn(BaseModel):
     password: str = Field(max_length=256)
     _u = field_validator("username")(_no_control_chars)
 
+    @field_validator("username", mode="before")
+    @classmethod
+    def _strip_username(cls, v):
+        # Un espace collé en début ou fin d'identifiant ne doit pas faire échouer la connexion.
+        return v.strip() if isinstance(v, str) else v
+
 
 class EnrollStartIn(BaseModel):
     activation_code: str = Field(min_length=8, max_length=64)

@@ -81,6 +81,9 @@ def _main(argv: list[str] | None = None) -> int:
     u = sub.add_parser("add-user")
     u.add_argument("username"); u.add_argument("display_name"); u.add_argument("role", choices=ROLES)
     u.add_argument("--clients", default="", help="clés clients séparées par des virgules")
+    u.add_argument("--password-stdin", action="store_true",
+                   help="lit le mot de passe sur l'entrée standard (sans terminal, par ex. depuis un script ou docker exec). "
+                        "Sinon : variable d'environnement KERYX_NEW_PASSWORD, ou saisie interactive")
     u.add_argument("--activation", action="store_true",
                    help="compte à activer par son titulaire : le mot de passe est temporaire, un code d'activation "
                         "(usage unique, 72 h) est affiché une fois, le TOTP est enrôlé à la première connexion")
@@ -123,7 +126,19 @@ def _main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.cmd == "add-user":
-        password = os.environ.get("KERYX_NEW_PASSWORD") or getpass.getpass("Mot de passe (12 caractères min.) : ")
+        if args.password_stdin:
+            password = sys.stdin.readline().rstrip("\r\n")
+        else:
+            password = os.environ.get("KERYX_NEW_PASSWORD") or ""
+            if not password:
+                if not sys.stdin.isatty():
+                    print("Aucun terminal pour saisir le mot de passe : utilisez la variable d'environnement "
+                          "KERYX_NEW_PASSWORD ou l'option --password-stdin.", file=sys.stderr)
+                    return 2
+                password = getpass.getpass("Mot de passe (12 caractères min.) : ")
+        if not password:
+            print("Mot de passe vide.", file=sys.stderr)
+            return 2
         tenants = []
         for key in filter(None, (x.strip().upper() for x in args.clients.split(","))):
             t = db.scalars(select(Tenant).where(Tenant.key == key)).first()

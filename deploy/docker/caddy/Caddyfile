@@ -3,6 +3,8 @@
 {
 	admin off # pas d'API d'administration : la configuration ne change qu'au redémarrage
 	persist_config off
+	# Accès par adresse IP : un navigateur n'envoie pas de SNI pour une adresse IP, Caddy prend alors ce nom.
+	default_sni {$KERYX_DOMAIN:localhost}
 	http_port {$KERYX_HTTP_PORT:80}
 	https_port {$KERYX_HTTPS_PORT:443}
 	# Redirections HTTP -> HTTPS écrites plus bas : celles de Caddy supposent le port 443 côté public.

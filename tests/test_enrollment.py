@@ -112,3 +112,32 @@ def test_premier_admin_cree_par_la_cli_avec_code_d_activation(app, db, settings,
     done = c.post("/api/v1/auth/enroll/finish", json={"code": code, "new_password": "un-autre-mot-de-passe"})
     assert done.status_code == 200 and done.json()["role"] == "admin" and len(done.json()["recovery_codes"]) == 10
     assert TestClient(app).post("/api/v1/auth/login", json={"username": "admin", "password": TEMP}).status_code == 401
+
+
+def test_add_user_sans_terminal_message_clair_et_mot_de_passe_sur_stdin(app, db, settings, monkeypatch, capsys):
+    """Sans terminal ni KERYX_NEW_PASSWORD : erreur explicite (pas d'EOFError). --password-stdin lit l'entrée."""
+    import io
+    from keryx.cli import main as cli_main
+    monkeypatch.setenv("KERYX_DATABASE_URL", settings.database_url)
+    monkeypatch.setenv("KERYX_SECRET_KEY", settings.secret_key)
+    monkeypatch.delenv("KERYX_NEW_PASSWORD", raising=False)
+    monkeypatch.setattr("sys.stdin", io.StringIO(""))
+    assert cli_main(["add-user", "stdin1", "Test", "admin", "--activation"]) == 2
+    err = capsys.readouterr().err
+    assert "KERYX_NEW_PASSWORD" in err and "--password-stdin" in err
+    monkeypatch.setattr("sys.stdin", io.StringIO(TEMP + "\n"))
+    assert cli_main(["add-user", "stdin1", "Test", "admin", "--activation", "--password-stdin"]) == 0
+    db.rollback()
+    assert db.scalars(select(User).where(User.username == "stdin1")).one().role == "admin"
+    monkeypatch.setattr("sys.stdin", io.StringIO("\n"))
+    assert cli_main(["add-user", "stdin2", "Test", "admin", "--activation", "--password-stdin"]) == 2
+
+
+def test_identifiant_de_connexion_sans_espaces_autour(app, db, settings, monkeypatch, capsys):
+    from keryx.cli import main as cli_main
+    monkeypatch.setenv("KERYX_DATABASE_URL", settings.database_url)
+    monkeypatch.setenv("KERYX_SECRET_KEY", settings.secret_key)
+    monkeypatch.setenv("KERYX_NEW_PASSWORD", TEMP)
+    assert cli_main(["add-user", "espace", "Test", "admin", "--activation"]) == 0
+    c = TestClient(app)
+    assert c.post("/api/v1/auth/login", json={"username": "  espace ", "password": TEMP}).json()["next"] == "enroll"
