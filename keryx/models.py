@@ -85,6 +85,8 @@ class Tenant(Base):
     wazuh_manager_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
     wazuh_agents_polled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     wazuh_agents_error: Mapped[str | None] = mapped_column(String(300), nullable=True)   # dernier échec du relevé, vide si réussi
+    # Le dernier relevé a pu lire le dernier événement de chaque agent dans l'indexeur (sinon « silencieux » n'a pas de sens).
+    wazuh_events_ok: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -378,6 +380,7 @@ class WazuhAgent(Base):
     registered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_event_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)   # indexeur, tous niveaux
     status_since: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)          # vu par Keryx
+    missed: Mapped[int] = mapped_column(Integer, default=0, server_default="0")   # relevés consécutifs sans cet agent
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -390,6 +393,9 @@ class WazuhAgentEvent(Base):
     agent_id: Mapped[str] = mapped_column(String(16), index=True)
     status: Mapped[str] = mapped_column(String(20))      # nouvel état ; « removed » : agent retiré de Wazuh
     previous: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Manager d'origine (adresse de son API) : les numéros d'agent ne sont uniques que par manager ; l'historique d'un
+    # autre manager n'est jamais mêlé à celui du manager courant.
+    source: Mapped[str] = mapped_column(String(300), default="")
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 

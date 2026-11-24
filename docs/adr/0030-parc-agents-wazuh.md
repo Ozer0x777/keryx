@@ -14,11 +14,19 @@
      Même autorité et même contrôle TLS que l'indexeur. Compte de lecture chiffré, jamais renvoyé ; changer
      l'adresse ou la confiance TLS l'efface.
   3. **Cloisonnement** (PDIS IV.3.8.g) : un manager qui sert plusieurs clients exige un groupe Wazuh par client,
-     différent pour chacun ; Keryx demande ce groupe à l'API et **écarte lui-même** tout agent hors du groupe, même si
-     le manager le renvoie. L'agent `000` (le manager) est ignoré.
+     différent pour chacun et jamais `default` (qui contient tous les agents enregistrés sans groupe). Keryx demande
+     ce groupe à l'API et **écarte lui-même** tout agent hors du groupe, et tout agent qui porte aussi le groupe d'un
+     autre client du même manager (un agent Wazuh peut appartenir à plusieurs groupes). L'agent `000` (le manager)
+     est ignoré. Changer ou retirer l'adresse de l'API efface l'état courant des agents du client : les numéros
+     d'agent ne sont uniques que par manager. L'historique reste, rattaché à son manager d'origine (colonne
+     `source`), et n'est jamais mêlé à celui d'un autre manager.
   4. **Relevé** toutes les `KERYX_WAZUH_AGENTS_POLL_S` secondes (300 par défaut, 0 = à la demande seulement), et à la
      demande par l'équipe (deux fois par minute au plus et par client).
   5. **Historique** : une ligne par changement d'état constaté, **conservée sans limite** (décision du mainteneur).
+     Un agent absent d'un relevé n'est déclaré retiré qu'au deuxième relevé consécutif sans lui (une suppression
+     dans Wazuh pendant un relevé paginé décale les pages) ; un numéro vu deux fois dans un relevé n'est compté
+     qu'une fois. Le dernier événement est demandé à l'indexeur par lots de 5 000 agents ; « silencieux » n'est
+     proposé que si le dernier relevé a pu lire l'indexeur.
      À la première observation, « depuis quand » vient du dernier contact (agent déconnecté) ou de l'enregistrement
      (jamais connecté). Disponibilité = temps actif sur le temps observé ; un agent jamais connecté ou en attente
      n'est pas compté (pas déployé n'est pas en panne).
@@ -26,7 +34,8 @@
      versions mineures d'écart ou plus, « plus récente que le manager » signalée aussi. Ces seuils sont un choix du
      projet.
   7. **Pas de ticket automatique** (décision du mainteneur) : l'équipe ouvre à la main un ticket « agent
-     déconnecté », qui passe par l'ingestion ordinaire (dédoublonnage, notifications, audit ; niveau 10).
+     déconnecté », qui passe par l'ingestion ordinaire (dédoublonnage, notifications envoyées au client, audit ;
+     niveau 10, jamais sous le seuil d'ingestion de l'instance).
   8. **Le client voit son parc** (décision du mainteneur), sans les éléments internes : ni nœud du manager, ni tickets,
      ni le détail technique d'un relevé en échec (seulement qu'il a échoué). L'Admin règle l'accès mais ne lit pas
      le parc.

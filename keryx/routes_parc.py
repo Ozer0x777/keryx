@@ -14,6 +14,8 @@ import threading
 from datetime import timedelta
 
 from fastapi import Depends, HTTPException, Response
+from fastapi.responses import JSONResponse
+from starlette.background import BackgroundTask
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
@@ -23,6 +25,7 @@ from . import wazuh_context as wz
 from .ids import as_utc, rfc3339, utcnow
 from .ingest import AlertRejected, ingest_alert
 from .models import Tenant, Ticket, User, WazuhAgent, WazuhAgentEvent
+from .notify import send_pending
 
 log = logging.getLogger("keryx.parc")
 OPEN = ("nouveau", "en_evaluation", "en_reponse")
@@ -35,13 +38,16 @@ def tenant_lock(tenant_id: str) -> threading.Lock:
         return _locks.setdefault(tenant_id, threading.Lock())
 
 
-def api_config(settings, box, tenant: Tenant) -> wa.ApiConfig:
+def api_config(settings, box, tenant: Tenant, db: DbSession) -> wa.ApiConfig:
     endpoint = wz.parse_indexer_url(tenant.wazuh_api_url, settings.wazuh_allow_loopback)
+    # Groupes des autres clients du même manager : leurs agents sont écartés, même s'ils portent aussi le groupe de ce client.
+    others = tuple(g for g, in db.execute(select(Tenant.wazuh_api_group).where(
+        Tenant.id != tenant.id, Tenant.wazuh_api_url == tenant.wazuh_api_url, Tenant.wazuh_api_group.is_not(None))))
     return wa.ApiConfig(endpoint=endpoint,
                         username=box.decrypt(tenant.wazuh_api_user, f"wazuh_api_user:{tenant.id}"),
                         password=box.decrypt(tenant.wazuh_api_password, f"wazuh_api_password:{tenant.id}"),
                         tls_verify=tenant.wazuh_tls_verify, ca_pem=tenant.wazuh_ca_pem, group=tenant.wazuh_api_group,
-                        allow_loopback=settings.wazuh_allow_loopback)
+                        allow_loopback=settings.wazuh_allow_loopback, excluded_groups=others)
 
 
 def indexer_config(settings, box, tenant: Tenant) -> wz.IndexerConfig | None:
@@ -61,7 +67,7 @@ def refresh_tenant(db: DbSession, settings, box, tenant: Tenant) -> dict:
     Un échec est enregistré sur le client (message lisible) et renvoyé ; il ne lève pas."""
     now = utcnow()
     try:
-        cfg = api_config(settings, box, tenant)
+        cfg = api_config(settings, box, tenant, db)
     except wz.ConfigError as exc:
         tenant.wazuh_agents_error = f"Réglage refusé : {exc}"[:300]
         return {"erreur": tenant.wazuh_agents_error}
@@ -78,11 +84,11 @@ def refresh_tenant(db: DbSession, settings, box, tenant: Tenant) -> dict:
     try:
         icfg = indexer_config(settings, box, tenant)
         if icfg is not None:
-            events = wa.last_events(icfg, [a["agent_id"] for a in snap.agents][:5000])
+            events = wa.last_events(icfg, [a["agent_id"] for a in snap.agents])
     except (wz.IndexerError, wz.ConfigError) as exc:
         log.warning("Parc Wazuh : dernier événement non lu pour %s (%s)", tenant.key, getattr(exc, "reason", exc))
-    except Exception:  # noqa: BLE001 - compte de l'indexeur indéchiffrable : le parc reste utile sans
-        log.warning("Parc Wazuh : compte de l'indexeur illisible pour %s", tenant.key)
+    except Exception as exc:  # noqa: BLE001 - le parc reste utile sans le dernier événement
+        log.warning("Parc Wazuh : dernier événement non lu pour %s (%s)", tenant.key, type(exc).__name__)
     return wa.store(db, tenant, snap, events, now)
 
 
@@ -108,6 +114,11 @@ def poll_all(session_factory, settings, box) -> int:
         finally:
             lock.release()
     return done
+
+
+def events_known(tenant: Tenant) -> bool:
+    """« Dernier événement » et « silencieux » n'ont de sens que si le dernier relevé a pu lire l'indexeur."""
+    return bool(wz.context_configured(tenant) and tenant.wazuh_events_ok)
 
 
 def register(app, ctx) -> None:
@@ -159,10 +170,10 @@ def register(app, ctx) -> None:
         tenant = tenant_for(user, client)
         team = user.role in ("analyst", "manager")
         now = utcnow()
-        events_known = wz.context_configured(tenant)
+        known = events_known(tenant)
         rows = db.scalars(select(WazuhAgent).where(WazuhAgent.tenant_id == tenant.id).order_by(WazuhAgent.name)).all()
         imp, tickets = importance_by_agent(db, tenant), (open_tickets(db, tenant) if team else {})
-        agents = [agent_view(a, tenant, now, team, imp, tickets, events_known) for a in rows]
+        agents = [agent_view(a, tenant, now, team, imp, tickets, known) for a in rows]
         versions: dict[str, int] = {}
         for a in agents:
             if a["version"]:
@@ -174,7 +185,7 @@ def register(app, ctx) -> None:
             "clients": [{"key": t.key, "name": t.name} for t in sorted(user.tenants, key=lambda t: t.key)],
             "configured": wa.api_configured(tenant), "manager_version": tenant.wazuh_manager_version,
             "polled_at": rfc3339(tenant.wazuh_agents_polled_at), "poll_interval_s": settings.wazuh_agents_poll_s,
-            "events_known": events_known, "agents": agents,
+            "events_known": known, "agents": agents,
             "versions": [{"version": v, "count": n, "gap": wa.version_gap(v, tenant.wazuh_manager_version)}
                          for v, n in sorted(versions.items(), key=lambda x: wa.version_tuple(x[0]) or (0, 0, 0), reverse=True)],
         }
@@ -191,13 +202,14 @@ def register(app, ctx) -> None:
             raise HTTPException(404, "Agent inconnu.")
         now = utcnow()
         events = db.scalars(select(WazuhAgentEvent).where(WazuhAgentEvent.tenant_id == tenant.id,
-                                                          WazuhAgentEvent.agent_id == a.agent_id)
+                                                          WazuhAgentEvent.agent_id == a.agent_id,
+                                                          WazuhAgentEvent.source == (tenant.wazuh_api_url or ""))
                             .order_by(WazuhAgentEvent.at)).all()
         week = wa.timeline(events, now - timedelta(days=7), now)
         month = wa.timeline(events, now - timedelta(days=30), now)
         span = 7 * 86400
         out = agent_view(a, tenant, now, team, importance_by_agent(db, tenant),
-                         open_tickets(db, tenant) if team else {}, wz.context_configured(tenant))
+                         open_tickets(db, tenant) if team else {}, events_known(tenant))
         out.update({
             "availability_7d": wa.availability(week), "availability_30d": wa.availability(month),
             "timeline_7d": [{"status": s["status"], "share": round((s["end"] - s["start"]).total_seconds() / span, 4)} for s in week],
@@ -242,10 +254,10 @@ def register(app, ctx) -> None:
         w = csv.writer(buf, delimiter=";")
         w.writerow(["agent", "nom", "adresse", "systeme", "version", "ecart_version", "etat", "depuis", "dernier_contact",
                     "dernier_evenement", "importance", "groupes", "tickets_ouverts"])
-        safe = lambda v: ("'" + v) if isinstance(v, str) and v[:1] in "=+-@\t\r" else v  # noqa: E731 - injection de formule
+        safe = lambda v: ("'" + v) if isinstance(v, str) and v[:1] and v[:1] in "=+-@\t\r" else v  # noqa: E731 - formule
         rows = db.scalars(select(WazuhAgent).where(WazuhAgent.tenant_id == tenant.id).order_by(WazuhAgent.name)).all()
         for a in rows:
-            f = wa.flags(a, tenant.wazuh_manager_version, now, wz.context_configured(tenant))
+            f = wa.flags(a, tenant.wazuh_manager_version, now, events_known(tenant))
             w.writerow([safe(x) for x in (a.agent_id, a.name, a.ip or "", " ".join(x for x in (a.os_name, a.os_version) if x),
                         a.version or "", f["version_gap"] or "", a.status, rfc3339(a.status_since),
                         rfc3339(a.last_keepalive) or "", rfc3339(a.last_event_at) or "", imp.get(a.agent_id) or "",
@@ -270,7 +282,8 @@ def register(app, ctx) -> None:
         alert = {
             "id": f"keryx-parc-{a.agent_id}-{int(since.timestamp())}",
             "timestamp": since.strftime("%Y-%m-%dT%H:%M:%S.000+0000"),
-            "rule": {"id": "keryx-agent-deconnecte", "level": 10, "groups": ["keryx_parc"],
+            # Niveau 10 (Moyenne), jamais sous le seuil d'ingestion de l'instance : le ticket demandé est toujours créé.
+            "rule": {"id": "keryx-agent-deconnecte", "level": min(16, max(10, settings.min_rule_level)), "groups": ["keryx_parc"],
                      "description": "Agent Wazuh déconnecté : plus de contact avec le manager"},
             "agent": {"id": a.agent_id, "name": a.name, "ip": a.ip or "",
                       "labels": {"importance": importance_by_agent(db, tenant).get(a.agent_id) or "standard"}},
@@ -283,7 +296,13 @@ def register(app, ctx) -> None:
         except AlertRejected as exc:
             db.rollback()
             raise HTTPException(422, str(exc)) from None
+        if result.status == "ignored" or result.ticket is None:
+            db.rollback()
+            raise HTTPException(422, f"Le ticket n'a pas été créé : {result.reason or 'alerte ignorée'}.")
         audit.record(db, user.username, "parc.ticket", "tenant", tenant.key, tenant.id,
-                     {"agent": a.agent_id, "ticket": result.ticket.ref if result.ticket else None, "resultat": result.status})
+                     {"agent": a.agent_id, "ticket": result.ticket.ref, "resultat": result.status})
+        notif_ids = [n.id for n in result.notifications if n.status == "en_attente"]
         commit(db)
-        return {"ref": result.ticket.ref if result.ticket else None, "status": result.status}
+        # Notifications du client envoyées après l'enregistrement, comme pour une alerte reçue de Wazuh.
+        return JSONResponse({"ref": result.ticket.ref, "status": result.status}, status_code=201,
+                            background=BackgroundTask(send_pending, ctx.SessionLocal, settings, notif_ids) if notif_ids else None)

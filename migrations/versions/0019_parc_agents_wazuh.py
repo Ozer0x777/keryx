@@ -24,6 +24,7 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column('wazuh_manager_version', sa.String(length=32), nullable=True))
         batch_op.add_column(sa.Column('wazuh_agents_polled_at', sa.DateTime(timezone=True), nullable=True))
         batch_op.add_column(sa.Column('wazuh_agents_error', sa.String(length=300), nullable=True))
+        batch_op.add_column(sa.Column('wazuh_events_ok', sa.Boolean(), server_default=sa.false(), nullable=False))
     op.create_table('wazuh_agents',
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('tenant_id', sa.String(length=36), nullable=False),
@@ -40,6 +41,7 @@ def upgrade() -> None:
     sa.Column('registered_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('last_event_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('status_since', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('missed', sa.Integer(), server_default='0', nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id'], ),
     sa.PrimaryKeyConstraint('id'),
@@ -53,6 +55,7 @@ def upgrade() -> None:
     sa.Column('agent_id', sa.String(length=16), nullable=False),
     sa.Column('status', sa.String(length=20), nullable=False),
     sa.Column('previous', sa.String(length=20), nullable=True),
+    sa.Column('source', sa.String(length=300), nullable=False),
     sa.Column('at', sa.DateTime(timezone=True), nullable=False),
     sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id'], ),
     sa.PrimaryKeyConstraint('id')
@@ -73,6 +76,6 @@ def downgrade() -> None:
         batch_op.drop_index(batch_op.f('ix_wazuh_agents_tenant_id'))
     op.drop_table('wazuh_agents')
     with op.batch_alter_table('tenants', schema=None) as batch_op:
-        for col in ('wazuh_agents_error', 'wazuh_agents_polled_at', 'wazuh_manager_version', 'wazuh_api_group',
+        for col in ('wazuh_events_ok', 'wazuh_agents_error', 'wazuh_agents_polled_at', 'wazuh_manager_version', 'wazuh_api_group',
                     'wazuh_api_password', 'wazuh_api_user', 'wazuh_api_url'):
             batch_op.drop_column(col)

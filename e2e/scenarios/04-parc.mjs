@@ -19,9 +19,9 @@ export default async ({ stack, BASE, check, login }) => {
     sql(stack, `insert into wazuh_agents (id, tenant_id, agent_id, name, ip, os_name, os_version, version, status, groups, node,
       last_keepalive, registered_at, last_event_at, status_since, updated_at) values (?, ${tenant}, ?, ?, ?, 'Ubuntu', '24.04', ?, ?, '["default","acme"]', 'worker-01', ?, ?, null, ?, ?)`,
       `e2e-agent-${id}`, id, name, `10.20.0.${Number(id)}`, version, status, keep == null ? null : ts(keep * H), ts(30 * 24 * H), ts(since), ts(0))
-    sql(stack, `insert into wazuh_agent_events (id, tenant_id, agent_id, status, previous, at) values (?, ${tenant}, ?, 'active', null, ?)`,
+    sql(stack, `insert into wazuh_agent_events (id, tenant_id, agent_id, status, previous, source, at) values (?, ${tenant}, ?, 'active', null, '', ?)`,
       `e2e-ev-a-${id}`, id, ts(8 * 24 * H))
-    if (status !== 'active') sql(stack, `insert into wazuh_agent_events (id, tenant_id, agent_id, status, previous, at) values (?, ${tenant}, ?, ?, 'active', ?)`,
+    if (status !== 'active') sql(stack, `insert into wazuh_agent_events (id, tenant_id, agent_id, status, previous, source, at) values (?, ${tenant}, ?, ?, 'active', '', ?)`,
       `e2e-ev-b-${id}`, id, status, ts(since))
   }
 

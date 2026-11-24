@@ -70,6 +70,9 @@ class ApiConfig:
     ca_pem: str | None = field(default=None, repr=False)
     group: str | None = None
     allow_loopback: bool = False
+    # Groupes des AUTRES clients du même manager : un agent qui en porte un est écarté, même s'il est aussi dans le
+    # groupe de ce client (un agent Wazuh peut appartenir à plusieurs groupes) [PDIS IV.3.8.g].
+    excluded_groups: tuple = ()
 
     def as_indexer(self) -> wz.IndexerConfig:
         """Le connecteur de wazuh_context ne lit que l'adresse et la confiance TLS."""
@@ -212,7 +215,7 @@ def fetch(cfg: ApiConfig) -> Snapshot:
         bearer = {"Authorization": f"Bearer {token}"}
         status, data = call("GET", "/", bearer)
         manager = version_of((_json(data, "version").get("data") or {}).get("api_version")) if status == 200 else None
-        agents, offset, truncated = [], 0, False
+        agents, offset, truncated = {}, 0, False
         while True:
             query = {"limit": PAGE, "offset": offset, "select": SELECT, "sort": "+id"}
             if cfg.group:
@@ -228,8 +231,9 @@ def fetch(cfg: ApiConfig) -> Snapshot:
                 raise ApiError("La réponse de l'API du manager Wazuh n'est pas une liste d'agents.", "reponse_invalide")
             for item in items:
                 a = normalize(item)
-                if a and (not cfg.group or cfg.group in a["groups"]):    # le filtre du serveur n'est pas cru sur parole
-                    agents.append(a)
+                # Le filtre du serveur n'est pas cru sur parole : groupe du client exigé, groupes des autres clients refusés.
+                if a and (not cfg.group or cfg.group in a["groups"]) and not set(a["groups"]) & set(cfg.excluded_groups):
+                    agents[a["agent_id"]] = a        # un numéro vu deux fois (pagination décalée) n'est gardé qu'une fois
             total = payload.get("total_affected_items")
             offset += len(items)
             if not items or not isinstance(total, int) or offset >= total:
@@ -237,7 +241,7 @@ def fetch(cfg: ApiConfig) -> Snapshot:
             if offset >= MAX_AGENTS:
                 truncated = True
                 break
-        return Snapshot(manager, agents, truncated)
+        return Snapshot(manager, list(agents.values()), truncated)
     except wz.IndexerError as exc:
         raise _api_message(exc) from exc
     except TimeoutError as exc:
@@ -249,8 +253,24 @@ def fetch(cfg: ApiConfig) -> Snapshot:
             conn["sock"].close()
 
 
+EVENT_BATCH = 5000
+
+
 def last_events(cfg: wz.IndexerConfig, agent_ids: list[str]) -> dict[str, datetime]:
-    """Date du dernier événement indexé (tous niveaux) par agent, sur les 30 derniers jours, en une agrégation."""
+    """Date du dernier événement indexé (tous niveaux) par agent, sur les 30 derniers jours : une agrégation par lot de
+    5 000 agents. Toute erreur (réseau, délai, réponse) lève wz.IndexerError : aucun résultat partiel."""
+    out: dict[str, datetime] = {}
+    for i in range(0, len(agent_ids), EVENT_BATCH):
+        try:
+            out.update(_last_events_batch(cfg, agent_ids[i:i + EVENT_BATCH]))
+        except TimeoutError as exc:
+            raise wz.IndexerError(503, "L'indexeur Wazuh n'a pas répondu dans le délai imparti.", "delai") from exc
+        except (OSError, http.client.HTTPException) as exc:
+            raise wz.IndexerError(503, "La connexion à l'indexeur Wazuh a été interrompue.", "connexion") from exc
+    return out
+
+
+def _last_events_batch(cfg: wz.IndexerConfig, agent_ids: list[str]) -> dict[str, datetime]:
     if not agent_ids:
         return {}
     deadline = time.monotonic() + wz.TOTAL_TIMEOUT_S
@@ -302,6 +322,7 @@ def _since(a: dict, now: datetime) -> datetime:
 def store(db: DbSession, tenant: Tenant, snap: Snapshot, events: dict[str, datetime] | None, now: datetime) -> dict:
     """Met à jour l'état des agents du client et ajoute à l'historique chaque changement d'état constaté."""
     current = {a.agent_id: a for a in db.scalars(select(WazuhAgent).where(WazuhAgent.tenant_id == tenant.id))}
+    source = tenant.wazuh_api_url or ""
     seen, changes = set(), 0
     for a in snap.agents:
         seen.add(a["agent_id"])
@@ -310,30 +331,42 @@ def store(db: DbSession, tenant: Tenant, snap: Snapshot, events: dict[str, datet
             since = _since(a, now)
             row = WazuhAgent(tenant_id=tenant.id, agent_id=a["agent_id"], status_since=since, status=a["status"])
             db.add(row)
-            db.add(WazuhAgentEvent(tenant_id=tenant.id, agent_id=a["agent_id"], status=a["status"], previous=None, at=since))
+            db.add(WazuhAgentEvent(tenant_id=tenant.id, agent_id=a["agent_id"], status=a["status"], previous=None, at=since,
+                                   source=source))
             changes += 1
         elif row.status != a["status"]:
             since = now
             if a["status"] == "disconnected" and a["last_keepalive"] and as_utc(a["last_keepalive"]) > as_utc(row.status_since):
                 since = min(a["last_keepalive"], now)      # la déconnexion date du dernier contact, pas du relevé
-            db.add(WazuhAgentEvent(tenant_id=tenant.id, agent_id=a["agent_id"], status=a["status"], previous=row.status, at=since))
+            db.add(WazuhAgentEvent(tenant_id=tenant.id, agent_id=a["agent_id"], status=a["status"], previous=row.status, at=since,
+                                   source=source))
             row.status, row.status_since = a["status"], since
             changes += 1
         for k in ("name", "ip", "os_name", "os_version", "version", "groups", "node", "last_keepalive", "registered_at"):
             setattr(row, k, a[k])
-        if events is not None and a["agent_id"] in events:
-            row.last_event_at = events[a["agent_id"]]
+        if events is not None:
+            row.last_event_at = events.get(a["agent_id"])     # absent de l'indexeur sur 30 jours : aucun événement
+        row.missed = 0
         row.updated_at = now
-    removed = [aid for aid in current if aid not in seen]
+    # Un agent absent n'est déclaré retiré qu'au deuxième relevé consécutif sans lui : une pagination décalée par une
+    # suppression pendant le relevé ne fait pas disparaître un agent bien présent.
+    removed = []
     if not snap.truncated:
-        for aid in removed:
-            db.add(WazuhAgentEvent(tenant_id=tenant.id, agent_id=aid, status="removed", previous=current[aid].status, at=now))
+        for aid, row in current.items():
+            if aid in seen:
+                continue
+            row.missed = (row.missed or 0) + 1
+            if row.missed >= 2:
+                removed.append(aid)
+                db.add(WazuhAgentEvent(tenant_id=tenant.id, agent_id=aid, status="removed", previous=row.status, at=now,
+                                       source=source))
         if removed:
             db.execute(delete(WazuhAgent).where(WazuhAgent.tenant_id == tenant.id, WazuhAgent.agent_id.in_(removed)))
     tenant.wazuh_manager_version = snap.manager_version
     tenant.wazuh_agents_polled_at = now
+    tenant.wazuh_events_ok = events is not None
     tenant.wazuh_agents_error = "Relevé tronqué : plus de 20 000 agents." if snap.truncated else None
-    return {"agents": len(snap.agents), "changements": changes, "retires": 0 if snap.truncated else len(removed)}
+    return {"agents": len(snap.agents), "changements": changes, "retires": len(removed)}
 
 
 # ---------------------------------------------------------------- calculs pour l'affichage
@@ -397,7 +430,8 @@ def summary(db: DbSession, tenants: dict, start: datetime, end: datetime) -> dic
     history: dict[tuple, list] = {}
     for e in db.scalars(select(WazuhAgentEvent).where(WazuhAgentEvent.tenant_id.in_(list(tenants)), WazuhAgentEvent.at < end)
                         .order_by(WazuhAgentEvent.at)):
-        history.setdefault((e.tenant_id, e.agent_id), []).append(e)
+        if e.source == (tenants[e.tenant_id].wazuh_api_url or ""):       # historique du manager courant seulement
+            history.setdefault((e.tenant_id, e.agent_id), []).append(e)
     per_agent, counts = [], {s: 0 for s in STATUSES}
     down24 = outdated = 0
     for a in rows:

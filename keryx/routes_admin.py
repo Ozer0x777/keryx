@@ -24,7 +24,8 @@ from . import wazuh_agents as wa
 from . import wazuh_context as wz
 from .ids import as_utc, rfc3339, utcnow
 from .mitre import valid_technique
-from .models import (ROLES, ApiKey, MitreMapping, Notification, Session, Tenant, Ticket, User, WebAuthnCredential)
+from .models import (ROLES, ApiKey, MitreMapping, Notification, Session, Tenant, Ticket, User, WazuhAgent,
+                     WebAuthnCredential)
 
 SILENT_KEY_HOURS = 24
 
@@ -305,13 +306,13 @@ def register(app, ctx) -> None:
                 and (t.wazuh_api_user or t.wazuh_api_password) and not (new_user and new_password):
             t.wazuh_api_user = t.wazuh_api_password = None
             credentials = "effaces"
+        previous_url, previous_group = t.wazuh_api_url, t.wazuh_api_group
         if "wazuh_api_group" in sent:
             t.wazuh_api_group = wa.validate_group(body.wazuh_api_group) if (body.wazuh_api_group or "").strip() else None
         if "wazuh_api_url" in sent:
-            previous = t.wazuh_api_url
             t.wazuh_api_url = (wz.parse_indexer_url(body.wazuh_api_url, settings.wazuh_allow_loopback).url
                                if (body.wazuh_api_url or "").strip() else None)
-            if t.wazuh_api_url != previous and (t.wazuh_api_user or t.wazuh_api_password) and not (new_user and new_password):
+            if t.wazuh_api_url != previous_url and (t.wazuh_api_user or t.wazuh_api_password) and not (new_user and new_password):
                 t.wazuh_api_user = t.wazuh_api_password = None
                 credentials = "effaces"
         for name, validate in (("wazuh_api_user", wz.validate_username), ("wazuh_api_password", wz.validate_password)):
@@ -326,11 +327,20 @@ def register(app, ctx) -> None:
         if t.wazuh_api_url:
             # Manager partagé entre clients : sans groupe propre à chacun, /agents renverrait les agents des autres
             # clients [PDIS IV.3.8.g]. Deux clients sur la même API doivent avoir chacun un groupe, et des groupes différents.
+            # Le groupe « default » contient tous les agents enregistrés sans groupe : jamais propre à un client. Un agent
+            # pouvant porter plusieurs groupes, Keryx écarte en plus, au relevé, ceux qui portent le groupe d'un autre client.
             for other in db.scalars(select(Tenant).where(Tenant.id != t.id, Tenant.wazuh_api_url == t.wazuh_api_url)):
-                if not t.wazuh_api_group or not other.wazuh_api_group or other.wazuh_api_group == t.wazuh_api_group:
+                if not t.wazuh_api_group or not other.wazuh_api_group or other.wazuh_api_group == t.wazuh_api_group \
+                        or "default" in (t.wazuh_api_group, other.wazuh_api_group):
                     raise wz.ConfigError(f"Le client {other.key} utilise déjà cette API Wazuh : donner à chaque client un "
-                                         "groupe Wazuh qui ne contient que ses propres agents, différent pour chacun.")
-        if "wazuh_api_url" in sent or "wazuh_api_group" in sent:
+                                         "groupe Wazuh qui ne contient que ses propres agents (pas « default »), différent pour chacun.")
+        if t.wazuh_api_url != previous_url:
+            # Autre manager (ou plus aucun) : les numéros d'agent ne désignent plus les mêmes machines. L'état courant est
+            # effacé ; l'historique reste, rattaché à son manager d'origine, et n'est plus mêlé au nouveau.
+            db.execute(delete(WazuhAgent).where(WazuhAgent.tenant_id == t.id))
+            t.wazuh_manager_version = t.wazuh_agents_polled_at = None
+            t.wazuh_events_ok = False
+        if t.wazuh_api_url != previous_url or t.wazuh_api_group != previous_group:
             t.wazuh_agents_error = None
         return credentials
 
