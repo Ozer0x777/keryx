@@ -1,6 +1,6 @@
 # Keryx : un conteneur (API + interface web construite). Base : SQLite en test, PostgreSQL en production.
 # Étape 1 : construction de l'interface web (aucun fichier n'est chargé depuis un CDN à l'exécution).
-FROM node:22-slim AS web
+FROM node:25-slim AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
