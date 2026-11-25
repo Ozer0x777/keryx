@@ -1,4 +1,4 @@
-import { answerDialog } from '../harness.mjs'
+import { answerDialog, eventually } from '../harness.mjs'
 
 export default async ({ browser, stack, BASE, check, login }) => {
   const p = await login('admin')
@@ -49,8 +49,8 @@ export default async ({ browser, stack, BASE, check, login }) => {
   check(!('email' in body) && body.role === 'manager' && body.display_name === 'Nouvel Analyste (N2)', "édition : le courriel n'est jamais envoyé au serveur")
   await ed.waitFor({ state: 'detached' })
   await p.waitForSelector('text=Compte nouvel.analyste enregistré à')
-  const cells = await row.innerText()
-  check(cells.includes('Nouvel Analyste (N2)') && cells.includes("Manager d'équipe") && cells.includes('ACME, NOVA'), 'édition : nom, rôle et clients modifiés')
+  // le message arrive avant le rechargement de la liste : attendre la ligne à jour
+  check(await eventually(async () => { const c = await row.innerText(); return c.includes('Nouvel Analyste (N2)') && c.includes("Manager d'équipe") && c.includes('ACME, NOVA') }), 'édition : nom, rôle et clients modifiés')
   check(await edit.evaluate((e) => e === document.activeElement), 'édition : le focus revient au bouton Modifier')
   await edit.click(); await ed.waitFor()
   await ed.locator('select').selectOption('client')
@@ -58,7 +58,7 @@ export default async ({ browser, stack, BASE, check, login }) => {
   await ed.locator('select').selectOption('admin')
   check(await ed.locator('[name=clients]').count() === 0 && (await ed.innerText()).includes("pas accès au contenu des tickets"), "édition : un Admin n'a aucun client (rappel de la séparation des rôles)")
   await p.keyboard.press('Escape'); await ed.waitFor({ state: 'detached' })
-  check((await row.innerText()).includes("Manager d'équipe"), 'édition annulée : rien n\'est modifié')
+  check(await eventually(async () => (await row.innerText()).includes("Manager d'équipe")), 'édition annulée : rien n\'est modifié')
   await p.locator('tr', { hasText: 'Test admin' }).getByRole('button', { name: /^Modifier le compte/ }).click(); await ed.waitFor()
   check(await ed.locator('select').isDisabled(), 'édition de son propre compte : rôle non modifiable')
   await p.keyboard.press('Escape'); await ed.waitFor({ state: 'detached' })
