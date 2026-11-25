@@ -111,6 +111,7 @@ Table complète des fonctions et de leurs exigences : [`docs/fonctions-et-exigen
 | Décisions d'architecture (ADR) | [`docs/adr/`](docs/adr/) |
 | Matrice exigence, code, test | [`docs/matrice-tracabilite.md`](docs/matrice-tracabilite.md) |
 | Dossier pour l'homologation | [`docs/homologation/`](docs/homologation/) |
+| API REST (description OpenAPI) | servie par Keryx sur `/api/openapi.json` |
 
 ## Démarrer en local (SQLite)
 
@@ -148,10 +149,12 @@ Brancher un vrai Wazuh : voir `integrations/wazuh/README.md` (script d'intégrat
 ## Tests
 
 ```bash
-python -m pytest -q
+python -m pytest -q        # échoue sur tout avertissement de dépréciation (pytest.ini)
+ruff check .               # analyse statique Python (ruff.toml)
+cd web && npm run lint     # analyse statique de l'interface (ESLint)
 ```
 
-402 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
+431 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
 régressions des revues, migrations, notifications (SMTP simulé, relances), pièces jointes (clamd simulé, EICAR),
 administration, confort de travail, pilotage, conformité, sauvegarde, script d'intégration Wazuh,
 contexte Wazuh (faux indexeur OpenSearch local, `tests/fake_indexer.py`),
@@ -183,6 +186,15 @@ cd e2e && npm ci && node run.mjs        # CHROME_PATH et KERYX_PYTHON si besoin
 Keryx est un projet libre. Pour contribuer : [`CONTRIBUTING.md`](CONTRIBUTING.md) (règles du projet, vérifications avant
 une demande de fusion). Une vulnérabilité se signale en privé : [`SECURITY.md`](SECURITY.md). Les changements sont
 listés dans [`CHANGELOG.md`](CHANGELOG.md).
+
+## In English
+
+Keryx is a free software (MIT) incident ticketing console for SOCs running Wazuh, written for small SOCs, managed
+security providers and CERTs. A Wazuh alert opens a pre-filled ticket; the team qualifies and handles it; the client
+follows the incident in its portal; every action goes to a sealed audit log. It targets the French ANSSI PDIS and
+PRIS frameworks and ISO/IEC 27035. The documentation is in French and the interface is available in French and
+English. Issues and pull requests in English are welcome (`CONTRIBUTING.md`); report vulnerabilities privately
+(`SECURITY.md`).
 
 ## Licence
 

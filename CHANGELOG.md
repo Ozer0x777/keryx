@@ -4,6 +4,19 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+### Ajouté
+- Analyse statique dans la CI, avertissements traités comme des erreurs : ruff pour Python (`ruff.toml`), ESLint pour
+  l'interface (`npm run lint`). Les tests échouent sur tout avertissement de dépréciation (`pytest.ini`).
+- Politique de sécurité complète (`SECURITY.md`) : délais de réponse et de correction, publication des avis et des
+  CVE, crédit des rapporteurs ; résumé en anglais dans `README.md`, `SECURITY.md` et `CONTRIBUTING.md`.
+
+### Corrigé
+- Huit traductions anglaises déclarées deux fois (même texte) : doublons retirés.
+- Vérification d'un jeton d'horodatage refusé par OpenSSL : le détail d'OpenSSL va au journal du serveur au lieu
+  d'être renvoyé à l'utilisateur.
+- Recherche VirusTotal : contrôle explicite de l'empreinte juste avant de la placer dans l'URL.
+- Caractères de contrôle bidirectionnels écrits en échappements dans le code et les tests (lisibles à la relecture).
+
 ## [0.8.0] : 2026-11-24
 
 Première version publiée. Les numéros précédents n'ont jamais été publiés : le code portait 0.2.0, le kit Docker et

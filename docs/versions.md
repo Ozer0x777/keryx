@@ -14,8 +14,12 @@ La version est écrite à deux endroits, à garder identiques : `keryx/__init__.
 3. CI verte sur `main`, puis pousser l'étiquette git `vX.Y.Z`. Le workflow `publication.yml` vérifie que les numéros
    concordent, publie l'image signée sur `ghcr.io` et crée la version GitHub (voir `docs/publication.md`).
 
-> À COMPLÉTER PAR LE MAINTENEUR : signature des étiquettes, publication d'une image Docker (registre, nom), et
-> rythme de publication.
+Les étiquettes git ne sont pas signées ; l'image publiée l'est (cosign, signature liée au workflow de publication,
+voir `docs/publication.md`). Image : `ghcr.io/ozer0x777/keryx:X.Y.Z`. Pas de rythme fixe : une version sort quand des
+changements utiles sont prêts, et sans attendre quand elle corrige une vulnérabilité.
+
+Les notes de version (`CHANGELOG.md`) ont une section « Sécurité » qui cite chaque vulnérabilité corrigée, avec son
+identifiant CVE s'il existe (voir `SECURITY.md`).
 
 ## Versions maintenues
 
@@ -24,4 +28,5 @@ La version est écrite à deux endroits, à garder identiques : `keryx/__init__.
 | 0.8.0 (dernière publiée) et `main` | oui |
 | numéros antérieurs (jamais publiés) | non |
 
-> À COMPLÉTER PAR LE MAINTENEUR : durée de maintenance d'une version publiée, si une est promise.
+Aucune durée de maintenance n'est promise pour une version ancienne : un correctif de sécurité sort dans une
+nouvelle version, et il faut mettre à jour vers celle-ci.

@@ -1,5 +1,7 @@
 # Contribuer à Keryx
 
+*In English: issues, pull requests and comments in English are welcome; see the summary at the end.*
+
 Keryx est un projet libre (licence MIT). Les contributions sont bienvenues : correctifs, tests, traductions,
 documentation.
 
@@ -31,8 +33,13 @@ python -m pytest -q                         # tests (SQLite)
 python scripts/pg_tests.py                  # mêmes tests sous PostgreSQL (paquet pgserver)
 cd web && npm run build && npm test         # interface
 cd e2e && node run.mjs                      # parcours dans un navigateur (CHROME_PATH si besoin)
+ruff check .                                # analyse statique Python (règles : ruff.toml)
+cd web && npm run lint                      # analyse statique de l'interface (ESLint)
 python3 scripts/verif_depot.py              # aucun secret, aucun tiret cadratin en Markdown
 ```
+
+Les tests échouent sur tout avertissement de dépréciation (`pytest.ini`), et l'analyse statique sur tout
+avertissement : on corrige, ou on justifie l'exception en commentaire à l'endroit où on la déclare.
 
 La CI relance tout cela sur chaque demande de fusion, avec l'audit des dépendances et CodeQL.
 
@@ -41,4 +48,21 @@ La CI relance tout cela sur chaque demande de fusion, avec l'audit des dépendan
 Remplir le modèle proposé : ce qui change, l'exigence citée, l'ADR, les tests ajoutés, l'effet sur le cloisonnement
 et sur l'audit. Une demande sans test pour un changement de comportement ne sera pas fusionnée.
 
-> À COMPLÉTER PAR LE MAINTENEUR : règles de relecture (nombre de relecteurs, délai), signature des commits si exigée.
+## Relecture
+
+Keryx a pour l'instant un seul mainteneur. Il relit chaque demande de fusion avant de la fusionner ; la CI doit être
+verte. Réponse visée sous 14 jours ; une demande restée sans réponse peut être relancée en commentaire. La signature
+des commits n'est pas exigée.
+
+## Ajouter des tests
+
+Toute nouvelle fonction et toute correction de bogue arrivent avec leurs tests automatisés : test pytest pour le
+serveur (`tests/`), test `node --test` pour la logique de l'interface (`web/tests/`), scénario de navigateur pour un
+parcours (`e2e/scenarios/`). Un correctif de sécurité arrive avec le test qui prouve que la faille est fermée.
+
+## In English
+
+Keryx is a free software (MIT) incident console for Wazuh-based SOCs. Its documentation is in French, but issues,
+pull requests and comments in English are welcome. Before opening a pull request, run the checks listed above (tests,
+`ruff check .`, `npm run lint`, `scripts/verif_depot.py`); every behaviour change comes with automated tests. Report
+vulnerabilities privately, as described in `SECURITY.md`.
