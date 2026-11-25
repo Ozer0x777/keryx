@@ -20,7 +20,7 @@ Quand une étiquette `vX.Y.Z` est poussée, le workflow `.github/workflows/publi
 
 ```bash
 cd deploy/docker
-KERYX_IMAGE=ghcr.io/ozer0x777/keryx KERYX_VERSION=0.8.1 ./install.sh
+KERYX_IMAGE=ghcr.io/ozer0x777/keryx KERYX_VERSION=0.8.2 ./install.sh
 ```
 
 `install.sh` récupère l'image au lieu de la construire, l'inscrit dans `.env`, et vérifie sa signature si `cosign`
@@ -29,11 +29,11 @@ est installé ; une signature absente ou invalide arrête l'installation. Sans c
 ## Vérifier une image à la main
 
 ```bash
-cosign verify ghcr.io/ozer0x777/keryx:0.8.1 \
+cosign verify ghcr.io/ozer0x777/keryx:0.8.2 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity-regexp '(?i)^https://github.com/Ozer0x777/keryx/\.github/workflows/publication\.yml@refs/tags/v'
 
-gh attestation verify oci://ghcr.io/ozer0x777/keryx:0.8.1 --owner Ozer0x777      # provenance
+gh attestation verify oci://ghcr.io/ozer0x777/keryx:0.8.2 --owner Ozer0x777      # provenance
 ```
 
 Une vérification réussie prouve que l'image a été construite par le workflow de publication de ce dépôt, à partir
@@ -41,7 +41,7 @@ d'une étiquette de version. Elle ne prouve pas que le code est exempt de défau
 
 ## Vérifier les fichiers d'une version
 
-Depuis la 0.8.1 (la 0.8.0 n'a que son image signée). Télécharger `SHA256SUMS`,
+Depuis la 0.8.2 (la 0.8.0 et la 0.8.1 n'ont que leur image signée). Télécharger `SHA256SUMS`,
 `SHA256SUMS.sigstore.json` et les fichiers voulus depuis la page de la version, puis :
 
 ```bash
