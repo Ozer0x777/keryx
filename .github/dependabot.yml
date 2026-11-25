@@ -1,21 +1,40 @@
 # Mises à jour proposées en demandes de fusion, chaque semaine ; aucune n'est fusionnée sans relecture et CI verte.
+# Une seule demande par écosystème (groupe), et pas de changement de version majeure : ceux-là demandent une étude
+# (notes de version, migration) et se font à la main.
+#
+# Pas de mises à jour Python ici : requirements.lock est verrouillé avec empreintes (uv pip compile) et Dependabot ne
+# sait pas le régénérer, ses demandes casseraient la CI. Les vulnérabilités Python restent couvertes : alertes
+# Dependabot du dépôt et pip-audit --strict bloquant en CI. Mise à jour à la main :
+#   uv pip compile requirements.txt --generate-hashes --python-version 3.12 --python-platform linux --upgrade -o requirements.lock
 version: 2
 updates:
-  - package-ecosystem: pip
-    directory: /
-    schedule: { interval: weekly }
-    open-pull-requests-limit: 5
   - package-ecosystem: npm
     directory: /web
     schedule: { interval: weekly }
-    open-pull-requests-limit: 5
+    groups:
+      web: { patterns: ["*"] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /e2e
     schedule: { interval: weekly }
-    open-pull-requests-limit: 3
+    groups:
+      e2e: { patterns: ["*"] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
+    groups:
+      actions: { patterns: ["*"] }
   - package-ecosystem: docker
     directory: /
     schedule: { interval: weekly }
+    groups:
+      images: { patterns: ["*"] }
+    ignore:
+      # Images de base (python, node) : on reste sur la branche choisie, seuls les correctifs sont proposés.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]

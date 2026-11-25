@@ -58,7 +58,8 @@ signaler à leurs projets), et un déploiement qui ne suit pas `docs/deploiement
 - les vulnérabilités connues des dépendances Python et npm ;
 - l'absence de secret suivi par git (`scripts/verif_depot.py`).
 
-Dependabot propose chaque semaine les mises à jour des dépendances, des actions GitHub et des images Docker. Chaque
+Dependabot propose chaque semaine les mises à jour des dépendances npm, des actions GitHub et des images Docker ;
+les dépendances Python, verrouillées avec empreintes, sont surveillées par les alertes Dependabot et pip-audit. Chaque
 image publiée est signée (cosign), accompagnée d'un SBOM et d'une attestation de provenance (`docs/publication.md`).
 
 ---
