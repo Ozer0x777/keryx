@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = re.search(r'version="([^"]+)"', (ROOT / "keryx" / "api.py").read_text()).group(1)
+VERSION = re.search(r'^__version__ = "([^"]+)"', (ROOT / "keryx" / "__init__.py").read_text(), re.M).group(1)
 
 
 def python_components():
