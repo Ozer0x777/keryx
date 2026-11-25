@@ -160,6 +160,14 @@ export function check(cond, label) {
 }
 
 // Attente active sans évaluation de script dans la page (la CSP de Keryx l'interdit).
+// Comme until, mais renvoie vrai ou faux au lieu de lever : pour un check() sur un état qui suit un rendu
+// (l'URL change avant que React ait repeint, surtout sur une machine lente).
+export async function eventually(fn, ms = 5000) {
+  const end = Date.now() + ms
+  while (Date.now() < end) { if (await fn()) return true; await new Promise((r) => setTimeout(r, 100)) }
+  return !!(await fn())
+}
+
 export async function until(fn, label = 'condition', ms = 8000) {
   const end = Date.now() + ms
   while (Date.now() < end) { if (await fn()) return; await new Promise((r) => setTimeout(r, 150)) }

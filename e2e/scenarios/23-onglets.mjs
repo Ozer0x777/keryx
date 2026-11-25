@@ -1,4 +1,4 @@
-import { unfold, until } from '../harness.mjs'
+import { eventually, unfold, until } from '../harness.mjs'
 
 // Fiche ticket en onglets avec barre fixe (ADR-0026) : clavier, URL, saisie conservée, barre collante, portail client.
 export default async ({ stack, BASE, check, login }) => {
@@ -19,7 +19,7 @@ export default async ({ stack, BASE, check, login }) => {
   // Souris et URL
   await m.getByRole('tab', { name: /^Preuves/ }).click()
   await m.waitForFunction(() => location.search.includes('onglet=preuves'))
-  check(JSON.stringify(await visibles()) === JSON.stringify(['ticket-tab-preuves']) && await m.locator('section[aria-label="Registre des preuves"]').isVisible(), 'onglet Preuves : registre visible, le reste masqué, onglet inscrit dans l\'URL')
+  check(await eventually(async () => JSON.stringify(await visibles()) === JSON.stringify(['ticket-tab-preuves']) && await m.locator('section[aria-label="Registre des preuves"]').isVisible()), 'onglet Preuves : registre visible, le reste masqué, onglet inscrit dans l\'URL')
 
   // Clavier : flèches, Fin, Début
   await m.getByRole('tab', { name: /^Preuves/ }).focus()
