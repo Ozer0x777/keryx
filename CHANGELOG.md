@@ -5,6 +5,10 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 ## [Non publié]
 
 ### Ajouté
+- Programme de sécurité des composants libres conforme à ISO/IEC 18974 (auto-certification OpenChain) :
+  `docs/programme-securite-open-source.md` et registre `docs/registre-vulnerabilites.md` ; veille hebdomadaire des
+  vulnérabilités (`veille-vulnerabilites.yml`) avec analyse de l'image par Grype ; la publication est refusée si un
+  audit des dépendances échoue ou si l'image contient une vulnérabilité élevée ou critique corrigeable.
 - Attestation DCO de chaque commit (`git commit -s`), contrôlée par la CI sur chaque demande de fusion
   (`scripts/verif_dco.py`, job `dco`) ; CONTRIBUTING.md décrit la règle et le choix, l'obtention et le suivi des
   dépendances.
@@ -16,6 +20,11 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
   feuille de route (`ROADMAP.md`), vue d'ensemble de l'architecture (`docs/architecture.md`) et argumentaire de
   sécurité (`docs/securite.md` : garanties, modèle de menaces, principes appliqués, cryptographie).
 - Couverture des tests mesurée en CI (92 % des instructions), seuil minimal de 85 %.
+
+### Sécurité
+- Image Docker : les correctifs de sécurité Debian sont appliqués à la construction (`apt-get upgrade`) ; l'image
+  0.8.0 contient des failles élevées déjà corrigées par Debian dans zlib (CVE-2026-85091) et glibc (CVE-2026-19499,
+  CVE-2026-5435). pip est retiré de l'image après l'installation des dépendances. Registre : V-2026-002, V-2026-003.
 
 ### Corrigé
 - Image Docker : le fichier `LICENSE` (MIT) y est désormais copié (`/app/LICENSE`), comme l'exige sa

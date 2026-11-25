@@ -62,6 +62,10 @@ Dependabot propose chaque semaine les mises à jour des dépendances npm, des ac
 les dépendances Python, verrouillées avec empreintes, sont surveillées par les alertes Dependabot et pip-audit. Chaque
 image publiée est signée (cosign), accompagnée d'un SBOM et d'une attestation de provenance (`docs/publication.md`).
 
+Les vulnérabilités des composants libres livrés (dépendances, paquets de l'image) suivent le programme
+`docs/programme-securite-open-source.md` (ISO/IEC 18974) : veille hebdomadaire, analyse de l'image, publication
+bloquée sur une vulnérabilité élevée ou critique corrigeable, registre `docs/registre-vulnerabilites.md`.
+
 ---
 
 ## Security policy (English)
