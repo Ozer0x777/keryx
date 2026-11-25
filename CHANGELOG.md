@@ -18,6 +18,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 - Couverture des tests mesurée en CI (92 % des instructions), seuil minimal de 85 %.
 
 ### Corrigé
+- Image Docker : le fichier `LICENSE` (MIT) y est désormais copié (`/app/LICENSE`), comme l'exige sa
+  redistribution ; la CI le vérifie.
 - Accessibilité (WCAG 2.5.3, étiquette dans le nom) : les boutons de mise en forme de l'éditeur affichent « H2 », « B »,
   « I », « 1. » ; leur nom accessible contient désormais ce texte (« Gras, B »), pour la commande vocale. Trouvé par
   axe-core 4.14.

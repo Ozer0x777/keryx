@@ -153,3 +153,5 @@ jobs:
           name: sbom
           path: sbom.cdx.json
       - run: docker build -t keryx:ci .
+      - name: La licence est dans l'image
+        run: docker run --rm --entrypoint test keryx:ci -s /app/LICENSE

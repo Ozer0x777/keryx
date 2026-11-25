@@ -30,7 +30,7 @@ WORKDIR /app
 COPY requirements.lock .
 RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 COPY keryx ./keryx
-COPY alembic.ini ./
+COPY LICENSE alembic.ini ./
 COPY migrations ./migrations
 COPY --from=web /web/dist ./keryx/web_dist
 USER keryx
