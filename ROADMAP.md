@@ -3,7 +3,7 @@
 *In English: planned work for the next twelve months, in priority order. No date is promised; security fixes always
 come first (`SECURITY.md`).*
 
-État au 25/11/2026, version 0.8.0. Les priorités viennent des retours d'usage, en premier lieu l'essai sur une
+État au 25/11/2026, version 0.8.1. Les priorités viennent des retours d'usage, en premier lieu l'essai sur une
 préproduction Wazuh réelle (188 alertes reçues sur 188, 63 tickets). Une idée nouvelle se propose en issue ; un
 choix technique passe par un ADR (`GOVERNANCE.md`).
 
