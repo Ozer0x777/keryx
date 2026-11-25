@@ -2,6 +2,8 @@
 
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/17087/badge)](https://www.bestpractices.dev/projects/17087)
 [![OpenSSF Baseline](https://www.bestpractices.dev/projects/17087/baseline)](https://www.bestpractices.dev/projects/17087)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Ozer0x777/keryx/badge)](https://scorecard.dev/viewer/?uri=github.com/Ozer0x777/keryx)
+[![ISO/IEC 18974 : conformité déclarée](https://img.shields.io/badge/ISO%2FIEC%2018974-conformit%C3%A9%20d%C3%A9clar%C3%A9e-1f6feb)](docs/programme-securite-open-source.md)
 
 Console de gestion des incidents de sécurité pour un SOC équipé de Wazuh. Une alerte Wazuh arrive, Keryx ouvre un
 ticket pré-rempli (règle, équipement, criticité, MITRE ATT&CK), l'équipe le qualifie et le traite, le client suit

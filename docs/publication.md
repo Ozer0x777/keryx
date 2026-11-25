@@ -11,9 +11,10 @@ Quand une étiquette `vX.Y.Z` est poussée, le workflow `.github/workflows/publi
 3. attache à l'image une attestation de provenance (SLSA, construite par GitHub Actions depuis ce commit) et une SBOM ;
 4. **signe l'image par son empreinte** avec cosign, en signature sans clé : le certificat de signature, émis par
    Sigstore, nomme ce workflow et l'étiquette qui l'a déclenché ;
-5. joint à la version l'archive des sources de l'étiquette et une SBOM CycloneDX des dépendances, et **signe la liste
-   de leurs empreintes SHA-256** (`SHA256SUMS`) de la même façon, sans clé ; la preuve de signature est
-   `SHA256SUMS.sigstore.json` ;
+5. joint à la version l'archive des sources de l'étiquette et une SBOM CycloneDX des dépendances, **signe la liste
+   de leurs empreintes SHA-256** (`SHA256SUMS`) de la même façon, sans clé (preuve : `SHA256SUMS.sigstore.json`),
+   et joint leur attestation de provenance SLSA (`keryx-X.Y.Z.intoto.jsonl`, à partir de la version qui suit la
+   0.8.2 ; vérification : `gh attestation verify keryx-X.Y.Z-sources.tar.gz --owner Ozer0x777`) ;
 6. crée la version GitHub avec la section du CHANGELOG, l'empreinte de l'image et ces fichiers.
 
 ## Installer l'image publiée avec le kit Docker

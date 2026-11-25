@@ -82,10 +82,16 @@ signature cryptographique : celle-ci n'est pas exigée.
   dans `requirements.lock` (`uv pip compile requirements.txt --generate-hashes --python-version 3.12
   --python-platform linux -o requirements.lock`), installées depuis PyPI par `pip install --require-hashes -r
   requirements.lock`. Interface et parcours : registre npm, versions figées dans `package-lock.json`, installées par
-  `npm ci`. Conteneurs : images officielles `python` et `node`. CI : actions GitHub épinglées par version majeure.
-  Aucune dépendance n'est copiée dans le dépôt.
-- **Suivi.** Dependabot propose chaque semaine les mises à jour npm, actions GitHub et Docker, et signale les
-  vulnérabilités des dépendances Python ; `pip-audit` et `npm audit` bloquent la CI sur une vulnérabilité connue ;
+  `npm ci`. Outils de la CI (pip-audit, ruff) et dépendances de test : `requirements-outils.lock` et
+  `requirements-dev.lock`, eux aussi installés avec `--require-hashes` (régénérer avec `uv pip compile
+  requirements-outils.txt --generate-hashes --python-version 3.12 --python-platform linux -o requirements-outils.lock`
+  et `uv pip compile requirements-dev.txt -c requirements.lock --generate-hashes --python-version 3.12
+  --python-platform linux -o requirements-dev.lock`). Conteneurs : images officielles `python` et `node`, épinglées
+  par empreinte (`@sha256:`). CI : actions GitHub épinglées par l'empreinte de leur commit, version en commentaire
+  (`tests/test_workflows.py` le vérifie). Aucune dépendance n'est copiée dans le dépôt.
+- **Suivi.** Dependabot propose chaque semaine les mises à jour npm, actions GitHub et Docker (empreintes comprises),
+  et signale les vulnérabilités des dépendances Python ; `pip-audit` (sur les trois verrous Python) et `npm audit`
+  bloquent la CI sur une vulnérabilité connue ; OpenSSF Scorecard évalue le dépôt chaque semaine ;
   une SBOM CycloneDX accompagne chaque version (`docs/publication.md`). Le tout forme le programme de sécurité des
   composants libres (`docs/programme-securite-open-source.md`, ISO/IEC 18974) : le lire avant d'ajouter ou de
   mettre à jour une dépendance.
