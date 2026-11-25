@@ -1,6 +1,6 @@
 // Parc d'agents Wazuh (ADR-0030) : parc inséré en base (aucun manager Wazuh dans le banc), vue de l'équipe et du client.
 // Placé en tête : les contrôles de mise en page, de traduction et d'accessibilité qui suivent voient une page remplie.
-import { sql, until } from '../harness.mjs'
+import { eventually, sql, until } from '../harness.mjs'
 
 const ts = (msAgo) => new Date(Date.now() - msAgo).toISOString().replace('T', ' ').replace('Z', '').padEnd(26, '0')
 const H = 3600e3
@@ -41,8 +41,13 @@ export default async ({ stack, BASE, check, login }) => {
   check(m.url().includes('filtre=down24'), 'filtre inscrit dans l\'URL')
   await m.getByRole('button', { name: 'Voir le détail de srv-web-02' }).click()
   await m.waitForSelector('.parc-detail h2:has-text("srv-web-02")')
-  const detail = await m.locator('.parc-detail').innerText()
-  const segs = await m.locator('.parc-timeline .seg').evaluateAll((l) => l.map((e) => e.className + ':' + e.style.flexBasis))
+  let detail = '', segs = []
+  const lire = async () => {
+    detail = await m.locator('.parc-detail').innerText()
+    segs = await m.locator('.parc-timeline .seg').evaluateAll((l) => l.map((e) => e.className + ':' + e.style.flexBasis))
+    return /disponibilité sur 7 jours/i.test(detail) && segs.some((x) => x.includes('disconnected')) && detail.includes('Ouvrir un ticket « agent déconnecté »')
+  }
+  await eventually(lire)
   check(/disponibilité sur 7 jours/i.test(detail) && segs.some((x) => x.includes('disconnected')), `détail : disponibilité et barre des 7 jours (${segs.join(' ')})`)
   check(detail.includes('Ouvrir un ticket « agent déconnecté »'), 'détail : bouton de ticket pour un agent déconnecté')
   await m.context().close()

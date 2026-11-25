@@ -14,6 +14,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 - Accessibilité (WCAG 2.5.3, étiquette dans le nom) : les boutons de mise en forme de l'éditeur affichent « H2 », « B »,
   « I », « 1. » ; leur nom accessible contient désormais ce texte (« Gras, B »), pour la commande vocale. Trouvé par
   axe-core 4.14.
+- Parc d'agents : choisir l'agent déjà affiché dans le détail ne recharge plus le panneau (il passait un instant sur
+  « Chargement… »).
 - README : la limite sur les processus parlait de limites de débit en mémoire ; elles sont partagées en base sous
   PostgreSQL. La vraie limite porte sur les fils de fond.
 

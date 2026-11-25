@@ -186,7 +186,7 @@ export default function Parc() {
               </div>
               <Versions versions={p.versions} manager={p.manager_version} />
             </section>
-            <AgentDetail key={`${p.client.key}-${selected}`} p={p} id={selected || rows[0]?.id} team={team} onChanged={load} />
+            <AgentDetail key={`${p.client.key}-${selected || rows[0]?.id}`} p={p} id={selected || rows[0]?.id} team={team} onChanged={load} />
           </div>
         </>
       )}
