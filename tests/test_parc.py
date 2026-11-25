@@ -2,7 +2,7 @@
 indexeur : aucun de ces tests ne prouve la compatibilité avec un vrai Wazuh (champs, permissions)."""
 import csv
 import io
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -96,7 +96,9 @@ def test_releve_etats_versions_et_vue_equipe(papp, db, world, wapi):
     assert {v["version"]: v["count"] for v in p["versions"]}["4.12.0"] == 3
     # Le dernier contact sert de « déconnecté depuis » à la première observation
     since = agents["002"]["status_since"]
-    assert since and since.startswith((utcnow() - timedelta(hours=50)).strftime("%Y-%m-%dT%H"))
+    # comparaison à la minute près, pas au préfixe de l'heure : le test échouait s'il tournait juste après hh:00
+    ecart = datetime.fromisoformat(since) - (utcnow() - timedelta(hours=50))
+    assert abs(ecart) < timedelta(minutes=5), (since, ecart)
     # Requête émise : jeton, filtre de groupe, champs choisis ; jamais d'écriture vers Wazuh
     assert all(x["method"] in ("GET", "POST") for x in wapi.requests)
     assert all(x["path"].split("?")[0] in ("/security/user/authenticate", "/", "/agents") for x in wapi.requests)
