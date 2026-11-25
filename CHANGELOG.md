@@ -10,6 +10,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 - Publication : l'attestation de provenance SLSA de l'archive des sources et de la SBOM est jointe à la version.
 
 ### Modifié
+- Dépendances de test : pytest borné à 9.0.3 au moins (CVE-2025-71176, relevée par Scorecard ; le verrou installait
+  déjà 9.2.0).
 - Chaîne d'approvisionnement : actions GitHub épinglées par l'empreinte de leur commit, images de base du
   `Dockerfile` par empreinte, outils Python de la CI et dépendances de test installés avec empreintes
   (`requirements-outils.lock`, `requirements-dev.lock`) et audités par pip-audit ; `tests/test_workflows.py` vérifie
