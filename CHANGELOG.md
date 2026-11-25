@@ -4,6 +4,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+## [0.8.1] : 2026-11-25
+
 ### Ajouté
 - Programme de sécurité des composants libres conforme à ISO/IEC 18974 (auto-certification OpenChain) :
   `docs/programme-securite-open-source.md` et registre `docs/registre-vulnerabilites.md` ; veille hebdomadaire des
