@@ -59,6 +59,35 @@ La CI relance tout cela sur chaque demande de fusion, avec l'audit des dépendan
 Remplir le modèle proposé : ce qui change, l'exigence citée, l'ADR, les tests ajoutés, l'effet sur le cloisonnement
 et sur l'audit. Une demande sans test pour un changement de comportement ne sera pas fusionnée.
 
+## Attester chaque commit (DCO)
+
+Chaque commit porte la ligne `Signed-off-by: Nom <adresse>` de son auteur, ajoutée par `git commit -s`. Par cette
+ligne, l'auteur atteste le [Developer Certificate of Origin 1.1](https://developercertificate.org/) : il a le droit
+de proposer cette contribution sous la licence du projet (MIT), parce qu'il l'a écrite ou qu'elle provient d'une
+source compatible, et il accepte qu'elle soit publiée avec son nom. Le nom et l'adresse sont ceux de l'auteur du
+commit (une adresse `noreply` de GitHub convient).
+
+La CI refuse une demande de fusion dont un commit n'a pas cette ligne (job `dco`, `scripts/verif_dco.py`). Pour
+rattraper des commits déjà faits : `git rebase --signoff main`, puis pousser à nouveau la branche. Sur le site
+GitHub, la ligne est ajoutée d'office aux commits faits dans l'interface web. Une attestation n'est pas une
+signature cryptographique : celle-ci n'est pas exigée.
+
+## Dépendances
+
+- **Choix.** Une nouvelle dépendance se justifie dans la demande de fusion : bibliothèque libre sous licence
+  compatible avec MIT, maintenue (versions et correctifs de sécurité récents), reconnue pour son usage (la
+  cryptographie passe par `cryptography`, `argon2-cffi` et le module `secrets`, jamais par du code maison). Pas de
+  dépendance pour quelques lignes que le projet peut écrire et tester lui-même.
+- **Obtention.** Python : dépendances directes et leurs bornes dans `requirements.txt`, figées avec leurs empreintes
+  dans `requirements.lock` (`uv pip compile requirements.txt --generate-hashes --python-version 3.12
+  --python-platform linux -o requirements.lock`), installées depuis PyPI par `pip install --require-hashes -r
+  requirements.lock`. Interface et parcours : registre npm, versions figées dans `package-lock.json`, installées par
+  `npm ci`. Conteneurs : images officielles `python` et `node`. CI : actions GitHub épinglées par version majeure.
+  Aucune dépendance n'est copiée dans le dépôt.
+- **Suivi.** Dependabot propose chaque semaine les mises à jour npm, actions GitHub et Docker, et signale les
+  vulnérabilités des dépendances Python ; `pip-audit` et `npm audit` bloquent la CI sur une vulnérabilité connue ;
+  une SBOM CycloneDX accompagne chaque version (`docs/publication.md`).
+
 ## Gouvernance et conduite
 
 Qui décide et comment : `GOVERNANCE.md`. Comportement attendu : `CODE_OF_CONDUCT.md`. Ce qui est prévu :
@@ -67,8 +96,8 @@ Qui décide et comment : `GOVERNANCE.md`. Comportement attendu : `CODE_OF_CONDUC
 ## Relecture
 
 Keryx a pour l'instant un seul mainteneur. Il relit chaque demande de fusion avant de la fusionner ; la CI doit être
-verte. Réponse visée sous 14 jours ; une demande restée sans réponse peut être relancée en commentaire. La signature
-des commits n'est pas exigée.
+verte. Réponse visée sous 14 jours ; une demande restée sans réponse peut être relancée en commentaire. Chaque
+commit porte l'attestation DCO (voir plus haut) ; la signature cryptographique des commits n'est pas exigée.
 
 ## Ajouter des tests
 
@@ -80,5 +109,6 @@ parcours (`e2e/scenarios/`). Un correctif de sécurité arrive avec le test qui 
 
 Keryx is a free software (MIT) incident console for Wazuh-based SOCs. Its documentation is in French, but issues,
 pull requests and comments in English are welcome. Before opening a pull request, run the checks listed above (tests,
-`ruff check .`, `npm run lint`, `scripts/verif_depot.py`); every behaviour change comes with automated tests. Report
+`ruff check .`, `npm run lint`, `scripts/verif_depot.py`); every behaviour change comes with automated tests. Every
+commit must carry a Developer Certificate of Origin sign-off (`git commit -s`), checked by CI. Report
 vulnerabilities privately, as described in `SECURITY.md`.

@@ -7,6 +7,20 @@ permissions:
   contents: read
 
 jobs:
+  dco:
+    # Demande de fusion : chaque commit porte « Signed-off-by: » de son auteur (CONTRIBUTING.md, DCO).
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Attestation DCO de chaque commit
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          TETE: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/verif_dco.py "$BASE" "$TETE"
+
   tests:
     runs-on: ubuntu-latest
     steps:

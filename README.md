@@ -120,6 +120,11 @@ Table complète des fonctions et de leurs exigences : [`docs/fonctions-et-exigen
 
 ## Démarrer en local (SQLite)
 
+Prérequis : Python 3.12 et pip, Node.js 22 et npm, git. Les bibliothèques sont installées par les commandes
+ci-dessous (Python : `requirements.lock`, avec empreintes ; interface : `web/package-lock.json`) ; leur choix et leur
+suivi sont décrits dans `CONTRIBUTING.md`, section « Dépendances ». Pour PostgreSQL : un serveur 16 et le client de
+la même version majeure. Image de production : `docker build .` (le `Dockerfile` reprend ces étapes).
+
 ```bash
 pip install -r requirements-dev.txt
 (cd web && npm ci && npm run build)          # interface servie par FastAPI depuis keryx/web_dist
