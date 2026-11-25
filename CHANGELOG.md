@@ -4,6 +4,17 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+### Ajouté
+- OpenSSF Scorecard : évaluation automatique du dépôt à chaque modification de `main` et chaque semaine, badge dans
+  le README (`.github/workflows/scorecard.yml`). Badge « ISO/IEC 18974 : conformité déclarée » vers le programme.
+- Publication : l'attestation de provenance SLSA de l'archive des sources et de la SBOM est jointe à la version.
+
+### Modifié
+- Chaîne d'approvisionnement : actions GitHub épinglées par l'empreinte de leur commit, images de base du
+  `Dockerfile` par empreinte, outils Python de la CI et dépendances de test installés avec empreintes
+  (`requirements-outils.lock`, `requirements-dev.lock`) et audités par pip-audit ; `tests/test_workflows.py` vérifie
+  l'épinglage.
+
 ## [0.8.2] : 2026-11-25
 
 Même contenu applicatif que la 0.8.1 : cette version termine sa publication.

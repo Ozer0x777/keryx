@@ -1,6 +1,6 @@
 # Keryx : un conteneur (API + interface web construite). Base : SQLite en test, PostgreSQL en production.
 # Étape 1 : construction de l'interface web (aucun fichier n'est chargé depuis un CDN à l'exécution).
-FROM node:22-slim AS web
+FROM node:22-slim@sha256:be979e5523c76fa4d5ca4ebd3099078f220aa47ec39c48ad5b5df9314debd6eb AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
@@ -8,7 +8,7 @@ COPY web ./
 RUN npm run build -- --outDir dist --emptyOutDir
 
 # Étape 2 : application
-FROM python:3.12-slim
+FROM python:3.12-slim@sha256:191083cdf6c7bda8c76158983163ead5d5cf7b77cf3033e805bb0f5296f51b4b
 # /sauvegardes : point de montage du volume de « keryx backup » (deploy/docker, profil sauvegarde). Le créer ici, au
 # bon propriétaire, évite tout « chown » à l'exécution : le volume nommé monté dessus en hérite.
 RUN useradd --create-home --uid 10001 keryx \
