@@ -116,5 +116,7 @@ jobs:
       - name: Créer la version GitHub
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "Keryx ${{ steps.version.outputs.version }}" --notes-file notes.md \
-          sbom.cdx.json "keryx-${{ steps.version.outputs.version }}-sources.tar.gz" SHA256SUMS SHA256SUMS.sigstore.json
+        run: |
+          V="${{ steps.version.outputs.version }}"
+          gh release create "$GITHUB_REF_NAME" --title "Keryx $V" --notes-file notes.md \
+            sbom.cdx.json "keryx-$V-sources.tar.gz" SHA256SUMS SHA256SUMS.sigstore.json
