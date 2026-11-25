@@ -4,3 +4,4 @@ pytest-cov>=7,<8   # couverture des tests (seuil vérifié en CI)
 ruff==0.17.6        # analyse statique Python (voir ruff.toml), même version que la CI
 moto[server]>=5,<6   # serveur S3 simulé pour les tests du stockage objet
 boto3>=1.35         # recoupe la signature AWS v4 dans les tests
+pyyaml>=6,<7         # lecture des workflows GitHub dans tests/test_workflows.py (MIT, déjà tiré par moto)
