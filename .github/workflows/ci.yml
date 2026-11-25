@@ -36,8 +36,12 @@ jobs:
           python-version: "3.12"
           cache: pip
       # Client de la même version majeure que le serveur : un pg_dump plus récent écrit des réglages (ex.
-      # transaction_timeout) que PostgreSQL 16 refuse à la restauration.
-      - run: sudo apt-get update && sudo apt-get install -y postgresql-client-16
+      # transaction_timeout) que PostgreSQL 16 refuse à la restauration. Pris dans le dépôt officiel de PostgreSQL,
+      # comme dans le Dockerfile : la distribution de la machine de CI ne le fournit pas toujours.
+      - run: |
+          sudo apt-get update && sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-16
       - run: pip install --require-hashes -r requirements.lock && pip install -r requirements-dev.txt
       - run: python -m pytest -q
         env:

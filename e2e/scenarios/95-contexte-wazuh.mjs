@@ -8,6 +8,7 @@ const axeSource = readFileSync(createRequire(import.meta.url).resolve('axe-core/
 
 const axe = async (page) => {
   await page.evaluate(axeSource)  // eslint-disable-line
+  await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getComputedTiming().endTime !== Infinity).map((a) => a.finished.catch(() => {}))))   // fondu d'un dialogue terminé : contraste mesuré sur l'état final
   return page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } })).violations
     .map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length, sample: v.nodes[0].target.join(' '), help: v.help })))
 }
