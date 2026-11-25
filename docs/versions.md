@@ -25,8 +25,9 @@ identifiant CVE s'il existe (voir `SECURITY.md`).
 
 | Version | Correctifs de sécurité |
 |---|---|
-| 0.8.1 (dernière publiée) et `main` | oui |
-| 0.8.0 | non : mettre à jour vers 0.8.1 (image touchée par des failles élevées de Debian, voir `CHANGELOG.md`) |
+| 0.8.2 (dernière publiée) et `main` | oui |
+| 0.8.1 | non : publication incomplète (image seule), mettre à jour vers 0.8.2 |
+| 0.8.0 | non : mettre à jour vers 0.8.2 (image touchée par des failles élevées de Debian, voir `CHANGELOG.md`) |
 | numéros antérieurs (jamais publiés) | non |
 
 Aucune durée de maintenance n'est promise pour une version ancienne : un correctif de sécurité sort dans une

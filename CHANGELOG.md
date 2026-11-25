@@ -4,7 +4,20 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+## [0.8.2] : 2026-11-25
+
+Même contenu applicatif que la 0.8.1 : cette version termine sa publication.
+
+### Corrigé
+- Publication : la version GitHub de la 0.8.1 n'a pas été créée. La commande qui joint les fichiers de la version
+  était coupée sur deux lignes dans une valeur YAML qui n'était pas un bloc ; YAML l'a recollée en un nom de fichier
+  invalide. L'image `ghcr.io/ozer0x777/keryx:0.8.1` est bien publiée, signée et corrigée, mais la 0.8.1 n'a ni page
+  de version, ni SBOM, ni archive des sources, ni liste d'empreintes signée : utiliser la 0.8.2. Un test
+  (`tests/test_workflows.py`) refuse désormais cette erreur dans tous les workflows.
+
 ## [0.8.1] : 2026-11-25
+
+Publication incomplète (voir 0.8.2) : seule l'image est publiée.
 
 ### Ajouté
 - Programme de sécurité des composants libres conforme à ISO/IEC 18974 (auto-certification OpenChain) :
