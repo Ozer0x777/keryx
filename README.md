@@ -1,5 +1,7 @@
 # Keryx
 
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/17087/badge)](https://www.bestpractices.dev/projects/17087)
+
 Console de gestion des incidents de sécurité pour un SOC équipé de Wazuh. Une alerte Wazuh arrive, Keryx ouvre un
 ticket pré-rempli (règle, équipement, criticité, MITRE ATT&CK), l'équipe le qualifie et le traite, le client suit
 son incident sur son portail, et chaque action est inscrite dans un journal d'audit scellé.
