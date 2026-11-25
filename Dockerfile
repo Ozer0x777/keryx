@@ -14,10 +14,18 @@ FROM python:3.12-slim
 RUN useradd --create-home --uid 10001 keryx \
  && mkdir -p /data/attachments /sauvegardes \
  && chown -R 10001:10001 /data /sauvegardes && chmod 700 /data /sauvegardes
-# Client PostgreSQL : nécessaire à « keryx backup » / « keryx restore » quand la base est PostgreSQL.
+# Client PostgreSQL : nécessaire à « keryx backup » / « keryx restore » quand la base est PostgreSQL. Il doit avoir la
+# version majeure du serveur du kit Docker (postgres:16) : un pg_dump plus récent écrit des réglages que le serveur 16
+# refuse à la restauration (« transaction_timeout » avec le client 17). Celui de Debian est trop récent, on prend
+# donc le client 16 dans le dépôt officiel de PostgreSQL (apt.postgresql.org, paquets signés).
 # ca-certificates : autorités du système, contre lesquelles le certificat de VirusTotal est vérifié (ADR-0022).
-RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client openssl ca-certificates \
+ARG PG_MAJOR=16
+RUN apt-get update && apt-get install -y --no-install-recommends postgresql-common openssl ca-certificates \
+ && /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y \
+ && apt-get install -y --no-install-recommends postgresql-client-${PG_MAJOR} \
  && rm -rf /var/lib/apt/lists/*
+ENV KERYX_PG_DUMP=/usr/lib/postgresql/${PG_MAJOR}/bin/pg_dump \
+    KERYX_PG_RESTORE=/usr/lib/postgresql/${PG_MAJOR}/bin/pg_restore
 WORKDIR /app
 COPY requirements.lock .
 RUN pip install --no-cache-dir --require-hashes -r requirements.lock

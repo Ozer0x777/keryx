@@ -35,11 +35,15 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      # Client de la même version majeure que le serveur : un pg_dump plus récent écrit des réglages (ex.
+      # transaction_timeout) que PostgreSQL 16 refuse à la restauration.
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client-16
       - run: pip install --require-hashes -r requirements.lock && pip install -r requirements-dev.txt
       - run: python -m pytest -q
         env:
           KERYX_TEST_PG_URL: postgresql+psycopg://postgres:postgres@localhost:5432/postgres
+          KERYX_PG_DUMP: /usr/lib/postgresql/16/bin/pg_dump
+          KERYX_PG_RESTORE: /usr/lib/postgresql/16/bin/pg_restore
 
   web:
     runs-on: ubuntu-latest

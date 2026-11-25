@@ -188,5 +188,9 @@ def restore(in_path: str, secret_key_b64: str, dest_dir: str, pg_restore_url: st
         r = subprocess.run([_pg_tool("pg_restore", "KERYX_PG_RESTORE"), "--no-owner", "--exit-on-error", "--dbname", dsn,
                             os.path.join(dest_dir, "keryx.pgdump")], env=env, capture_output=True, text=True)
         if r.returncode != 0:
-            raise BackupError("pg_restore a échoué : " + r.stderr.strip()[:300])
+            hint = ""
+            if "unrecognized configuration parameter" in r.stderr:
+                hint = (" (pg_restore est plus récent que le serveur : utiliser le client PostgreSQL de la même version"
+                        " majeure que le serveur, par exemple avec KERYX_PG_RESTORE)")
+            raise BackupError("pg_restore a échoué : " + r.stderr.strip()[:300] + hint)
     return {"files": len(manifest["files"]), "created_at": manifest["created_at"], "postgres": has_pg}

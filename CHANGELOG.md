@@ -4,25 +4,16 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
-### Ajouté
-- Analyse statique dans la CI, avertissements traités comme des erreurs : ruff pour Python (`ruff.toml`), ESLint pour
-  l'interface (`npm run lint`). Les tests échouent sur tout avertissement de dépréciation (`pytest.ini`).
-- Politique de sécurité complète (`SECURITY.md`) : délais de réponse et de correction, publication des avis et des
-  CVE, crédit des rapporteurs ; résumé en anglais dans `README.md`, `SECURITY.md` et `CONTRIBUTING.md`.
-
-### Corrigé
-- Huit traductions anglaises déclarées deux fois (même texte) : doublons retirés.
-- Vérification d'un jeton d'horodatage refusé par OpenSSL : le détail d'OpenSSL va au journal du serveur au lieu
-  d'être renvoyé à l'utilisateur.
-- Recherche VirusTotal : contrôle explicite de l'empreinte juste avant de la placer dans l'URL.
-- Caractères de contrôle bidirectionnels écrits en échappements dans le code et les tests (lisibles à la relecture).
-
-## [0.8.0] : 2026-11-24
+## [0.8.0] : 2026-11-25
 
 Première version publiée. Les numéros précédents n'ont jamais été publiés : le code portait 0.2.0, le kit Docker et
 le dossier d'homologation 0.7.0. La numérotation reprend donc à 0.8.0 pour ne pas paraître antérieure à ces documents.
 
 ### Ajouté
+- Analyse statique dans la CI, avertissements traités comme des erreurs : ruff pour Python (`ruff.toml`), ESLint pour
+  l'interface (`npm run lint`). Les tests échouent sur tout avertissement de dépréciation (`pytest.ini`).
+- Politique de sécurité complète (`SECURITY.md`) : délais de réponse et de correction, publication des avis et des
+  CVE, crédit des rapporteurs ; résumé en anglais dans `README.md`, `SECURITY.md` et `CONTRIBUTING.md`.
 - Parc d'agents Wazuh (ADR-0030) : état, version, disponibilité et historique des agents de chaque client, lus en
   lecture seule dans l'API du manager ; page pour l'équipe et pour le client, export CSV, ticket « agent déconnecté »
   ouvert à la main, parc dans le pilotage et le rapport périodique.
@@ -41,13 +32,23 @@ le dossier d'homologation 0.7.0. La numérotation reprend donc à 0.8.0 pour ne 
 - CI : audit des dépendances (pip-audit, npm audit), CodeQL, contrôle des secrets et de la rédaction, tests de
   l'interface ; Dependabot ; `SECURITY.md`, `CONTRIBUTING.md`, modèles d'issue et de demande de fusion.
 
+### Corrigé
+- Kit Docker : l'image embarquait le client PostgreSQL 17 de Debian alors que le serveur du kit est en version 16 ;
+  une sauvegarde PostgreSQL ne pouvait pas être restaurée (`transaction_timeout` refusé par le serveur 16). L'image
+  prend désormais le client 16 dans le dépôt officiel de PostgreSQL, et l'erreur de `pg_restore` indique la cause.
+- CI : client PostgreSQL 16 pour les tests de sauvegarde, et tests de l'interface lancés d'une façon que Node 22
+  comprend.
+- Huit traductions anglaises déclarées deux fois (même texte) : doublons retirés.
+- Vérification d'un jeton d'horodatage refusé par OpenSSL : le détail d'OpenSSL va au journal du serveur au lieu
+  d'être renvoyé à l'utilisateur.
+- Recherche VirusTotal : contrôle explicite de l'empreinte juste avant de la placer dans l'URL.
+- Caractères de contrôle bidirectionnels écrits en échappements dans le code et les tests (lisibles à la relecture).
+- L'identifiant de connexion est lu sans les espaces de début et de fin.
+- Libellés restés en français dans l'interface anglaise (pilotage, rapports).
+
 ### Modifié
 - Clore en faux positif exige un motif de 10 caractères au moins, interne à l'équipe (le client ne le voit pas).
 - Un champ de synthèse sans texte visible est enregistré vide.
-
-### Corrigé
-- L'identifiant de connexion est lu sans les espaces de début et de fin.
-- Libellés restés en français dans l'interface anglaise (pilotage, rapports).
 
 ### Sécurité
 - Pillow 12.3.0 vers 13.0.0 : vulnérabilités connues corrigées (relevées par pip-audit).
@@ -56,3 +57,4 @@ le dossier d'homologation 0.7.0. La numérotation reprend donc à 0.8.0 pour ne 
 
 Premier commit du dépôt public (code numéroté 0.2.0, non publié). Les changements jusqu'au 22/11 (audit de sécurité,
 recherche VirusTotal, contexte Wazuh, kit Docker, README) sont décrits par l'historique git et les ADR 0021 à 0023.
+
