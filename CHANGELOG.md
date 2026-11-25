@@ -10,6 +10,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
   dépendances.
 - Publication : l'archive des sources et la liste des empreintes SHA-256 des fichiers de la version (`SHA256SUMS`),
   signée sans clé avec cosign, sont jointes à chaque version ; vérification dans `docs/publication.md`.
+- Architecture : acteurs (analyste, manager, client, admin, intégration Wazuh, opérateur, services externes), ce
+  que chacun peut faire et ce qui lui est refusé (`docs/architecture.md`, « Acteurs et actions »).
 - Gouvernance (`GOVERNANCE.md` : rôles, décisions, continuité), code de conduite (Contributor Covenant 2.1),
   feuille de route (`ROADMAP.md`), vue d'ensemble de l'architecture (`docs/architecture.md`) et argumentaire de
   sécurité (`docs/securite.md` : garanties, modèle de menaces, principes appliqués, cryptographie).
