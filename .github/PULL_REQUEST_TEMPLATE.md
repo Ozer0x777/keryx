@@ -12,4 +12,5 @@
 - [ ] ADR ajouté pour un choix technique, matrice de traçabilité à jour
 - [ ] Chaînes d'interface traduites (`web/src/i18n.en.js`)
 - [ ] `python3 scripts/verif_depot.py` passe
+- [ ] Dépendance ajoutée ou changée : justifiée (`CONTRIBUTING.md`, « Dépendances », programme ISO/IEC 18974)
 - [ ] Entrée dans `CHANGELOG.md` (section « Non publié »)

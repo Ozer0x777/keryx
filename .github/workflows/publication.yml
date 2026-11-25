@@ -36,6 +36,27 @@ jobs:
       - name: Contrôles du dépôt
         run: python3 scripts/verif_depot.py
 
+      # Programme ISO/IEC 18974 : aucune version publiée avec une vulnérabilité connue, élevée ou critique et
+      # corrigeable, dans ses dépendances ou dans son image (docs/programme-securite-open-source.md).
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Audit des dépendances
+        run: |
+          pip install pip-audit
+          pip-audit --strict -r requirements.lock
+          (cd web && npm audit --omit=dev --audit-level=high)
+      - name: Construire l'image à analyser
+        run: docker build -t keryx:verif .
+      - name: Analyse de l'image (Grype)
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: keryx:verif
+          only-fixed: true
+          severity-cutoff: high
+          fail-build: true
+          output-format: table
+
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:

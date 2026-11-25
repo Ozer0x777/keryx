@@ -86,7 +86,9 @@ signature cryptographique : celle-ci n'est pas exigée.
   Aucune dépendance n'est copiée dans le dépôt.
 - **Suivi.** Dependabot propose chaque semaine les mises à jour npm, actions GitHub et Docker, et signale les
   vulnérabilités des dépendances Python ; `pip-audit` et `npm audit` bloquent la CI sur une vulnérabilité connue ;
-  une SBOM CycloneDX accompagne chaque version (`docs/publication.md`).
+  une SBOM CycloneDX accompagne chaque version (`docs/publication.md`). Le tout forme le programme de sécurité des
+  composants libres (`docs/programme-securite-open-source.md`, ISO/IEC 18974) : le lire avant d'ajouter ou de
+  mettre à jour une dépendance.
 
 ## Gouvernance et conduite
 

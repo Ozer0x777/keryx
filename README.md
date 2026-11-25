@@ -113,6 +113,7 @@ Table complète des fonctions et de leurs exigences : [`docs/fonctions-et-exigen
 | Déploiement Docker, fiche ANSSI, PDIS | [`docs/deploiement-docker.md`](docs/deploiement-docker.md) |
 | Architecture (vue d'ensemble) | [`docs/architecture.md`](docs/architecture.md) |
 | Sécurité : garanties, menaces, argumentaire | [`docs/securite.md`](docs/securite.md) |
+| Sécurité des composants libres (ISO/IEC 18974) | [`docs/programme-securite-open-source.md`](docs/programme-securite-open-source.md), [registre](docs/registre-vulnerabilites.md) |
 | Décisions d'architecture (ADR) | [`docs/adr/`](docs/adr/) |
 | Feuille de route | [`ROADMAP.md`](ROADMAP.md) |
 | Matrice exigence, code, test | [`docs/matrice-tracabilite.md`](docs/matrice-tracabilite.md) |

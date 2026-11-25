@@ -19,8 +19,11 @@ RUN useradd --create-home --uid 10001 keryx \
 # refuse à la restauration (« transaction_timeout » avec le client 17). Celui de Debian est trop récent, on prend
 # donc le client 16 dans le dépôt officiel de PostgreSQL (apt.postgresql.org, paquets signés).
 # ca-certificates : autorités du système, contre lesquelles le certificat de VirusTotal est vérifié (ADR-0022).
+# apt-get upgrade : correctifs de sécurité Debian publiés après l'image de base python:3.12-slim ; sans lui, l'image
+# embarque des failles déjà corrigées (zlib, glibc relevées par Grype le 25/11/2026, docs/programme-securite-open-source.md).
 ARG PG_MAJOR=16
-RUN apt-get update && apt-get install -y --no-install-recommends postgresql-common openssl ca-certificates \
+RUN apt-get update && apt-get upgrade -y \
+ && apt-get install -y --no-install-recommends postgresql-common openssl ca-certificates \
  && /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y \
  && apt-get install -y --no-install-recommends postgresql-client-${PG_MAJOR} \
  && rm -rf /var/lib/apt/lists/*
@@ -28,7 +31,9 @@ ENV KERYX_PG_DUMP=/usr/lib/postgresql/${PG_MAJOR}/bin/pg_dump \
     KERYX_PG_RESTORE=/usr/lib/postgresql/${PG_MAJOR}/bin/pg_restore
 WORKDIR /app
 COPY requirements.lock .
-RUN pip install --no-cache-dir --require-hashes -r requirements.lock
+# pip ne sert qu'à l'installation : retiré ensuite, il n'apporte à l'image que ses propres failles.
+RUN pip install --no-cache-dir --require-hashes -r requirements.lock \
+ && pip uninstall -y pip
 COPY keryx ./keryx
 COPY LICENSE alembic.ini ./
 COPY migrations ./migrations
