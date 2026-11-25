@@ -19,6 +19,10 @@ Ce modèle convient à la taille actuelle du projet ; il sera revu dès qu'un de
 | Rapporteur de vulnérabilité | Toute personne qui signale une faille | Signaler en privé, laisser le temps du correctif (`SECURITY.md`) | Signalement privé GitHub |
 | Utilisateur | SOC, MSSP, CERT qui déploient Keryx | Signaler bogues et besoins en issue, appliquer les mises à jour de sécurité | Lecture |
 
+Accès aux ressources sensibles (administration du dépôt et de ses réglages, paquet ghcr.io, signalements privés de
+vulnérabilité, publication des versions) : **Ozer0x777 seul** au 25/11/2026, avec double authentification. Toute
+personne qui reçoit l'un de ces accès est ajoutée à ce tableau dans la même demande de fusion.
+
 ## Prise de décision
 
 - **Changement courant** (correctif, test, documentation) : une demande de fusion, CI verte, relecture du mainteneur.

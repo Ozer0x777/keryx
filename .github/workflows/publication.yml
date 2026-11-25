@@ -1,7 +1,8 @@
 # Publication d'une version : à chaque étiquette vX.Y.Z poussée sur le dépôt.
 # Construit l'image de Keryx, la publie sur le registre GitHub (ghcr.io/<compte>/keryx), joint une attestation de
 # provenance et une SBOM, signe l'image (cosign, signature sans clé liée à ce workflow), puis crée la version GitHub
-# avec la section du CHANGELOG et la SBOM CycloneDX. Vérifier une image : docs/publication.md.
+# avec la section du CHANGELOG, la SBOM CycloneDX, l'archive des sources et la liste de leurs empreintes, signée.
+# Vérifier une image ou les fichiers de la version : docs/publication.md.
 name: Publication
 on:
   push:
@@ -72,6 +73,13 @@ jobs:
       - name: SBOM CycloneDX du dépôt
         run: python3 scripts/sbom.py sbom.cdx.json
 
+      - name: Archive des sources, liste d'empreintes signée
+        run: |
+          V="${{ steps.version.outputs.version }}"
+          git archive --format=tar.gz --prefix="keryx-$V/" -o "keryx-$V-sources.tar.gz" "$GITHUB_SHA"
+          sha256sum "keryx-$V-sources.tar.gz" sbom.cdx.json > SHA256SUMS
+          cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
+
       - name: Notes de version (section du CHANGELOG)
         run: |
           V="${{ steps.version.outputs.version }}"
@@ -87,4 +95,5 @@ jobs:
       - name: Créer la version GitHub
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "Keryx ${{ steps.version.outputs.version }}" --notes-file notes.md sbom.cdx.json
+        run: gh release create "$GITHUB_REF_NAME" --title "Keryx ${{ steps.version.outputs.version }}" --notes-file notes.md \
+          sbom.cdx.json "keryx-${{ steps.version.outputs.version }}-sources.tar.gz" SHA256SUMS SHA256SUMS.sigstore.json

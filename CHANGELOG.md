@@ -5,6 +5,11 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 ## [Non publié]
 
 ### Ajouté
+- Attestation DCO de chaque commit (`git commit -s`), contrôlée par la CI sur chaque demande de fusion
+  (`scripts/verif_dco.py`, job `dco`) ; CONTRIBUTING.md décrit la règle et le choix, l'obtention et le suivi des
+  dépendances.
+- Publication : l'archive des sources et la liste des empreintes SHA-256 des fichiers de la version (`SHA256SUMS`),
+  signée sans clé avec cosign, sont jointes à chaque version ; vérification dans `docs/publication.md`.
 - Gouvernance (`GOVERNANCE.md` : rôles, décisions, continuité), code de conduite (Contributor Covenant 2.1),
   feuille de route (`ROADMAP.md`), vue d'ensemble de l'architecture (`docs/architecture.md`) et argumentaire de
   sécurité (`docs/securite.md` : garanties, modèle de menaces, principes appliqués, cryptographie).
