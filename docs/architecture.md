@@ -35,6 +35,22 @@ Vue d'ensemble. Les choix et leurs raisons sont dans les ADR (`docs/adr/`), le s
 | Tâches de fond | Deux fils dans le processus : relance des notifications, relevé du parc d'agents | `keryx/api.py` (`notify-retry`, `parc-wazuh`) |
 | Administration | Ligne de commande tracée au journal d'audit : comptes, clients, clés, sauvegarde | `keryx/cli.py`, `keryx/backup.py` |
 
+## Acteurs et actions
+
+Les droits sont vérifiés par le serveur, route par route (`require_role` dans `keryx/api.py` et `keryx/routes_*.py`),
+et le cloisonnement par client dans la couche d'accès aux données. Le détail du quotidien de chaque rôle est dans
+`docs/prise-en-main/`.
+
+| Acteur | Comment il agit | Ce qu'il peut faire | Ce qu'il ne peut pas faire |
+|---|---|---|---|
+| Analyste | Interface web (mot de passe et second facteur, ou SSO OIDC) | Sur les tickets de ses clients : qualifier (gravité, verdict, MITRE ATT&CK, ETSI ISI), changer le statut, affecter, rédiger le corps et la synthèse, commenter (interne ou visible du client), lier et fusionner des tickets, déposer et suivre les pièces (chaîne de possession, restitution, horodatage), exporter en IODEF ; consulter le contexte Wazuh, chercher une empreinte sur VirusTotal et relever le parc d'agents quand ces connecteurs sont activés ; ouvrir le mode crise et tenir son registre | Lire les tickets d'un client qui ne lui est pas rattaché ; détruire une pièce ; clore le mode crise ; administrer les comptes |
+| Manager | Interface web | Tout ce que fait l'analyste, plus : détruire une pièce, clore le mode crise, tenir la table MITRE et ses imports, consulter et exporter le journal d'audit, piloter l'équipe (tableau de bord, rapports périodiques, registre, affectation en masse, modèles communs) | Administrer les comptes, clients et clés d'API |
+| Client | Portail web, cloisonné à son client | Suivre ses incidents (statut, gravité, éléments marqués visibles), répondre au SOC, déposer un fichier, consulter son parc d'agents | Voir les commentaires internes, les motifs de faux positif, les recherches VirusTotal, le contexte Wazuh, les données d'un autre client |
+| Admin | Interface web et ligne de commande | Comptes (création, rôle, rattachement aux clients, réinitialisation du mot de passe et du second facteur, revue des comptes), clients, clés d'API Wazuh, accès d'un client à son indexeur et à son API Wazuh, table MITRE, rétention, état du système, journal d'audit (vérification, points de contrôle) | Lire le contenu des tickets, le parc d'agents des clients ou le détail des actions sur les tickets dans le journal |
+| Intégration Wazuh d'un client | Requête HTTPS avec la clé d'API de ce client | Envoyer une alerte : ouverture d'un ticket pré-rempli ou rattachement à un ticket ouvert | Toute autre route ; écrire pour un autre client que celui de sa clé |
+| Opérateur du serveur | Ligne de commande `keryx` sur l'hôte, chaque action tracée au journal | Créer le premier compte, les clients et les clés, sauvegarder et restaurer, vérifier la chaîne d'audit, charger un jeu de démonstration | (accès à l'hôte : hors du contrôle de l'application, voir `docs/securite.md`) |
+| Services externes | Appelés par Keryx seulement, jamais l'inverse (sauf le retour OIDC) | Messagerie, antivirus, fournisseur d'identité, autorité d'horodatage, syslog, indexeur et API du manager Wazuh d'un client (lecture seule), VirusTotal | Recevoir autre chose que ce que leur fonction exige (VirusTotal ne reçoit qu'une empreinte, jamais un fichier) |
+
 ## Flux principal
 
 1. Wazuh déclenche l'intégration pour une alerte au-dessus du seuil ; le script envoie l'alerte en HTTPS avec la clé
