@@ -1,5 +1,4 @@
 """Conformité avancée (v0.7) : crise, visionneuse d'audit, STIX, rétention. [PRIS VI.5.5.1 ; PDIS IV.2.2.w]"""
-import io
 import json
 from datetime import timedelta
 

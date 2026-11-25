@@ -10,12 +10,10 @@ from alembic.config import Config
 from alembic.migration import MigrationContext
 from sqlalchemy import func, select
 
-from keryx.api import create_app
-from keryx.config import Settings
 from keryx.db import Base, make_engine
 from keryx.models import RawAlert, Ticket
 
-from .conftest import ALERT_SSH_BRUTEFORCE, SECRET_KEY, _pg_database, ingest
+from .conftest import ALERT_SSH_BRUTEFORCE, _pg_database, ingest
 
 pytestmark = pytest.mark.skipif(not os.environ.get("KERYX_TEST_PG_URL"), reason="PostgreSQL requis")
 ROOT = Path(__file__).parents[1]

@@ -58,8 +58,8 @@ def main() -> int:
                 line = text.count("\n", 0, m.start()) + 1
                 problems.append(f"{path}:{line} : {label} probable")
         if path.endswith(".md") and TIRET in text:
-            for i, l in enumerate(text.splitlines(), 1):
-                if TIRET in l:
+            for i, ligne in enumerate(text.splitlines(), 1):
+                if TIRET in ligne:
                     problems.append(f"{path}:{i} : tiret cadratin dans la documentation")
     for p in problems:
         print(p)

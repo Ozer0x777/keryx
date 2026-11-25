@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from . import audit, sla, wazuh_agents
 from .ids import as_utc, rfc3339, utcnow
-from .models import TERMINAL_STATUSES, Tenant, Ticket, User
+from .models import Tenant, Ticket, User
 
 MAX_DAYS = 366
 MAX_TICKETS = 20000
@@ -186,7 +186,7 @@ def register(app, ctx) -> None:
         commit(db)
         if format == "json":
             return {"client": tenant.key, "generated_at": rfc3339(utcnow()),
-                    "items": [dict(zip(header, line(t))) for t in rows]}
+                    "items": [dict(zip(header, line(t), strict=True)) for t in rows]}
         buf = io.StringIO()
         w = csv.writer(buf, lineterminator="\r\n")
         w.writerow(header)

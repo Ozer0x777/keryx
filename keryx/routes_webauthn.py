@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 
 from fastapi import Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 from webauthn import (generate_authentication_options, generate_registration_options, options_to_json,
                       verify_authentication_response, verify_registration_response)

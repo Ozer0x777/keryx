@@ -3,7 +3,6 @@ chiffrement avant envoi, quarantaine, destruction. [plan : stockage objet]"""
 import datetime as dt
 import hashlib
 import socket
-import threading
 
 import boto3
 import pytest

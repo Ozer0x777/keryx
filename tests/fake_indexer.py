@@ -32,7 +32,7 @@ USER, PASSWORD = "keryx-lecture", "S3cret-indexeur-de-test!"
 ALERT_ID = "1732113662.4417203"                      # identifiant de ALERT_SSH_BRUTEFORCE (tests/conftest.py)
 ALERT_AT = dt.datetime(2026, 11, 20, 14, 41, 2, 118000, tzinfo=dt.timezone.utc)
 INDEX = "wazuh-alerts-4.x-2026.11.20"
-HOSTILE_LOG = "GET /?q=<script>alert(1)</script> \x1b[31mrouge\x00 ‮gnp.exe HTTP/1.1"
+HOSTILE_LOG = "GET /?q=<script>alert(1)</script> \x1b[31mrouge\x00 \u202egnp.exe HTTP/1.1"
 
 
 def make_pki(directory: str) -> str:
@@ -162,7 +162,8 @@ def search(docs: list[dict], index_pattern: str, body: dict, ignore_agent: bool 
                 if op == "format":
                     continue
                 pivot = parse_time(value)
-                keep = {"lt": lambda t: t < pivot, "lte": lambda t: t <= pivot, "gt": lambda t: t > pivot, "gte": lambda t: t >= pivot}[op]
+                keep = {"lt": lambda t, p=pivot: t < p, "lte": lambda t, p=pivot: t <= p, "gt": lambda t, p=pivot: t > p,
+                        "gte": lambda t, p=pivot: t >= p}[op]
                 hits = [d for d in hits if keep(parse_time(_get(d["_source"], field)))]
         else:
             raise ValueError("filtre non pris en charge par le faux indexeur")

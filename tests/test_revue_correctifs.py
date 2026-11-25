@@ -1,15 +1,13 @@
 """Régressions de la revue de code : courriels, notifications, rapports, rétention, crise."""
-import smtplib
 from datetime import timedelta
 
-import pytest
 from sqlalchemy import select
 
 from keryx import notify
 from keryx.api import create_app
 from keryx.ids import utcnow
 from keryx.inbox import push
-from keryx.models import InboxItem, Notification, RawAlert, Tenant, Ticket, User
+from keryx.models import InboxItem, Notification, RawAlert, Ticket, User
 
 from .conftest import ALERT_CRITICAL, ALERT_NO_MITRE, ALERT_SSH_BRUTEFORCE, ingest, login
 from .test_notifications import FakeSMTP, _contacts
@@ -128,7 +126,7 @@ def test_crise_refusee_sur_ticket_clos_et_desactivee_par_la_fusion(app, db, worl
     row.crisis = True            # état incohérent forcé : même alors, le ticket clos refuse toute modification
     db.commit()
     assert m.post("/api/v1/tickets/ACME-2/crisis/entries", json={"kind": "decision", "body": "tard"}).status_code == 409
-    act = m.post("/api/v1/tickets/ACME-1/crisis", json={"active": True, "reason": "autre"}).json()
+    m.post("/api/v1/tickets/ACME-1/crisis", json={"active": True, "reason": "autre"})
     m.post("/api/v1/tickets/ACME-1/crisis/entries", json={"kind": "action", "body": "agir"})
     entry = m.get("/api/v1/tickets/ACME-1/crisis").json()["items"][0]
     m.post("/api/v1/tickets/ACME-1/status", json={"status": "en_evaluation"})

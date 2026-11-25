@@ -17,8 +17,6 @@ jobs:
           cache: pip
       - run: pip install --require-hashes -r requirements.lock && pip install -r requirements-dev.txt
       - run: python -m pytest -q
-        env:
-          PYTHONWARNINGS: ignore
 
   tests-postgres:
     # Mêmes tests sous PostgreSQL 16 : migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore.
@@ -41,7 +39,6 @@ jobs:
       - run: pip install --require-hashes -r requirements.lock && pip install -r requirements-dev.txt
       - run: python -m pytest -q
         env:
-          PYTHONWARNINGS: ignore
           KERYX_TEST_PG_URL: postgresql+psycopg://postgres:postgres@localhost:5432/postgres
 
   web:
@@ -55,10 +52,23 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
         working-directory: web
+      - run: npm run lint
+        working-directory: web
       - run: npm run build
         working-directory: web
       - run: npm test
         working-directory: web
+
+  analyse-statique:
+    # Avertissements traités comme des erreurs : ruff (Python, règles dans ruff.toml). ESLint tourne dans le job web.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "ruff==0.17.6"
+      - run: ruff check .
 
   depot:
     # Aucun secret suivi par git, aucun tiret cadratin dans la documentation Markdown.

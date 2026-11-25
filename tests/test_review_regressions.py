@@ -1,5 +1,4 @@
 """Tests de non-régression des constats de la revue de code (interne et indépendante)."""
-import copy
 import hashlib
 import importlib.util
 import json

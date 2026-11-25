@@ -1,9 +1,8 @@
 """Administration dans l'interface. [PDIS IV.3.4.b, IV.3.9.d à h ; PRIS IV.3.n, o]"""
-import pyotp
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from keryx.models import Session, User
+from keryx.models import Session
 
 from .conftest import ALERT_SSH_BRUTEFORCE, PASSWORD, ingest, login
 

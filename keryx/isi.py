@@ -8,7 +8,7 @@ Trois axes sont obligatoires pour un incident : qui/pourquoi, quoi, statut, et t
 """
 from __future__ import annotations
 
-from .ids import rfc3339, utcnow
+from .ids import rfc3339
 
 CATEGORIES = {"IEX": "Intrusions et attaques externes", "IMF": "Dysfonctionnements", "IDB": "Comportements internes déviants"}
 

@@ -28,8 +28,8 @@ EMPTY_ZIP_SHA256 = hashlib.sha256(EMPTY_ZIP).hexdigest()
 QUIET_SHA256 = "c0ffee" + "0" * 58                        # connu, aucune détection
 HOSTILE_SHA256 = "bad0" * 16                              # connu, textes hostiles
 UNKNOWN_SHA256 = "f" * 64
-HOSTILE_NAME = "facture<script>alert(1)</script>\x1b[31m\x00‮gpj.exe"
-HOSTILE_LABEL = "<img src=x onerror=alert(1)>trojan.‮evil/" + "A" * 400
+HOSTILE_NAME = "facture<script>alert(1)</script>\x1b[31m\x00\u202egpj.exe"
+HOSTILE_LABEL = "<img src=x onerror=alert(1)>trojan.\u202eevil/" + "A" * 400
 
 
 def attributes(sha256: str, sha1: str | None = None, malicious: int = 0, name: str = "fichier.bin", **extra) -> dict:
@@ -55,7 +55,7 @@ def sample_files() -> dict[str, dict]:
     eicar = attributes(EICAR_SHA256, EICAR_SHA1, malicious=62, name="eicar.com")
     hostile = attributes(HOSTILE_SHA256, malicious=3, name=HOSTILE_NAME, type_description="<b>PE</b>\x07",
                          popular_threat_classification={"suggested_threat_label": HOSTILE_LABEL})
-    hostile["last_analysis_results"]["<script>x</script>"] = {"category": "malicious", "result": "Evil\r\n‮<svg onload=1>"}
+    hostile["last_analysis_results"]["<script>x</script>"] = {"category": "malicious", "result": "Evil\r\n\u202e<svg onload=1>"}
     hostile["last_analysis_stats"]["malicious"] = "beaucoup"                       # type inattendu : compté 0
     hostile["last_analysis_date"] = "hier"
     return {

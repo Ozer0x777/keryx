@@ -2,9 +2,7 @@
 limite de pièce par client, suggestion de gravité."""
 import json
 
-from sqlalchemy import select
 
-from keryx.models import Tenant
 
 from .conftest import ALERT_NO_MITRE, ALERT_SSH_BRUTEFORCE, ingest, login
 from .test_attachments import REGISTRY, zip_bytes

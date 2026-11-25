@@ -12,6 +12,7 @@ import logging
 import os
 
 import pytest
+from cryptography.exceptions import InvalidTag
 from sqlalchemy import select
 
 from keryx import wazuh_context as wz
@@ -118,7 +119,7 @@ def test_reglages_admin_identifiants_chiffres_et_jamais_renvoyes(wapp, db, world
     assert acme.wazuh_indexer_user.startswith("v1:") and USER not in acme.wazuh_indexer_user
     box = wapp.state.box
     assert box.decrypt(acme.wazuh_indexer_password, f"wazuh_indexer_password:{acme.id}") == PASSWORD
-    with pytest.raises(Exception):
+    with pytest.raises(InvalidTag):
         box.decrypt(acme.wazuh_indexer_password, f"wazuh_indexer_password:{delta.id}")
     # Audit : noms des champs, hôtes et indicateurs ; jamais d'identifiant
     last = audit_rows(db, "client.update")[-1]

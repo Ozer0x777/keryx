@@ -18,7 +18,7 @@ initLang()
 // Erreur de rendu : page sobre et traduite, sans pile technique (celle-ci reste dans la console du navigateur).
 function RouteError() {
   const error = useRouteError()
-  console.error(error)   // eslint-disable-line no-console
+  console.error(error)
   return (
     <main className="content" role="alert">
       <h1>{t("Une erreur empêche d'afficher cette page.")}</h1>

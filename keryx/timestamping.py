@@ -8,6 +8,7 @@ certificats d'autorité configurés, empreinte et nonce de la demande) avant d'�
 from __future__ import annotations
 
 import datetime as dt
+import logging
 import os
 import re
 import shutil
@@ -16,9 +17,10 @@ import tempfile
 
 import httpx
 from cryptography import x509
-from cryptography.hazmat.primitives import serialization
 from rfc3161_client import (HashAlgorithm, PKIStatus, TimestampRequestBuilder, VerifierBuilder, decode_timestamp_response)
 from rfc3161_client.errors import VerificationError
+
+log = logging.getLogger("keryx.horodatage")
 
 HTTP_TIMEOUT = 10.0
 
@@ -115,7 +117,9 @@ def _openssl_verify(token: bytes, message: bytes | None, request: bytes | None, 
                 raise TimestampError(f"Politique d'horodatage inattendue : {found} (attendu : {policy_oid}).")
         v = _openssl(*args)
         if "Verification: OK" not in v.stdout + v.stderr:
-            raise TimestampError("Réponse de l'autorité d'horodatage non valide : " + (v.stderr.strip().splitlines() or ["vérification refusée"])[-1][:160])
+            # Le détail d'OpenSSL (qui peut citer des chemins de fichiers du serveur) va au journal, pas à l'utilisateur.
+            log.warning("openssl ts -verify a refusé le jeton : %s", (v.stderr.strip().splitlines() or ["sans détail"])[-1][:300])
+            raise TimestampError("Réponse de l'autorité d'horodatage non valide : vérification refusée par OpenSSL.")
     return {"gen_time": when, "serial": serial, "policy": policy_found}
 
 

@@ -18,8 +18,8 @@ def register(app, ctx) -> None:
     def dictionary(user: User = Depends(current_user)):
         require_role(user, "analyst", "manager")
         return {"categories": isi.CATEGORIES, "mandatory": list(isi.MANDATORY), "multi": isi.MULTI,
-                "axes": {a: [{"code": c, "ref": r, "label": l} for c, (r, l) in vals.items()] for a, vals in isi.AXES.items()},
-                "how": [{"code": c, "ref": r.replace("B.1.2.", "B.1.3."), "label": l} for c, (r, l) in isi.AXES["what"].items()]}
+                "axes": {a: [{"code": c, "ref": r, "label": lab} for c, (r, lab) in vals.items()] for a, vals in isi.AXES.items()},
+                "how": [{"code": c, "ref": r.replace("B.1.2.", "B.1.3."), "label": lab} for c, (r, lab) in isi.AXES["what"].items()]}
 
     @app.get("/api/v1/tickets/{ref}/isi")
     def get_isi(ref: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):

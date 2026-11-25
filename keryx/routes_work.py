@@ -5,7 +5,6 @@ ne contient jamais de détail de l'incident, ici seulement la référence et la 
 """
 from __future__ import annotations
 
-from datetime import timedelta
 
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -15,7 +14,7 @@ from sqlalchemy.orm import Session as DbSession
 from . import audit, sla
 from .ids import rfc3339, utcnow
 from .inbox import push
-from .models import (INBOX_KINDS, LINK_KINDS, InboxItem, RawAlert, SavedFilter, Template, Tenant, Ticket, TicketEvent,
+from .models import (INBOX_KINDS, LINK_KINDS, InboxItem, RawAlert, SavedFilter, Template, Ticket, TicketEvent,
                      TicketLink, User, Comment)
 from .sanitize import clean_html
 

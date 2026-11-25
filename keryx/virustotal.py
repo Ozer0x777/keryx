@@ -284,8 +284,10 @@ class Client:
     def file_report(self, digest: str, api_key: str) -> Report:
         """`GET /api/v3/files/{empreinte}`. Renvoie le résumé du rapport, ou « inconnu » si VirusTotal ne connaît pas
         ce fichier. Lève VirusTotalError pour tout le reste."""
+        # Contrôle explicite à l'endroit où l'empreinte entre dans l'URL : uniquement 40 ou 64 caractères hexadécimaux
+        # minuscules, donc ni « / », ni « ? », ni « .. » ne peuvent changer le chemin demandé à VirusTotal.
         kind = hash_kind(digest)
-        if kind is None:
+        if kind is None or not re.fullmatch(HASH_PATTERN, digest):
             raise ValueError("empreinte invalide")
         deadline = time.monotonic() + TOTAL_TIMEOUT_S
         headers = {"x-apikey": api_key, "Accept": "application/json", "Accept-Encoding": "identity", "User-Agent": "keryx"}

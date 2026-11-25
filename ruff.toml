@@ -1,0 +1,15 @@
+# Analyse statique Python (ruff). Lancée par la CI : tout avertissement fait échouer la vérification.
+target-version = "py312"
+line-length = 120
+extend-exclude = ["data", "web", "e2e"]
+
+[lint]
+# E4/E7/E9 et F : erreurs de syntaxe, noms indéfinis, imports inutiles, variables mortes (pyflakes).
+# B : pièges courants (bugbear). PLE : erreurs détectées par pylint.
+select = ["E4", "E7", "E9", "F", "B", "PLE"]
+ignore = [
+    "B008",  # Depends(...) en valeur par défaut : forme normale de FastAPI.
+    "B904",  # raise ... from err : les HTTPException n'exposent volontairement pas la cause au client.
+    "E702",  # deux instructions courtes sur une ligne : style du projet.
+    "E731",  # lambda nommée : style du projet pour les petites fonctions locales.
+]

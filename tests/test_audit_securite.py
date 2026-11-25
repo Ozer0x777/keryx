@@ -132,7 +132,7 @@ def callback(c, q, code="c1"):
     return c.get("/api/v1/auth/oidc/soc/callback", params={"code": code, "state": q["state"][0]}, follow_redirects=False)
 
 
-def test_un_fournisseur_ne_lie_pas_un_compte_admin(sso, db, world):
+def test_un_fournisseur_ne_lie_pas_un_compte_admin(sso, db, world):  # noqa: F811 - fixture importée
     admin = world["users"]["admin"]
     admin.email = "admin@soc.example"
     db.commit()
@@ -166,7 +166,7 @@ def test_fournisseur_restreint_aux_clients_et_role_recontrole_a_chaque_connexion
     assert callback(c, begin(c)).headers["location"].endswith("inconnu") and c.get("/api/v1/me").status_code == 401
 
 
-def test_etat_sso_lie_au_navigateur_qui_a_commence(sso, db):
+def test_etat_sso_lie_au_navigateur_qui_a_commence(sso, db):  # noqa: F811 - fixture importée
     attacker, victim = TestClient(sso), TestClient(sso)
     q = begin(attacker)                                                       # l'attaquant commence, la victime termine
     assert callback(victim, q).headers["location"] == "/connexion?sso_error=etat"

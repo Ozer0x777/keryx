@@ -560,7 +560,7 @@ def fetch(cfg: IndexerConfig, agent_id: str, pivot: datetime, alert_id: str | No
 
 
 # ---------------------------------------------------------------- assainissement (texte pur, borné)
-_BIDI = set("‪‫‬‭‮⁦⁧⁨⁩‎‏")
+_BIDI = set("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069\u200e\u200f")
 
 
 def clean_text(value, limit: int, multiline: bool = False) -> str:

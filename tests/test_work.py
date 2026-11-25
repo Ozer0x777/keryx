@@ -1,5 +1,4 @@
 """Confort de travail (v0.5) : recherche, SLA, liens, fusion, modèles, notifications, filtres, affectation en masse."""
-import copy
 from datetime import timedelta
 
 from sqlalchemy import select

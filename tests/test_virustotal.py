@@ -13,6 +13,7 @@ import logging
 import zipfile
 
 import pytest
+from cryptography.exceptions import InvalidTag
 from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import select
@@ -128,7 +129,7 @@ def test_cle_chiffree_jamais_renvoyee_ni_journalisee_ni_auditee(vapp, db, world,
     me, other = (db.scalars(select(User).where(User.username == n)).one() for n in ("analyst_acme", "manager"))
     assert me.vt_api_key.startswith("v1:") and API_KEY not in me.vt_api_key and other.vt_api_key is None
     assert vapp.state.box.decrypt(me.vt_api_key, f"vt_api_key:{me.id}") == API_KEY
-    with pytest.raises(Exception):
+    with pytest.raises(InvalidTag):
         vapp.state.box.decrypt(me.vt_api_key, f"vt_api_key:{other.id}")
     # Elle sert : la recherche part avec elle, en en-tête, vers le seul chemin attendu
     assert manual(a, EICAR_SHA256).status_code == 201
@@ -476,12 +477,12 @@ def test_texte_hostile_assaini(vapp, db, world, ticket, analyst):
     assert r.status_code == 201, r.text
     s = r.json()["summary"]
     # texte pur et borné : le balisage reste du texte, plus de caractère de contrôle ni de marque de sens d'écriture
-    assert s["name"].startswith("facture<script>alert(1)</script>\\x1b[31m\\x00") and "‮" not in s["name"]
-    assert s["type"] == "<b>PE</b>\\x07" and len(s["threat_label"]) == 100 and "‮" not in s["threat_label"]
+    assert s["name"].startswith("facture<script>alert(1)</script>\\x1b[31m\\x00") and "\u202e" not in s["name"]
+    assert s["type"] == "<b>PE</b>\\x07" and len(s["threat_label"]) == 100 and "\u202e" not in s["threat_label"]
     hostile = [e for e in s["engine_names"] if "script" in e["engine"]][0]
     assert hostile == {"engine": "<script>x</script>", "result": "Evil\\x0d\\x0a�<svg onload=1>"}
     text = json.dumps(s, ensure_ascii=False)
-    assert not any(c in text for c in ("\x1b", "\x00", "\x07", "\r", "‮"))
+    assert not any(c in text for c in ("\x1b", "\x00", "\x07", "\r", "\u202e"))
     # types inattendus : compteur à 0, date absente ; jamais d'exception ni de valeur recopiée telle quelle
     assert s["stats"]["malicious"] == 0 and s["last_analysis_date"] is None
     assert all(isinstance(v, int) for v in s["stats"].values())
