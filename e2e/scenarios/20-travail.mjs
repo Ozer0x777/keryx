@@ -80,7 +80,7 @@ export default async ({ stack, BASE, check, login }) => {
   // éditeur riche : l'état actif d'un bouton suit la mise en forme (classe et aria-pressed)
   await unfold(m, 'Commentaires')
   await m.locator('section[aria-label="Commentaires"] .rich-content').last().click()
-  const gras = m.locator('section[aria-label="Commentaires"] .tool[aria-label="Gras"]')
+  const gras = m.locator('section[aria-label="Commentaires"] .tool[title="Gras"]')
   check(await gras.getAttribute('aria-pressed') === 'false', 'éditeur : bouton Gras relâché par défaut')
   await gras.click(); await m.keyboard.type('x')
   check(await gras.getAttribute('aria-pressed') === 'true' && (await gras.getAttribute('class')).includes('on'), 'éditeur : bouton Gras marqué actif (aria-pressed et style)')

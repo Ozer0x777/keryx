@@ -26,10 +26,15 @@ export default function RichEditor({ value, onChange, label, onImage, templates,
   }, [value, editor])
 
   if (!editor) return null
-  const btn = (name, title, action, active) => (
-    <button type="button" className={`tool${active ? ' on' : ''}`} aria-label={title} title={title}
-      aria-pressed={active === null ? undefined : !!active} onClick={action}>{name}</button>
-  )
+  // Le nom accessible contient le texte affiché (« Gras, B ») : la commande vocale « cliquer sur B » doit marcher
+  // (WCAG 2.5.3, étiquette dans le nom). Un symbole seul (•, ↗, { }) n'est pas du texte à prononcer : nom inchangé.
+  const btn = (name, title, action, active) => {
+    const label = /[\p{L}\p{N}]/u.test(name) ? `${title}, ${name}` : title   // pas de parenthèses : ignorées à la comparaison
+    return (
+      <button type="button" className={`tool${active ? ' on' : ''}`} aria-label={label} title={title}
+        aria-pressed={active === null ? undefined : !!active} onClick={action}>{name}</button>
+    )
+  }
   const setLink = async () => {
     const current = editor.getAttributes('link').href || ''
     const r = await ask({
