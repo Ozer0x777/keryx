@@ -1,5 +1,5 @@
 -r requirements.txt
-pytest>=9
+pytest>=9.0.3          # 9.0.3 : correctif de CVE-2025-71176 (dossiers temporaires), registre V-2026-005
 pytest-cov>=7,<8   # couverture des tests (seuil vérifié en CI)
 ruff==0.17.6        # analyse statique Python (voir ruff.toml), même version que la CI
 moto[server]>=5,<6   # serveur S3 simulé pour les tests du stockage objet
