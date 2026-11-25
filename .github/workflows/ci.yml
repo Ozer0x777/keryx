@@ -16,7 +16,8 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install --require-hashes -r requirements.lock && pip install -r requirements-dev.txt
-      - run: python -m pytest -q
+      # Couverture des instructions du paquet keryx : 92 % au 25/11/2026 ; la CI échoue sous 85 %.
+      - run: python -m pytest -q --cov=keryx --cov-report=term --cov-fail-under=85
 
   tests-postgres:
     # Mêmes tests sous PostgreSQL 16 : migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore.

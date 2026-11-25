@@ -4,6 +4,16 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+### Ajouté
+- Gouvernance (`GOVERNANCE.md` : rôles, décisions, continuité), code de conduite (Contributor Covenant 2.1),
+  feuille de route (`ROADMAP.md`), vue d'ensemble de l'architecture (`docs/architecture.md`) et argumentaire de
+  sécurité (`docs/securite.md` : garanties, modèle de menaces, principes appliqués, cryptographie).
+- Couverture des tests mesurée en CI (92 % des instructions), seuil minimal de 85 %.
+
+### Corrigé
+- README : la limite sur les processus parlait de limites de débit en mémoire ; elles sont partagées en base sous
+  PostgreSQL. La vraie limite porte sur les fils de fond.
+
 ## [0.8.0] : 2026-11-25
 
 Première version publiée. Les numéros précédents n'ont jamais été publiés : le code portait 0.2.0, le kit Docker et

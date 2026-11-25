@@ -108,7 +108,10 @@ Table complète des fonctions et de leurs exigences : [`docs/fonctions-et-exigen
 | Exploitation au quotidien | [`docs/exploitation.md`](docs/exploitation.md) |
 | Variables de configuration | [`docs/configuration.md`](docs/configuration.md) |
 | Déploiement Docker, fiche ANSSI, PDIS | [`docs/deploiement-docker.md`](docs/deploiement-docker.md) |
+| Architecture (vue d'ensemble) | [`docs/architecture.md`](docs/architecture.md) |
+| Sécurité : garanties, menaces, argumentaire | [`docs/securite.md`](docs/securite.md) |
 | Décisions d'architecture (ADR) | [`docs/adr/`](docs/adr/) |
+| Feuille de route | [`ROADMAP.md`](ROADMAP.md) |
 | Matrice exigence, code, test | [`docs/matrice-tracabilite.md`](docs/matrice-tracabilite.md) |
 | Dossier pour l'homologation | [`docs/homologation/`](docs/homologation/) |
 | API REST (description OpenAPI) | servie par Keryx sur `/api/openapi.json` |
@@ -169,7 +172,7 @@ cd e2e && npm ci && node run.mjs        # CHROME_PATH et KERYX_PYTHON si besoin
 
 ## Limites connues
 
-- Limites de débit en mémoire, par processus : un seul processus uvicorn tant qu'elles ne sont pas partagées (ADR-0010).
+- Un seul processus Keryx : les limites de débit sont partagées en base sous PostgreSQL (en mémoire sous SQLite, ADR-0010), mais les relances de notifications et le relevé du parc tournent dans chaque processus. Haute disponibilité ni conçue ni testée.
 - Quarantaine : archive ZIP chiffrée (mot de passe « infected ») ; les pièces mises en quarantaine avant cette version restent stockées telles quelles (ADR-0019).
 - PostgreSQL 16 : la suite complète passe (402 tests réussis, 9 ignorés, sous PostgreSQL 16.2 le 24/11/2026, dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore ; `add-user --activation` a aussi été exercé sous PostgreSQL 16.16 par le déploiement Docker d'essai). Non testé : haute disponibilité, réplication, très gros volumes.
 - Ingestion testée contre un vrai manager Wazuh de préproduction (188 alertes envoyées, 188 reçues, aucune perte), en plus du serveur simulé des tests. Le contexte de l'indexeur et le lien vers le tableau de bord n'ont pas été éprouvés (voir ci-dessous).
@@ -184,7 +187,8 @@ cd e2e && npm ci && node run.mjs        # CHROME_PATH et KERYX_PYTHON si besoin
 ## Contribuer, signaler une vulnérabilité
 
 Keryx est un projet libre. Pour contribuer : [`CONTRIBUTING.md`](CONTRIBUTING.md) (règles du projet, vérifications avant
-une demande de fusion). Une vulnérabilité se signale en privé : [`SECURITY.md`](SECURITY.md). Les changements sont
+une demande de fusion). Une vulnérabilité se signale en privé : [`SECURITY.md`](SECURITY.md). Gouvernance :
+[`GOVERNANCE.md`](GOVERNANCE.md) ; code de conduite : [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md). Les changements sont
 listés dans [`CHANGELOG.md`](CHANGELOG.md).
 
 ## In English

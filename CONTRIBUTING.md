@@ -26,10 +26,21 @@ documentation.
    (le contrôle `scripts/verif_depot.py` le refuse). Toute chaîne d'interface passe par `t()` / `tr()` et a sa
    traduction anglaise dans `web/src/i18n.en.js`.
 
+## Règles de code
+
+- **Python** : PEP 8, lignes de 120 caractères au plus ; règles de `ruff.toml` (pyflakes, pièges courants de
+  bugbear, erreurs pylint), appliquées en CI. Les exceptions sont déclarées dans `ruff.toml` avec leur raison.
+- **Interface** : règles recommandées d'ESLint et des hooks React (`web/eslint.config.js`), appliquées en CI sans
+  aucun avertissement toléré.
+- **Nommage** : noms de domaine en français, comme dans le code existant (`gravite`, `criticite_initiale`) ;
+  identifiants techniques en anglais quand ils suivent une bibliothèque.
+- **Sécurité** : aucun secret dans le code ; aucune donnée non fiable dans du HTML sans assainissement ; aucune
+  redirection suivie ni certificat ignoré par défaut dans un connecteur (voir `docs/securite.md`).
+
 ## Vérifier avant de proposer
 
 ```bash
-python -m pytest -q                         # tests (SQLite)
+python -m pytest -q --cov=keryx             # tests (SQLite) et couverture (85 % au moins en CI)
 python scripts/pg_tests.py                  # mêmes tests sous PostgreSQL (paquet pgserver)
 cd web && npm run build && npm test         # interface
 cd e2e && node run.mjs                      # parcours dans un navigateur (CHROME_PATH si besoin)
@@ -47,6 +58,11 @@ La CI relance tout cela sur chaque demande de fusion, avec l'audit des dépendan
 
 Remplir le modèle proposé : ce qui change, l'exigence citée, l'ADR, les tests ajoutés, l'effet sur le cloisonnement
 et sur l'audit. Une demande sans test pour un changement de comportement ne sera pas fusionnée.
+
+## Gouvernance et conduite
+
+Qui décide et comment : `GOVERNANCE.md`. Comportement attendu : `CODE_OF_CONDUCT.md`. Ce qui est prévu :
+`ROADMAP.md`.
 
 ## Relecture
 
