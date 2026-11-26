@@ -123,9 +123,11 @@ def message(settings: Settings, motif: str, ticket: Ticket, tenant: Tenant, chan
     link = f"{settings.public_url}/tickets/{ticket.ref}"
     crit = ticket.criticite_initiale
     if motif == "escalade":
+        subject = f"[Keryx] ESCALADE {ticket.ref} ({crit}, {tenant.key}) : sans prise en charge depuis {delai_min} min"
         text = (f"[Keryx] ESCALADE : ticket {ticket.ref} ({crit}, client {tenant.key}) sans prise en charge depuis "
                 f"{delai_min} min. {link}")
     else:
+        subject = f"[Keryx] Astreinte {ticket.ref} ({crit}, {tenant.key}) : nouveau ticket"
         text = f"[Keryx] Astreinte : nouveau ticket {ticket.ref} ({crit}, client {tenant.key}). {link}"
     data = {"type": f"keryx.{motif}", "ticket": ticket.ref, "client": tenant.key, "criticite": crit, "url": link}
     if motif == "escalade":
@@ -133,7 +135,7 @@ def message(settings: Settings, motif: str, ticket: Ticket, tenant: Tenant, chan
     if channel.include_title:
         text += f"\n{ticket.title}"
         data["titre"] = ticket.title
-    return {"text": text, "data": data}
+    return {"subject": subject, "text": text, "data": data}
 
 
 def body_for(kind: str, msg: dict, now) -> bytes:
@@ -234,7 +236,7 @@ def deliver(settings: Settings, box: SecretBox, channel: OnCallChannel, msg: dic
     now = now or utcnow()
     target = box.decrypt(channel.target_enc, f"canal:{channel.id}")
     if channel.kind == "email":
-        _send_mail(settings, target, msg["text"].split(" : ", 1)[0], msg["text"])
+        _send_mail(settings, target, msg.get("subject") or msg["text"].split(" : ", 1)[0], msg["text"])
         return None
     body = body_for(channel.kind, msg, now)
     headers = {}
