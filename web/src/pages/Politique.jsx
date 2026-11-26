@@ -16,6 +16,7 @@ function Client({ c, canaux, onSaved }) {
   const [niveau, setNiveau] = useState(c.niveau_classification_defaut)
   const [versionRegles, setVersionRegles] = useState(c.version_regles || '')
   const [rapport, setRapport] = useState(Boolean(c.acquittement_rapport))
+  const [vt, setVt] = useState(Boolean(c.virustotal_autorise))
   const [ast, setAst] = useState(c.astreinte)
   const [secours, setSecours] = useState(c.notif_secours.canal_id || '')
   const [essai, setEssai] = useState(c.notif_secours)
@@ -24,7 +25,7 @@ function Client({ c, canaux, onSaved }) {
   const [status, track, setStatus] = useActionStatus()
   const changed = plancher !== (c.tlp_plancher || '') || rapport !== Boolean(c.acquittement_rapport)
     || niveau !== c.niveau_classification_defaut || versionRegles !== (c.version_regles || '')
-    || secours !== (c.notif_secours.canal_id || '')
+    || secours !== (c.notif_secours.canal_id || '') || vt !== Boolean(c.virustotal_autorise)
     || JSON.stringify(ast) !== JSON.stringify(c.astreinte)
     || bat.active !== c.battement.active || bat.periode_min !== c.battement.periode_min || bat.delai_min !== c.battement.delai_min
   const set = (patch) => setAst((a) => ({ ...a, ...patch }))
@@ -33,7 +34,7 @@ function Client({ c, canaux, onSaved }) {
     const json = {
       tlp_plancher: plancher || null, acquittement_rapport: rapport,
       niveau_classification_defaut: niveau, version_regles: versionRegles,
-      notif_secours_canal_id: secours || null,
+      notif_secours_canal_id: secours || null, virustotal_autorise: vt,
       astreinte_active: ast.active, astreinte_criticites: ast.criticites, astreinte_delais: ast.delais,
       astreinte_canal_id: ast.canal_id || null, escalade_canal_id: ast.escalade_canal_id || null,
       battement_active: bat.active, battement_periode_min: bat.periode_min, battement_delai_min: bat.delai_min,
@@ -143,6 +144,10 @@ function Client({ c, canaux, onSaved }) {
               : c.battement.dernier ? tr('Dernier battement : {d} ({s}).', { d: formatUtc(c.battement.dernier), s: c.battement.source || '?' }) : tr('Aucun battement reçu pour l’instant.')}
           </p>
         )}
+
+        <h3>{tr('Accords du client')}</h3>
+        <label className="check"><input type="checkbox" checked={vt} onChange={(e) => setVt(e.target.checked)} />{' '}
+          {tr("Le client autorise la recherche de ses empreintes chez VirusTotal (une empreinte part chez ce tiers, PDIS IV.1.g)")}</label>
 
         <h3>{tr('Rapport')}</h3>
         <label className="check"><input type="checkbox" checked={rapport} onChange={(e) => setRapport(e.target.checked)} />{' '}

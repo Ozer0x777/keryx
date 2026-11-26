@@ -29,6 +29,7 @@ class PolitiqueIn(BaseModel):
     version_regles: str | None = Field(default=None, max_length=120)
     # Moyen secondaire de notification (PDIS IV.2.3.b)
     notif_secours_canal_id: str | None = Field(default=None, max_length=36)
+    virustotal_autorise: bool | None = None          # accord du client (PDIS IV.1.g)
     # Astreinte (ADR-0032)
     astreinte_active: bool | None = None
     astreinte_criticites: list[str] | None = Field(default=None, max_length=4)
@@ -65,7 +66,7 @@ def register(app, ctx) -> None:
         return {"key": t.key, "name": t.name, "tlp_plancher": t.tlp_plancher,
                 "niveau_classification_defaut": t.niveau_classification_defaut or "Non protégé",
                 "version_regles": t.version_regles,
-                "notif_secours": secours_vue(t),
+                "notif_secours": secours_vue(t), "virustotal_autorise": bool(t.virustotal_autorise),
                 "acquittement_rapport": bool(t.acquittement_rapport),
                 "astreinte": {"active": bool(t.astreinte_active),
                               "criticites": list(t.astreinte_criticites or ["Critique"]),
@@ -213,6 +214,8 @@ def register(app, ctx) -> None:
             trace_astreinte["niveau_classification_defaut"] = tenant.niveau_classification_defaut = body.niveau_classification_defaut
         if "version_regles" in sent:
             trace_astreinte["version_regles"] = tenant.version_regles = (body.version_regles or "").strip() or None
+        if body.virustotal_autorise is not None and body.virustotal_autorise != bool(tenant.virustotal_autorise):
+            trace_astreinte["virustotal_autorise"] = tenant.virustotal_autorise = body.virustotal_autorise
         if "notif_secours_canal_id" in sent and body.notif_secours_canal_id != tenant.notif_secours_canal_id:
             tenant.notif_secours_canal_id = canal(db, body.notif_secours_canal_id)
             tenant.notif_secours_teste_at = None          # nouveau moyen : pas encore essayé

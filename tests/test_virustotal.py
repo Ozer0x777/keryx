@@ -104,9 +104,18 @@ def vapp(settings, fake):
 
 
 @pytest.fixture
-def ticket(vapp, world, alert):
+def ticket(vapp, db, world, alert):
     ingest(vapp, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE))
+    _accord(db)
     return "ACME-1"
+
+
+def _accord(db, keys=("ACME", "DELTA"), valeur=True):
+    """Accord des clients à la recherche VirusTotal (PDIS IV.1.g), refusée par défaut."""
+    from sqlalchemy import update
+    from keryx.models import Tenant
+    db.execute(update(Tenant).where(Tenant.key.in_(keys)).values(virustotal_autorise=valeur))
+    db.commit()
 
 
 @pytest.fixture
@@ -319,6 +328,7 @@ def test_image_reencodee_l_empreinte_du_fichier_recu_est_cherchee(vapp, db, worl
 
 
 def test_piece_en_quarantaine_et_preuve_externe(settings, db, world, alert, fake):
+    _accord(db)
     """Une pièce en quarantaine garde l'empreinte de l'ORIGINAL (c'est l'archive chiffrée qui est stockée) : c'est le
     cas le plus utile. Une preuve externe : l'empreinte déclarée."""
     clamd = _fake_clamd(b"stream: Eicar-Test-Signature FOUND\0")
@@ -579,6 +589,7 @@ def test_echec_sur_une_piece_sans_evenement_de_possession(vapp, db, world, ticke
 
 
 def test_limite_de_debit_par_utilisateur_et_par_client(settings, db, world, alert, fake):
+    _accord(db)
     settings.virustotal_url, settings.virustotal_allow_loopback = fake.url, True
     assert settings.virustotal_user_limit == 4                    # défaut : 4 par minute et par utilisateur
     settings.virustotal_client_limit = 5
@@ -598,6 +609,7 @@ def test_limite_de_debit_par_utilisateur_et_par_client(settings, db, world, aler
 
 # ---------------------------------------------------------------- interrupteur d'instance, adresse, mandataire
 def test_interrupteur_d_instance_coupe(settings, db, world, alert, fake, monkeypatch):
+    _accord(db)
     settings.virustotal_url, settings.virustotal_allow_loopback = fake.url, True
     app = create_app(settings)
     ingest(app, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE))
@@ -659,6 +671,7 @@ def test_adresse_de_base_hote_fixe_et_reglage_d_essai(settings):
 
 
 def test_https_certificat_non_reconnu_refuse_la_cle_ne_part_pas(settings, db, world, alert, tmp_path, monkeypatch):
+    _accord(db)
     """En HTTPS, le certificat est vérifié contre les autorités du système et rien ne permet de s'en passer : devant
     un serveur dont l'autorité est inconnue, la négociation échoue avant toute requête (la clé n'est pas envoyée)."""
     import ssl
@@ -685,6 +698,7 @@ def test_https_certificat_non_reconnu_refuse_la_cle_ne_part_pas(settings, db, wo
 
 
 def test_aucun_mandataire_d_environnement_mandataire_explicite_possible(settings, db, world, alert, fake, monkeypatch):
+    _accord(db)
     """Les variables HTTP_PROXY de l'environnement ne sont jamais lues : la recherche part droit vers l'hôte réglé.
     Un mandataire explicite (KERYX_VIRUSTOTAL_PROXY) est utilisé, lui : ici le faux serveur joue le mandataire."""
     proxies = ("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy")
@@ -709,3 +723,16 @@ def test_aucun_mandataire_d_environnement_mandataire_explicite_possible(settings
     r = manual(a, EICAR_SHA256)
     assert fake.requests[-1]["path"] == f"http://localhost:1/api/v3/files/{EICAR_SHA256}"
     assert r.status_code == 201 and r.json()["summary"]["stats"]["malicious"] == 62
+
+
+def test_recherche_refusee_sans_accord_du_client(vapp, db, world, analyst, fake):
+    """PDIS IV.1.g : sans l'accord enregistré par le manager, aucune empreinte ne part chez VirusTotal."""
+    _accord(db, valeur=False)
+    avant = len(fake.requests) if hasattr(fake, "requests") else 0
+    r = analyst.post("/api/v1/tickets/ACME-1/virustotal", json={"source": "saisie", "hash": "a" * 64})
+    assert r.status_code == 403 and "IV.1.g" in r.json()["detail"]
+    assert (len(fake.requests) if hasattr(fake, "requests") else 0) == avant
+    assert analyst.get("/api/v1/tickets/ACME-1").json()["virustotal"]["autorise"] is False
+    m = login(vapp, db, "manager")
+    assert m.put("/api/v1/politique/ACME", json={"virustotal_autorise": True}).json()["virustotal_autorise"] is True
+    assert analyst.get("/api/v1/tickets/ACME-1").json()["virustotal"]["autorise"] is True
