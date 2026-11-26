@@ -372,3 +372,32 @@ def test_reprise_des_syntheses_vides(settings):
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     assert m._blank("<p><br></p>") and m._blank("<p>&nbsp; </p>") and not m._blank("<p>x</p>") and not m._blank('<p><img src="a"></p>')
+
+
+def test_silencieux_ne_lit_que_la_source_du_client(papp, db, world, tmp_path):
+    """Indexeur partagé (ADR-0031) : l'agent 003 d'un autre manager émet encore, celui du client est muet depuis
+    deux jours. Avec la source du client réglée, l'événement récent de l'autre manager ne masque pas le silence."""
+    import datetime as dt
+    from .fake_indexer import wazuh_time
+    d = tmp_path / "wazuh"
+    d.mkdir()
+    now = dt.datetime.now(dt.timezone.utc)
+
+    def doc(i, agent, when, manager):
+        return {"_index": "wazuh-alerts-4.x-x", "_id": i, "_source": {"@timestamp": when.isoformat().replace("+00:00", "Z"),
+                "timestamp": wazuh_time(when), "agent": {"id": agent}, "manager": {"name": manager},
+                "rule": {"id": "1", "level": 3}}}
+    idx = FakeIndexer(d, docs=[doc("e1", "003", now - dt.timedelta(days=2), "manager-acme"),
+                               doc("e2", "003", now, "manager-autre-client")]).start()
+    api = FakeWazuhApi(d, reuse_pki=True).start()
+    try:
+        configure(papp, db, api, wazuh_indexer_url=idx.url, wazuh_indexer_user=IDX_USER, wazuh_indexer_password=IDX_PASSWORD,
+                  wazuh_indexer_source="manager-acme")
+        a = login(papp, db, "analyst_acme")
+        assert a.post("/api/v1/parc/ACME/refresh").status_code == 200
+        assert by_id(a.get("/api/v1/parc").json())["003"]["silent"] is True
+        body = [x for x in idx.searches() if "aggs" in x][0]
+        assert {"term": {"manager.name": "manager-acme"}} in body["query"]["bool"]["filter"][2]["bool"]["should"]
+    finally:
+        api.stop()
+        idx.stop()

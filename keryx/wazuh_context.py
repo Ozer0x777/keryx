@@ -54,7 +54,7 @@ DOCUMENT_FORMAT = "keryx-wazuh-context-v1"
 METHOD_LABEL = "Extraction indexeur Wazuh"
 
 # Champs demandés à l'indexeur (le reste du document n'est pas rapatrié).
-SOURCE_FIELDS = ["id", "rule.id", "rule.level", "rule.description", "agent.id", "agent.name", "manager.name",
+SOURCE_FIELDS = ["id", "rule.id", "rule.level", "rule.description", "agent.id", "agent.name", "manager.name", "cluster.name",
                  "location", "decoder.name", "full_log", "data"]
 
 
@@ -296,6 +296,79 @@ def parse_indexer_url(value: str, allow_loopback: bool = False) -> Endpoint:
     return Endpoint(host, port or 443, path)
 
 
+_SOURCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+def validate_source(value: str) -> str:
+    v = (value or "").strip()
+    if not _SOURCE.match(v):
+        raise ConfigError("Source Wazuh invalide : nom du manager ou du cluster Wazuh (lettres, chiffres, « . », « - », « _ »).")
+    return v
+
+
+def source_filter(cfg: IndexerConfig) -> list[dict]:
+    """Filtre de l'indexeur sur la source du client : son manager, ou son cluster (dans un cluster, manager.name est le
+    nœud qui a traité l'alerte). Vide si aucune source n'est réglée."""
+    if not cfg.source:
+        return []
+    return [{"bool": {"should": [{"term": {"manager.name": cfg.source}}, {"term": {"cluster.name": cfg.source}}],
+                      "minimum_should_match": 1}}]
+
+
+def from_source(src: dict, source: str | None) -> bool:
+    """Vrai si l'événement vient de la source du client (toujours vrai sans source réglée)."""
+    if not source:
+        return True
+    manager, cluster = src.get("manager"), src.get("cluster")
+    return (isinstance(manager, dict) and manager.get("name") == source) or \
+        (isinstance(cluster, dict) and cluster.get("name") == source)
+
+
+def _prefix(pattern: str) -> str:
+    return pattern.split("*", 1)[0]
+
+
+def patterns_overlap(a: str, b: str) -> bool:
+    """Prudent : deux motifs d'index peuvent couvrir les mêmes index si l'un est égal à l'autre, ou si les parties fixes
+    avant la première étoile se prolongent l'une l'autre (wazuh-alerts-* et wazuh-alerts-4.x-*)."""
+    if a == b:
+        return True
+    if "*" not in a and "*" not in b:
+        return False
+    pa, pb = _prefix(a), _prefix(b)
+    if "*" not in a:
+        return a.startswith(pb)
+    if "*" not in b:
+        return b.startswith(pa)
+    return pa.startswith(pb) or pb.startswith(pa)
+
+
+def shared_without_source(db: DbSession, tenant: Tenant, allow_loopback: bool = True) -> Tenant | None:
+    """Autre client qui lit le même indexeur avec un motif d'index qui peut recouvrir celui-ci, sans que chacun ait sa
+    propre source Wazuh : les événements de l'un pourraient s'afficher chez l'autre [PDIS IV.3.8.g]. None si aucun."""
+    if not tenant.wazuh_indexer_url:
+        return None
+    try:
+        mine = parse_indexer_url(tenant.wazuh_indexer_url, allow_loopback)
+    except ConfigError:
+        return None
+    pattern = tenant.wazuh_index_pattern or DEFAULT_INDEX_PATTERN
+    source = (tenant.wazuh_indexer_source or "").lower()
+    for other in db.scalars(select(Tenant).where(Tenant.id != tenant.id, Tenant.wazuh_indexer_url.is_not(None))):
+        try:
+            theirs = parse_indexer_url(other.wazuh_indexer_url, allow_loopback)
+        except ConfigError:
+            continue
+        if (mine.host.lower(), mine.port) != (theirs.host.lower(), theirs.port):
+            continue
+        if not patterns_overlap(pattern, other.wazuh_index_pattern or DEFAULT_INDEX_PATTERN):
+            continue
+        other_source = (other.wazuh_indexer_source or "").lower()
+        if not source or not other_source or source == other_source:
+            return other
+    return None
+
+
 def validate_index_pattern(value: str) -> str:
     v = (value or "").strip()
     if not _INDEX_PATTERN.match(v):
@@ -346,6 +419,7 @@ class IndexerConfig:
     index_pattern: str = DEFAULT_INDEX_PATTERN
     time_field: str = DEFAULT_TIME_FIELD
     allow_loopback: bool = False
+    source: str | None = None      # manager.name ou cluster.name des événements du client (ADR-0031)
 
 
 def _tls_context(cfg: IndexerConfig) -> ssl.SSLContext:
@@ -443,6 +517,7 @@ def search_body(cfg: IndexerConfig, agent_id: str, pivot: str, direction: str, s
         "query": {"bool": {"filter": [
             {"term": {"agent.id": agent_id}},
             {"range": {cfg.time_field: {"lt" if before else "gte": pivot, "format": "strict_date_optional_time"}}},
+            *source_filter(cfg),
         ]}},
         "sort": [{cfg.time_field: {"order": "desc" if before else "asc", "unmapped_type": "date"}}],
     }
@@ -538,8 +613,8 @@ def fetch(cfg: IndexerConfig, agent_id: str, pivot: datetime, alert_id: str | No
         for h in hits:
             src = h.get("_source")
             agent = src.get("agent") if isinstance(src, dict) else None
-            if not isinstance(agent, dict) or str(agent.get("id")) != agent_id:
-                dropped += 1          # jamais l'événement d'un autre agent, même si l'indexeur le renvoie
+            if not isinstance(agent, dict) or str(agent.get("id")) != agent_id or not from_source(src, cfg.source):
+                dropped += 1          # jamais l'événement d'un autre agent ou d'un autre manager, même renvoyé par l'indexeur
                 continue
             entry = entry_from_source(src, cfg.time_field)
             if alert_id and entry["id"] == alert_id:

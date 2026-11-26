@@ -8,6 +8,12 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 - Kit Docker : `install.sh` vérifie toujours la signature de l'image publiée, avec cosign s'il est installé, sinon
   avec l'image officielle de cosign épinglée par empreinte ; auparavant, sans cosign, il signalait l'absence de
   vérification et continuait. Exception explicite : `KERYX_VERIFIER_SIGNATURE=non`, pour un registre interne.
+- Cloisonnement d'un indexeur Wazuh partagé entre clients (ADR-0031) : deux clients sur le même indexeur avec des
+  motifs d'index différents mais qui se recouvrent (`wazuh-alerts-*` et `wazuh-alerts-4.x-*`) étaient acceptés, et
+  l'analyste de l'un pouvait voir dans la fiche d'un ticket les événements de l'agent de même numéro de l'autre.
+  Chaque client a désormais une source Wazuh (nom de son manager ou de son cluster), exigée et distincte dans ce
+  cas, appliquée à chaque recherche et revérifiée sur chaque événement reçu ; un réglage antérieur dans ce cas est
+  refusé jusqu'à ce qu'un Admin règle les sources. Relevé par une revue externe ; aucune fuite constatée.
 
 ## [0.8.3] : 2026-11-26
 
