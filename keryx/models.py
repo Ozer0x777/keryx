@@ -71,6 +71,10 @@ class Tenant(Base):
     # Indexeur Wazuh (API OpenSearch) lu pour le contexte d'une alerte : adresse HTTPS, motif d'index (vide = wazuh-alerts-*).
     wazuh_indexer_url: Mapped[str | None] = mapped_column(String(300), nullable=True)
     wazuh_index_pattern: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Source des événements du client dans l'indexeur : nom de son manager Wazuh (manager.name) ou de son cluster
+    # (cluster.name). Obligatoire et propre à chaque client quand plusieurs clients lisent le même indexeur avec des
+    # motifs d'index qui se recouvrent : les numéros d'agent ne sont uniques que par manager (ADR-0031).
+    wazuh_indexer_source: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # Compte en lecture seule de l'indexeur : chiffré AES-256-GCM comme le secret TOTP (ADR-0006), jamais renvoyé par l'API.
     wazuh_indexer_user: Mapped[str | None] = mapped_column(Text, nullable=True)
     wazuh_indexer_password: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 from starlette.background import BackgroundTask
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
+from sqlalchemy.orm import object_session
 
 from . import audit
 from . import wazuh_agents as wa
@@ -53,13 +54,17 @@ def api_config(settings, box, tenant: Tenant, db: DbSession) -> wa.ApiConfig:
 def indexer_config(settings, box, tenant: Tenant) -> wz.IndexerConfig | None:
     if not wz.context_configured(tenant):
         return None
+    if (session := object_session(tenant)) is not None and wz.shared_without_source(session, tenant) is not None:
+        log.warning("Parc d'agents : indexeur partagé sans source Wazuh propre au client %s, dernier événement non lu",
+                    tenant.key)
+        return None     # la carte « Silencieux » reste masquée plutôt que de mêler les événements de deux clients
     return wz.IndexerConfig(endpoint=wz.parse_indexer_url(tenant.wazuh_indexer_url, settings.wazuh_allow_loopback),
                             username=box.decrypt(tenant.wazuh_indexer_user, f"wazuh_indexer_user:{tenant.id}"),
                             password=box.decrypt(tenant.wazuh_indexer_password, f"wazuh_indexer_password:{tenant.id}"),
                             tls_verify=tenant.wazuh_tls_verify, ca_pem=tenant.wazuh_ca_pem,
                             index_pattern=tenant.wazuh_index_pattern or wz.DEFAULT_INDEX_PATTERN,
                             time_field=wz.validate_time_field(settings.wazuh_time_field),
-                            allow_loopback=settings.wazuh_allow_loopback)
+                            allow_loopback=settings.wazuh_allow_loopback, source=tenant.wazuh_indexer_source)
 
 
 def refresh_tenant(db: DbSession, settings, box, tenant: Tenant) -> dict:

@@ -156,6 +156,11 @@ def search(docs: list[dict], index_pattern: str, body: dict, ignore_agent: bool 
             (path, wanted), = f["terms"].items()
             if not (ignore_agent and path == "agent.id"):
                 hits = [d for d in hits if _get(d["_source"], path) in wanted]
+        elif "bool" in f:
+            # Filtre de source (ADR-0031) : manager.name OU cluster.name. Le mode « fuite » l'ignore aussi.
+            should = f["bool"]["should"]
+            if not ignore_agent:
+                hits = [d for d in hits if any(_get(d["_source"], p) == w for s in should for p, w in s["term"].items())]
         elif "range" in f:
             (field, bounds), = f["range"].items()
             for op, value in bounds.items():

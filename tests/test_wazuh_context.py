@@ -698,3 +698,80 @@ def test_assainissement_des_evenements():
     assert len(big["data"]) == 40 and all(len(v) == 500 for v in big["data"].values())
     # le document signé ne contient que du JSON sûr (aucun demi-codet isolé : il s'encode en UTF-8)
     wz.document_bytes({"x": wz.clean_text("\ud83d", 10)})
+
+
+# ---------------------------------------------------------------- indexeur partagé entre clients (ADR-0031)
+def _autre_manager(indexer, agent="003", manager="wazuh-manager-02", cluster=None):
+    """Événements d'un AUTRE manager, sur le même indexeur, avec le même numéro d'agent, aux mêmes instants."""
+    for d in [dict(x) for x in indexer.docs if x["_source"]["agent"]["id"] == agent]:
+        src = json.loads(json.dumps(d["_source"]))
+        src["manager"] = {"name": manager}
+        if cluster:
+            src["cluster"] = {"name": cluster}
+        src["full_log"] = "SECRET-AUTRE-MANAGER " + src["full_log"]
+        indexer.docs.append({"_index": d["_index"], "_id": d["_id"] + "-m2", "_source": src})
+
+
+def test_indexeur_partage_exige_une_source_par_client(wapp, db, world, indexer):
+    configure(wapp, db, indexer)                                            # ACME, motif par défaut
+    adm = login(wapp, db, "admin")
+    base = {"wazuh_indexer_url": indexer.url, "wazuh_indexer_user": USER, "wazuh_indexer_password": PASSWORD,
+            "wazuh_ca_pem": indexer.ca_pem}
+    # Même indexeur, même motif, sans source : refusé (comme avant)
+    r = adm.patch("/api/v1/admin/clients/DELTA", json=base)
+    assert r.status_code == 422 and "ACME" in r.text and "source" in r.text
+    # Motifs différents mais qui se recouvrent : refusé aussi (autorisé avant ADR-0031)
+    r = adm.patch("/api/v1/admin/clients/DELTA", json={**base, "wazuh_index_pattern": "wazuh-alerts-4.x-*"})
+    assert r.status_code == 422
+    # Une seule des deux sources réglée, puis la même source : refusé
+    r = adm.patch("/api/v1/admin/clients/DELTA", json={**base, "wazuh_indexer_source": "wazuh-manager-02"})
+    assert r.status_code == 422
+    assert adm.patch("/api/v1/admin/clients/ACME", json={"wazuh_indexer_source": "wazuh-manager-01"}).status_code == 200
+    r = adm.patch("/api/v1/admin/clients/DELTA", json={**base, "wazuh_indexer_source": "WAZUH-MANAGER-01"})
+    assert r.status_code == 422
+    # Sources distinctes : accepté ; motifs disjoints : accepté sans source
+    assert adm.patch("/api/v1/admin/clients/DELTA", json={**base, "wazuh_indexer_source": "wazuh-manager-02"}).status_code == 200
+    assert wz.patterns_overlap("wazuh-alerts-*", "wazuh-alerts-4.x-*") and wz.patterns_overlap("*", "a-*")
+    assert not wz.patterns_overlap("acme-alerts-*", "delta-alerts-*") and not wz.patterns_overlap("acme", "delta")
+    # Source invalide
+    assert adm.patch("/api/v1/admin/clients/DELTA", json={"wazuh_indexer_source": "a b"}).status_code == 422
+    assert adm.get("/api/v1/admin/clients").json()["items"][1]["wazuh_indexer_source"] in ("wazuh-manager-01", "wazuh-manager-02")
+
+
+@pytest.mark.parametrize("mode", ["normal", "leak"])
+def test_source_ecarte_les_evenements_d_un_autre_manager(wapp, db, world, ticket, indexer, mode):
+    """Même numéro d'agent chez un autre manager du même indexeur : jamais montré, que l'indexeur applique le filtre de
+    source ou non (mode « fuite » : Keryx revérifie chaque événement reçu)."""
+    _autre_manager(indexer)
+    configure(wapp, db, indexer, wazuh_indexer_source="wazuh-manager-01")
+    indexer.mode = mode
+    a = login(wapp, db, "analyst_acme")
+    r = fetch(a, 15, 15)
+    assert r.status_code == 200, r.text
+    assert "SECRET-AUTRE-MANAGER" not in r.text and "SECRET-AUTRE-AGENT" not in r.text
+    before = r.json()["document"]["before"]
+    # mode normal : l'indexeur filtre, la page est pleine ; mode fuite : Keryx écarte ce que l'indexeur a mêlé
+    assert len(before) == 15 if mode == "normal" else 0 < len(before) <= 15
+
+
+def test_source_par_nom_de_cluster(wapp, db, world, ticket, indexer):
+    """Dans un cluster, manager.name est le nœud : la source peut être le nom du cluster."""
+    for d in indexer.docs:
+        d["_source"]["cluster"] = {"name": "cluster-acme"}
+    _autre_manager(indexer, manager="wazuh-node-07", cluster="cluster-delta")
+    configure(wapp, db, indexer, wazuh_indexer_source="cluster-acme")
+    r = fetch(login(wapp, db, "analyst_acme"), 15, 15)
+    assert r.status_code == 200 and "SECRET-AUTRE-MANAGER" not in r.text and len(r.json()["document"]["before"]) == 15
+
+
+def test_reglage_anterieur_partage_sans_source_refuse(wapp, db, world, ticket, indexer):
+    """Configuration enregistrée avant ADR-0031 (deux clients, même indexeur, motifs qui se recouvrent, sans source) :
+    le contexte est refusé au lieu de mêler les événements."""
+    configure(wapp, db, indexer, wazuh_index_pattern="wazuh-alerts-*")
+    fresh(db)
+    acme = db.scalars(select(Tenant).where(Tenant.key == "ACME")).one()
+    delta = db.scalars(select(Tenant).where(Tenant.key == "DELTA")).one()
+    delta.wazuh_indexer_url, delta.wazuh_index_pattern = acme.wazuh_indexer_url, "wazuh-alerts-4.x-*"
+    db.commit()
+    r = fetch(login(wapp, db, "analyst_acme"))
+    assert r.status_code == 409 and "source" in r.text

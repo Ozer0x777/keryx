@@ -183,6 +183,10 @@ def test_deux_clients_sur_le_meme_indexeur_et_le_meme_motif_refuses(app, db, wor
     assert adm.patch("/api/v1/admin/clients/ACME", json=cfg).status_code == 200
     r = adm.patch("/api/v1/admin/clients/DELTA", json=cfg)
     assert r.status_code == 422 and "ACME" in r.json()["detail"] and "motif d'index" in r.json()["detail"]
+    # wazuh-alerts-* couvre aussi les index wazuh-alerts-delta-… : refusé (ADR-0031, accepté à tort avant)
+    assert adm.patch("/api/v1/admin/clients/DELTA", json={**cfg, "wazuh_index_pattern": "wazuh-alerts-delta-*"}).status_code == 422
+    # motifs vraiment séparés : accepté sans source
+    assert adm.patch("/api/v1/admin/clients/ACME", json={"wazuh_index_pattern": "wazuh-alerts-acme-*"}).status_code == 200
     assert adm.patch("/api/v1/admin/clients/DELTA", json={**cfg, "wazuh_index_pattern": "wazuh-alerts-delta-*"}).status_code == 200
     # et l'inverse : ACME ne peut pas reprendre le motif de DELTA
     assert adm.patch("/api/v1/admin/clients/ACME", json={"wazuh_index_pattern": "wazuh-alerts-delta-*"}).status_code == 422

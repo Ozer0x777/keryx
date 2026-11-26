@@ -67,6 +67,7 @@ class ClientPatchIn(BaseModel):
     wazuh_dashboard_url: str | None = Field(default=None, max_length=500)
     wazuh_indexer_url: str | None = Field(default=None, max_length=300)
     wazuh_index_pattern: str | None = Field(default=None, max_length=128)
+    wazuh_indexer_source: str | None = Field(default=None, max_length=128)
     wazuh_indexer_user: str | None = Field(default=None, max_length=128)
     wazuh_indexer_password: str | None = Field(default=None, max_length=256)
     wazuh_tls_verify: bool | None = None
@@ -78,7 +79,7 @@ class ClientPatchIn(BaseModel):
     wazuh_api_group: str | None = Field(default=None, max_length=128)
 
 
-WAZUH_FIELDS = ("wazuh_dashboard_url", "wazuh_indexer_url", "wazuh_index_pattern", "wazuh_indexer_user",
+WAZUH_FIELDS = ("wazuh_dashboard_url", "wazuh_indexer_url", "wazuh_index_pattern", "wazuh_indexer_source", "wazuh_indexer_user",
                 "wazuh_indexer_password", "wazuh_tls_verify", "wazuh_ca_pem",
                 "wazuh_api_url", "wazuh_api_user", "wazuh_api_password", "wazuh_api_group")
 
@@ -286,7 +287,8 @@ def register(app, ctx) -> None:
                 "max_attachment_mb": t.max_attachment_mb,
                 # Contexte Wazuh : adresses et options visibles de l'Admin ; du compte de lecture, seul un indicateur.
                 "wazuh_dashboard_url": t.wazuh_dashboard_url, "wazuh_indexer_url": t.wazuh_indexer_url,
-                "wazuh_index_pattern": t.wazuh_index_pattern, "wazuh_tls_verify": t.wazuh_tls_verify,
+                "wazuh_index_pattern": t.wazuh_index_pattern, "wazuh_indexer_source": t.wazuh_indexer_source,
+                "wazuh_tls_verify": t.wazuh_tls_verify,
                 "wazuh_ca_pem": t.wazuh_ca_pem,
                 "wazuh_credentials_set": bool(t.wazuh_indexer_user and t.wazuh_indexer_password),
                 "wazuh_link_enabled": bool(t.wazuh_dashboard_url), "wazuh_context_enabled": wz.context_configured(t),
@@ -351,6 +353,8 @@ def register(app, ctx) -> None:
             t.wazuh_dashboard_url = wz.validate_dashboard_template(body.wazuh_dashboard_url) if (body.wazuh_dashboard_url or "").strip() else None
         if "wazuh_index_pattern" in sent:
             t.wazuh_index_pattern = wz.validate_index_pattern(body.wazuh_index_pattern) if (body.wazuh_index_pattern or "").strip() else None
+        if "wazuh_indexer_source" in sent:
+            t.wazuh_indexer_source = wz.validate_source(body.wazuh_indexer_source) if (body.wazuh_indexer_source or "").strip() else None
         trust_before = (t.wazuh_tls_verify, t.wazuh_ca_pem)
         if "wazuh_tls_verify" in sent:
             t.wazuh_tls_verify = True if body.wazuh_tls_verify is None else body.wazuh_tls_verify
@@ -389,18 +393,20 @@ def register(app, ctx) -> None:
         if t.wazuh_indexer_user and not t.wazuh_indexer_url:
             raise wz.ConfigError("Indiquer l'adresse de l'indexeur avant le compte de lecture.")
         if t.wazuh_indexer_url:
-            # Indexeur partagé : les numéros d'agent ne sont uniques que par manager Wazuh. Deux clients sur la même
-            # adresse et le même motif d'index liraient les événements l'un de l'autre [PDIS IV.3.8.g].
-            pattern = t.wazuh_index_pattern or wz.DEFAULT_INDEX_PATTERN
-            for other in db.scalars(select(Tenant).where(Tenant.id != t.id, Tenant.wazuh_indexer_url == t.wazuh_indexer_url)):
-                if (other.wazuh_index_pattern or wz.DEFAULT_INDEX_PATTERN) == pattern:
-                    raise wz.ConfigError(f"Le client {other.key} utilise déjà cet indexeur avec le motif d'index « {pattern} » : "
-                                         "donner à chaque client un motif d'index qui ne couvre que ses propres alertes.")
+            # Indexeur partagé : les numéros d'agent ne sont uniques que par manager Wazuh. Deux clients sur le même
+            # indexeur avec des motifs d'index qui peuvent se recouvrir liraient les événements l'un de l'autre : chacun
+            # doit alors avoir sa source Wazuh (manager ou cluster), différente [PDIS IV.3.8.g ; ADR-0031].
+            other = wz.shared_without_source(db, t, settings.wazuh_allow_loopback)
+            if other is not None:
+                raise wz.ConfigError(f"Le client {other.key} lit déjà cet indexeur avec un motif d'index qui peut recouvrir "
+                                     "celui-ci : donner à chaque client sa source Wazuh (nom de son manager ou de son "
+                                     "cluster), différente pour chacun, ou des motifs d'index distincts.")
         dashboard = urlsplit(t.wazuh_dashboard_url).hostname if t.wazuh_dashboard_url else None
         return {"tableau_de_bord": dashboard, "api": wz.parse_indexer_url(t.wazuh_api_url, True).label if t.wazuh_api_url else None,
                 "groupe_api": t.wazuh_api_group, "identifiants_api": api_credentials,
                 "indexeur": wz.parse_indexer_url(t.wazuh_indexer_url, True).label if t.wazuh_indexer_url else None,
-                "motif_index": t.wazuh_index_pattern, "verification_tls": t.wazuh_tls_verify,
+                "motif_index": t.wazuh_index_pattern, "source_indexeur": t.wazuh_indexer_source,
+                "verification_tls": t.wazuh_tls_verify,
                 "autorite_propre": bool(t.wazuh_ca_pem), "identifiants": credentials}
 
     @app.get("/api/v1/admin/clients", dependencies=[Depends(ctx.admin_guard)])

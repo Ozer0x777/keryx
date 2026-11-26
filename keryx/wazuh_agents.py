@@ -276,7 +276,8 @@ def _last_events_batch(cfg: wz.IndexerConfig, agent_ids: list[str]) -> dict[str,
     deadline = time.monotonic() + wz.TOTAL_TIMEOUT_S
     body = {"size": 0, "track_total_hits": False,
             "query": {"bool": {"filter": [{"terms": {"agent.id": agent_ids}},
-                                          {"range": {cfg.time_field: {"gte": EVENT_WINDOW}}}]}},
+                                          {"range": {cfg.time_field: {"gte": EVENT_WINDOW}}},
+                                          *wz.source_filter(cfg)]}},
             "aggs": {"agents": {"terms": {"field": "agent.id", "size": len(agent_ids)},
                                 "aggs": {"last": {"max": {"field": cfg.time_field}}}}}}
     sock = wz._connect(cfg, deadline)
