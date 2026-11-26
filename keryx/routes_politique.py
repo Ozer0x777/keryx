@@ -169,6 +169,21 @@ def register(app, ctx) -> None:
         commit(db)
         return {"statut": statut, "code": code, **({"erreur": erreur} if erreur else {}), "notif_secours": secours_vue(tenant)}
 
+    @app.get("/api/v1/politique/{client}/export")
+    def export_client(client: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        """Restitution de toutes les données du client (PDIS IV.5.2.b) : archive ZIP avec manifeste d'empreintes."""
+        from fastapi import Response
+        from . import restitution
+        require_role(user, "manager")
+        tenant = next((t for t in user.tenants if t.key == client.upper()), None)
+        if tenant is None:
+            raise HTTPException(404, "Client inconnu.")
+        content, digest = restitution.export_bytes(db, settings, db.get(Tenant, tenant.id), user.username)
+        commit(db)
+        nom = f"keryx-{tenant.key}-{utcnow().date().isoformat()}.zip"
+        return Response(content, media_type="application/zip", headers={
+            "Content-Disposition": f'attachment; filename="{nom}"', "X-Keryx-SHA256": digest, "Cache-Control": "no-store"})
+
     @app.get("/api/v1/battements")
     def battements(user: User = Depends(current_user)):
         """État de la chaîne Wazuh vers Keryx des clients de l'équipe (bandeau de l'interface)."""

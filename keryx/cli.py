@@ -124,6 +124,11 @@ def _main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("add-client"); c.add_argument("key"); c.add_argument("name")
     sub.add_parser("purge", help="Supprime les alertes brutes arrivées en fin de rétention (--apply pour exécuter)").add_argument(
         "--apply", action="store_true")
+    ex = sub.add_parser("export-client", help="Restitution : toutes les données d'un client dans une archive ZIP (PDIS IV.5.2.b)")
+    ex.add_argument("client"); ex.add_argument("out")
+    de = sub.add_parser("destroy-client", help="Fin de prestation : détruit toutes les données d'un client (PDIS IV.5.2.f), "
+                                               "après un export ; simulation sans --confirm")
+    de.add_argument("client"); de.add_argument("--confirm", metavar="CLE", help="répéter la clé du client pour exécuter")
     sub.add_parser("backup", help="Sauvegarde chiffrée (base SQLite + pièces)").add_argument("out")
     r = sub.add_parser("restore", help="Restaure une sauvegarde dans un dossier vide et vérifie l'audit")
     r.add_argument("file"); r.add_argument("--to", required=True)
@@ -393,6 +398,32 @@ def _main(argv: list[str] | None = None) -> int:
             print("  Conseil : fixer KERYX_TSA_POLICY_OID à l'OID ci-dessus (celui que le prestataire annonce pour son service qualifié).")
         return 0
 
+    if args.cmd in ("export-client", "destroy-client"):
+        from . import restitution
+        tenant = db.scalars(select(Tenant).where(Tenant.key == args.client.upper())).first()
+        if tenant is None:
+            print(f"Client inconnu : {args.client}", file=sys.stderr)
+            return 1
+        if args.cmd == "export-client":
+            content, digest = restitution.export_bytes(db, settings, tenant, actor)
+            fd = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "wb") as f:
+                f.write(content)
+            db.commit()
+            print(f"Export de {tenant.key} : {args.out} ({len(content)} octets, SHA-256 {digest})")
+            return 0
+        execute = args.confirm == tenant.key
+        try:
+            comptes = restitution.destroy_client(db, settings, tenant, actor, dry_run=not execute)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        if execute:
+            db.commit()
+        for k, v in comptes.items():
+            print(f"{k} : {v}")
+        print("Données détruites." if execute else f"Simulation : relancer avec --confirm {tenant.key} pour détruire.")
+        return 0
     if args.cmd == "purge":
         from . import retention
         from .ids import utcnow

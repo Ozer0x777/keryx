@@ -22,6 +22,10 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
   en cours chez lui, traité de son côté) et demande la clôture ou la réouverture ; l'équipe accepte en changeant le
   statut ou refuse avec un motif visible du client. Actions demandées au client par l'équipe, mises à jour par le
   client (à faire, faite, impossible). Tout est inscrit au registre des actions et signalé à l'équipe. Migration 0029.
+- Réversibilité (PDIS IV.5.2.b, f) : export complet d'un client en archive ZIP avec manifeste d'empreintes SHA-256
+  (manager, « Politique des clients », ou `keryx export-client`), sans aucun secret ; destruction complète des
+  données d'un client en fin de prestation (`keryx destroy-client`, simulation par défaut, export préalable exigé),
+  inscrite au journal d'audit, ses comptes Client désactivés.
 
 ### Documentation
 - Portail par client (ADR-0027) accepté après lecture intégrale du référentiel PDIS v2.0 : décisions (synchronisation,
