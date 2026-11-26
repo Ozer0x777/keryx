@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api.js'
+import { api, downloadBlob } from '../api.js'
 import { ActionStatus, useActionStatus } from '../components/ActionStatus.jsx'
 import { t as tr } from '../i18n.js'
 import { TLPS, formatUtc } from '../labels.js'
@@ -149,6 +149,10 @@ function Client({ c, canaux, onSaved }) {
           {tr("Inclure le délai d'acquittement dans le rapport périodique remis au client")}</label>
         <div><button type="button" className="primary" onClick={save} disabled={!changed}>{tr('Enregistrer')}</button></div>
         <ActionStatus state={status} />
+
+        <h3>{tr('Réversibilité')}</h3>
+        <p className="field-hint">{tr("Toutes les données du client dans une archive ZIP (tickets et leur contexte, pièces, notifications, parc, journal d'audit), avec l'empreinte de chaque fichier (PDIS IV.5.2.b). La destruction en fin de prestation se fait ensuite sur le serveur : keryx destroy-client.")}</p>
+        <div><button type="button" onClick={() => track(async () => { downloadBlob(await api(`/politique/${encodeURIComponent(c.key)}/export`), `keryx-${c.key}.zip`); return true }, tr('Export téléchargé.'))}>{tr('Exporter toutes les données du client (ZIP)')}</button></div>
       </div>
     </section>
   )
