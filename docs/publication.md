@@ -13,15 +13,15 @@ Quand une étiquette `vX.Y.Z` est poussée, le workflow `.github/workflows/publi
    Sigstore, nomme ce workflow et l'étiquette qui l'a déclenché ;
 5. joint à la version l'archive des sources de l'étiquette et une SBOM CycloneDX des dépendances, **signe la liste
    de leurs empreintes SHA-256** (`SHA256SUMS`) de la même façon, sans clé (preuve : `SHA256SUMS.sigstore.json`),
-   et joint leur attestation de provenance SLSA (`keryx-X.Y.Z.intoto.jsonl`, à partir de la version qui suit la
-   0.8.2 ; vérification : `gh attestation verify keryx-X.Y.Z-sources.tar.gz --owner Ozer0x777`) ;
+   et joint leur attestation de provenance SLSA (`keryx-X.Y.Z.intoto.jsonl`, à partir de la
+   0.8.3 ; vérification : `gh attestation verify keryx-X.Y.Z-sources.tar.gz --owner Ozer0x777`) ;
 6. crée la version GitHub avec la section du CHANGELOG, l'empreinte de l'image et ces fichiers.
 
 ## Installer l'image publiée avec le kit Docker
 
 ```bash
 cd deploy/docker
-KERYX_IMAGE=ghcr.io/ozer0x777/keryx KERYX_VERSION=0.8.2 ./install.sh
+KERYX_IMAGE=ghcr.io/ozer0x777/keryx KERYX_VERSION=0.8.3 ./install.sh
 ```
 
 `install.sh` récupère l'image au lieu de la construire, l'inscrit dans `.env`, et vérifie sa signature si `cosign`
@@ -30,11 +30,11 @@ est installé ; une signature absente ou invalide arrête l'installation. Sans c
 ## Vérifier une image à la main
 
 ```bash
-cosign verify ghcr.io/ozer0x777/keryx:0.8.2 \
+cosign verify ghcr.io/ozer0x777/keryx:0.8.3 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity-regexp '(?i)^https://github.com/Ozer0x777/keryx/\.github/workflows/publication\.yml@refs/tags/v'
 
-gh attestation verify oci://ghcr.io/ozer0x777/keryx:0.8.2 --owner Ozer0x777      # provenance
+gh attestation verify oci://ghcr.io/ozer0x777/keryx:0.8.3 --owner Ozer0x777      # provenance
 ```
 
 Une vérification réussie prouve que l'image a été construite par le workflow de publication de ce dépôt, à partir

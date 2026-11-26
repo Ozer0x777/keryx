@@ -4,6 +4,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+## [0.8.3] : 2026-11-26
+
 ### Ajouté
 - Fuzzing avec Atheris des entrées non fiables (assainissement HTML, alertes Wazuh), propriétés de sécurité
   vérifiées : 1 minute par cible sur chaque demande de fusion, 10 minutes chaque semaine (`fuzz/`,
@@ -12,13 +14,6 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
   le README (`.github/workflows/scorecard.yml`). Badge « ISO/IEC 18974 : conformité déclarée » vers le programme.
 - Publication : l'attestation de provenance SLSA de l'archive des sources et de la SBOM est jointe à la version.
 
-### Corrigé
-- Ingestion : une alerte contenant un caractère nul (`\u0000`) échouait sous PostgreSQL (aucun ticket créé) et un
-  retour à la ligne dans le nom d'agent coupait le titre. Les caractères de contrôle sont retirés de toute valeur lue
-  dans l'alerte ; l'alerte brute conservée reste intacte. Trouvé par le fuzzing. Wazuh, écrit en C, traite a priori les
-  journaux comme des chaînes terminées par un caractère nul (non vérifié) ; l'envoi reste possible pour qui détient
-  une clé d'API d'ingestion.
-
 ### Modifié
 - Dépendances de test : pytest borné à 9.0.3 au moins (CVE-2025-71176, relevée par Scorecard ; le verrou installait
   déjà 9.2.0).
@@ -26,6 +21,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
   `Dockerfile` par empreinte, outils Python de la CI et dépendances de test installés avec empreintes
   (`requirements-outils.lock`, `requirements-dev.lock`) et audités par pip-audit ; `tests/test_workflows.py` vérifie
   l'épinglage.
+
+### Corrigé
+- Ingestion : une alerte contenant un caractère nul (`\u0000`) échouait sous PostgreSQL (aucun ticket créé) et un
+  retour à la ligne dans le nom d'agent coupait le titre. Les caractères de contrôle sont retirés de toute valeur lue
+  dans l'alerte ; l'alerte brute conservée reste intacte. Trouvé par le fuzzing. Wazuh, écrit en C, traite a priori les
+  journaux comme des chaînes terminées par un caractère nul (non vérifié) ; l'envoi reste possible pour qui détient
+  une clé d'API d'ingestion.
 
 ## [0.8.2] : 2026-11-25
 
