@@ -296,32 +296,40 @@ def parse_indexer_url(value: str, allow_loopback: bool = False) -> Endpoint:
     return Endpoint(host, port or 443, path)
 
 
-_SOURCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_SOURCE = re.compile(r"^(manager|cluster):([A-Za-z0-9][A-Za-z0-9._-]{0,127})$")
+SOURCE_KINDS = ("manager", "cluster")
 
 
 def validate_source(value: str) -> str:
+    """Source Wazuh d'un client : « manager:<nom> » (champ manager.name) ou « cluster:<nom> » (champ cluster.name)."""
     v = (value or "").strip()
-    if not _SOURCE.match(v):
-        raise ConfigError("Source Wazuh invalide : nom du manager ou du cluster Wazuh (lettres, chiffres, « . », « - », « _ »).")
-    return v
+    m = _SOURCE.match(v)
+    if not m:
+        raise ConfigError("Source Wazuh invalide : « manager:<nom du manager> » ou « cluster:<nom du cluster> » "
+                          "(lettres, chiffres, « . », « - », « _ »).")
+    return f"{m.group(1)}:{m.group(2)}"
+
+
+def parse_source(value: str | None) -> tuple[str, str] | None:
+    """(type, nom) d'une source réglée, ou None si elle est absente ou n'a pas la forme attendue."""
+    m = _SOURCE.match((value or "").strip())
+    return (m.group(1), m.group(2)) if m else None
 
 
 def source_filter(cfg: IndexerConfig) -> list[dict]:
-    """Filtre de l'indexeur sur la source du client : son manager, ou son cluster (dans un cluster, manager.name est le
-    nœud qui a traité l'alerte). Vide si aucune source n'est réglée."""
-    if not cfg.source:
-        return []
-    return [{"bool": {"should": [{"term": {"manager.name": cfg.source}}, {"term": {"cluster.name": cfg.source}}],
-                      "minimum_should_match": 1}}]
+    """Filtre de l'indexeur sur la source du client : le champ de son type seulement (manager.name, ou cluster.name dans
+    un cluster, où manager.name est le nœud qui a traité l'alerte). Vide si aucune source n'est réglée."""
+    parsed = parse_source(cfg.source)
+    return [{"term": {f"{parsed[0]}.name": parsed[1]}}] if parsed else []
 
 
 def from_source(src: dict, source: str | None) -> bool:
     """Vrai si l'événement vient de la source du client (toujours vrai sans source réglée)."""
-    if not source:
-        return True
-    manager, cluster = src.get("manager"), src.get("cluster")
-    return (isinstance(manager, dict) and manager.get("name") == source) or \
-        (isinstance(cluster, dict) and cluster.get("name") == source)
+    parsed = parse_source(source)
+    if not parsed:
+        return not source
+    field = src.get(parsed[0])
+    return isinstance(field, dict) and field.get("name") == parsed[1]
 
 
 def _prefix(pattern: str) -> str:
@@ -343,28 +351,31 @@ def patterns_overlap(a: str, b: str) -> bool:
     return pa.startswith(pb) or pb.startswith(pa)
 
 
-def shared_without_source(db: DbSession, tenant: Tenant, allow_loopback: bool = True) -> Tenant | None:
-    """Autre client qui lit le même indexeur avec un motif d'index qui peut recouvrir celui-ci, sans que chacun ait sa
-    propre source Wazuh : les événements de l'un pourraient s'afficher chez l'autre [PDIS IV.3.8.g]. None si aucun."""
+def source_conflict(db: DbSession, tenant: Tenant, strict: bool = True) -> Tenant | None:
+    """Autre client dont les événements pourraient être lus avec la source de celui-ci [PDIS IV.3.8.g ; ADR-0031].
+
+    Les adresses des indexeurs ne sont PAS comparées : un même serveur s'écrit de bien des façons (adresse IP sous
+    plusieurs formes, alias DNS, IPv6). Deux clients dont les motifs d'index peuvent se recouvrir doivent donc, quel que
+    soit leur indexeur, avoir chacun une source, du même type (deux noms de types différents ne s'excluent pas : un
+    manager et un cluster peuvent porter le même nom) et de noms différents. `strict=False` (enregistrement d'un client) :
+    un autre client encore sans source n'empêche pas d'enregistrer la sienne, pour qu'un Admin puisse régler les
+    clients un par un ; la lecture (`strict=True`) reste refusée tant que tous ne sont pas réglés."""
     if not tenant.wazuh_indexer_url:
         return None
-    try:
-        mine = parse_indexer_url(tenant.wazuh_indexer_url, allow_loopback)
-    except ConfigError:
-        return None
     pattern = tenant.wazuh_index_pattern or DEFAULT_INDEX_PATTERN
-    source = (tenant.wazuh_indexer_source or "").lower()
-    for other in db.scalars(select(Tenant).where(Tenant.id != tenant.id, Tenant.wazuh_indexer_url.is_not(None))):
-        try:
-            theirs = parse_indexer_url(other.wazuh_indexer_url, allow_loopback)
-        except ConfigError:
-            continue
-        if (mine.host.lower(), mine.port) != (theirs.host.lower(), theirs.port):
-            continue
+    mine = parse_source(tenant.wazuh_indexer_source)
+    for other in db.scalars(select(Tenant).where(Tenant.id != tenant.id, Tenant.wazuh_indexer_url.is_not(None))
+                            .order_by(Tenant.key)):
         if not patterns_overlap(pattern, other.wazuh_index_pattern or DEFAULT_INDEX_PATTERN):
             continue
-        other_source = (other.wazuh_indexer_source or "").lower()
-        if not source or not other_source or source == other_source:
+        theirs = parse_source(other.wazuh_indexer_source)
+        if mine is None:
+            return other
+        if theirs is None:
+            if strict:
+                return other
+            continue
+        if theirs[0] != mine[0] or theirs[1].lower() == mine[1].lower():
             return other
     return None
 

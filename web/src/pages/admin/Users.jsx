@@ -248,6 +248,7 @@ export default function Users() {
           </tbody>
         </table>
       </div>
+      {list.empty}
       {list.pager}
     </section>
   )

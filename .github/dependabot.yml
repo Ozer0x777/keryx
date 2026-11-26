@@ -29,6 +29,23 @@ updates:
     schedule: { interval: weekly }
     groups:
       actions: { patterns: ["*"] }
+  # Images épinglées par empreinte dans le kit Docker (docker-compose.yml) et dans ses Dockerfile (Keycloak, Garage).
+  - package-ecosystem: docker-compose
+    directory: /deploy/docker
+    schedule: { interval: weekly }
+    groups:
+      kit: { patterns: ["*"] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: docker
+    directories: ["/deploy/docker/keycloak", "/deploy/docker/garage"]
+    schedule: { interval: weekly }
+    groups:
+      kit-images: { patterns: ["*"] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker
     directory: /
     schedule: { interval: weekly }

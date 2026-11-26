@@ -63,10 +63,12 @@ def register(app, ctx) -> None:
     def indexer_config(tenant: Tenant) -> wz.IndexerConfig:
         if not wz.context_configured(tenant):
             raise HTTPException(409, "Le contexte Wazuh n'est pas configuré pour ce client.")
-        if (session := object_session(tenant)) is not None and wz.shared_without_source(session, tenant) is not None:
+        session = object_session(tenant)
+        if session is None or wz.source_conflict(session, tenant) is not None:
             # Réglage antérieur à ADR-0031 : indexeur partagé sans source propre à chaque client. Rien n'est lu.
-            raise HTTPException(409, "L'indexeur Wazuh de ce client est partagé avec un autre client sans source Wazuh "
-                                     "propre à chacun : un Admin doit régler la source (nom du manager ou du cluster).")
+            raise HTTPException(409, "Un autre client lit un indexeur Wazuh dont les index peuvent recouvrir ceux de ce client, "
+                                     "sans source Wazuh distincte pour chacun : un Admin doit régler les sources "
+                                     "(manager ou cluster) de ces clients.")
         try:
             endpoint = wz.parse_indexer_url(tenant.wazuh_indexer_url, settings.wazuh_allow_loopback)
             username = box.decrypt(tenant.wazuh_indexer_user, f"wazuh_indexer_user:{tenant.id}")

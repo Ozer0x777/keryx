@@ -191,7 +191,7 @@ export default function Tickets() {
   useEffect(() => { if (picked.size && !people.length) api('/tickets/' + encodeURIComponent([...picked][0]) + '/assignables').then((r) => setPeople(r.items)).catch(() => {}) }, [picked, people.length])
 
   const statusChoices = [
-    ['', tr('Tous')], [OPEN_STATUSES, tr('Ouverts')], [TO_QUALIFY, tr('À qualifier')],
+    ['', tr('Tous')], [OPEN_STATUSES, tr('Ouverts')], [TO_QUALIFY, tr('À qualifier')], ['cloture,faux_positif', tr('Clôturés et faux positifs')],
     ...Object.entries(STATUS).map(([k, v]) => [k, v.label]),
   ]
   const multi = me.clients.length > 1

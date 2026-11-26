@@ -14,7 +14,7 @@ Quand une étiquette `vX.Y.Z` est poussée, le workflow `.github/workflows/publi
 5. joint à la version l'archive des sources de l'étiquette et une SBOM CycloneDX des dépendances, **signe la liste
    de leurs empreintes SHA-256** (`SHA256SUMS`) de la même façon, sans clé (preuve : `SHA256SUMS.sigstore.json`),
    et joint leur attestation de provenance SLSA (`keryx-X.Y.Z.intoto.jsonl`, à partir de la
-   0.8.3 ; vérification : `gh attestation verify keryx-X.Y.Z-sources.tar.gz --owner Ozer0x777`) ;
+   0.8.3 ; vérification : `gh attestation verify keryx-X.Y.Z-sources.tar.gz --repo Ozer0x777/keryx --signer-workflow Ozer0x777/keryx/.github/workflows/publication.yml`) ;
 6. crée la version GitHub avec la section du CHANGELOG, l'empreinte de l'image et ces fichiers.
 
 ## Installer l'image publiée avec le kit Docker
@@ -35,13 +35,18 @@ l'installation l'affiche en avertissement.
 ```bash
 cosign verify ghcr.io/ozer0x777/keryx:0.8.3 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  --certificate-identity-regexp '(?i)^https://github.com/Ozer0x777/keryx/\.github/workflows/publication\.yml@refs/tags/v'
+  --certificate-github-workflow-trigger push \
+  --certificate-identity-regexp '(?i)^https://github\.com/Ozer0x777/keryx/\.github/workflows/publication\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$'
 
-gh attestation verify oci://ghcr.io/ozer0x777/keryx:0.8.3 --owner Ozer0x777      # provenance
+gh attestation verify oci://ghcr.io/ozer0x777/keryx:0.8.3 --repo Ozer0x777/keryx \
+  --signer-workflow Ozer0x777/keryx/.github/workflows/publication.yml          # provenance
 ```
 
-Une vérification réussie prouve que l'image a été construite par le workflow de publication de ce dépôt, à partir
-d'une étiquette de version. Elle ne prouve pas que le code est exempt de défaut.
+Une vérification réussie prouve que l'image a été construite et signée par le workflow de publication de ce dépôt,
+déclenché par la poussée d'une étiquette `vX.Y.Z`. Ce workflow refuse une étiquette qui ne désigne pas un commit de
+`main` : le code publié est donc passé par une demande de fusion et par les vérifications obligatoires. Une règle du
+dépôt interdit aussi de déplacer ou de supprimer une étiquette `v*` une fois posée, sans exception : un numéro de
+version désigne toujours le même commit. Elle ne prouve pas que le code est exempt de défaut.
 
 ## Vérifier les fichiers d'une version
 
@@ -51,7 +56,8 @@ Depuis la 0.8.2 (la 0.8.0 et la 0.8.1 n'ont que leur image signée). Télécharg
 ```bash
 cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  --certificate-identity-regexp '(?i)^https://github.com/Ozer0x777/keryx/\.github/workflows/publication\.yml@refs/tags/v'
+  --certificate-github-workflow-trigger push \
+  --certificate-identity-regexp '(?i)^https://github\.com/Ozer0x777/keryx/\.github/workflows/publication\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$'
 sha256sum --check --ignore-missing SHA256SUMS
 ```
 

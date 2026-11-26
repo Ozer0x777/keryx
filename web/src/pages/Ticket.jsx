@@ -592,18 +592,24 @@ function fmtDetail(v) {
 // Entrées plus anciennes d'un ticket (commentaires ou historique), chargées à la demande par paquets : la fiche ne
 // reçoit que les plus récentes. Un nouveau relevé de la fiche repart des plus récentes.
 function useOlder(ref, kind, items, older) {
-  const [extra, setExtra] = useState({ items: [], older: null })
+  // Les entrées ajoutées sont liées à la liste reçue avec la fiche : une fiche relue les efface dès le rendu suivant,
+  // et une réponse arrivée après une relecture est ignorée.
+  const [extra, setExtra] = useState({ base: items, items: [], older: null, error: '' })
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  useEffect(() => { setExtra({ items: [], older: null }); setError('') }, [items])
-  const all = [...extra.items, ...items]
-  const remaining = extra.older ?? older ?? 0
+  const current = extra.base === items ? extra : { base: items, items: [], older: null, error: '' }
+  const all = [...current.items, ...items]
+  const remaining = current.older ?? older ?? 0
+  const error = current.error
   const more = async () => {
-    setBusy(true); setError('')
+    setBusy(true)
     try {
       const r = await api(`/tickets/${encodeURIComponent(ref)}/${kind}`, { params: { before: all[0].id } })
-      setExtra((x) => ({ items: [...r.items, ...x.items], older: r.older }))
-    } catch (e) { setError(e.message) } finally { setBusy(false) }
+      // Liée à la liste de la fiche au moment de la demande : si la fiche a été relue entre-temps, `base` ne correspond
+      // plus et ces entrées ne sont pas affichées.
+      setExtra((x) => ({ base: items, items: [...r.items, ...(x.base === items ? x.items : [])], older: r.older, error: '' }))
+    } catch (e) {
+      setExtra((x) => ({ ...(x.base === items ? x : { base: items, items: [], older: null }), error: e.message }))
+    } finally { setBusy(false) }
   }
   const button = remaining > 0 && (
     <p className="row gap older">

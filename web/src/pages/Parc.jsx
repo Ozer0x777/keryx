@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, downloadBlob } from '../api.js'
 import { useAuth } from '../App.jsx'
@@ -58,7 +58,7 @@ export default function Parc() {
   const client = search.get('client') || ''
   const filter = FILTERS.some(([k]) => k === search.get('filtre')) ? search.get('filtre') : 'all'
   const q = search.get('q') || ''
-  const page = search.get('page') || '1'
+  const page = /^[1-9][0-9]{0,5}$/.test(search.get('page') || '') ? search.get('page') : '1'
   const perPage = PER_PAGE.includes(search.get('per_page')) ? search.get('per_page') : '50'
   const selected = search.get('agent') || ''
   const [draft, setDraft] = useState(q)
@@ -72,9 +72,15 @@ export default function Parc() {
     return n
   }, { replace: true }), [setSearch])
 
-  const load = useCallback(() => api('/parc', { params: { client: client || undefined, filtre: filter === 'all' ? undefined : filter,
-    q: q || undefined, page, per_page: perPage } })
-    .then((r) => { setP(r); setError('') }).catch((e) => setError(e.message)), [client, filter, q, page, perPage])
+  // Seule la réponse à la dernière demande est affichée (pages ou recherches enchaînées vite).
+  const request = useRef(0)
+  const load = useCallback(() => {
+    const n = ++request.current
+    return api('/parc', { params: { client: client || undefined, filtre: filter === 'all' ? undefined : filter,
+      q: q || undefined, page, per_page: perPage } })
+      .then((r) => { if (n === request.current) { setP(r); setError('') } })
+      .catch((e) => { if (n === request.current) setError(e.message) })
+  }, [client, filter, q, page, perPage])
   useEffect(() => { load() }, [load])
   // Recherche envoyée au serveur après une courte pause de frappe, pas à chaque touche ; retour à la page 1.
   useEffect(() => { setDraft(q) }, [q])
@@ -109,7 +115,7 @@ export default function Parc() {
         <div className="row wrap gap">
           {p.clients.length > 1 && (
             <label className="filter">{tr('Client')}
-              <select value={p.client.key} onChange={(e) => setParam({ client: e.target.value, agent: '' })}>
+              <select value={p.client.key} onChange={(e) => setParam({ client: e.target.value, agent: '', page: '', filtre: '', q: '' })}>
                 {p.clients.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
               </select>
             </label>
@@ -232,10 +238,15 @@ function AgentDetail({ p, id, team, onChanged }) {
   const [error, setError] = useState('')
   const [status, track] = useActionStatus()
   const [ask, dialog] = useConfirm()
+  const [tick, setTick] = useState(0)
+  // Relu quand l'agent, le client ou le relevé changent, ou après une action sur l'agent ; pas à chaque page de la
+  // liste (chaque lecture est inscrite au journal d'audit).
+  const client = p.client.key
+  const polled = p.polled_at
   useEffect(() => {
     if (!id) return
-    api(`/parc/${p.client.key}/agents/${encodeURIComponent(id)}`).then(setD).catch((e) => setError(e.message))
-  }, [p, id])
+    api(`/parc/${client}/agents/${encodeURIComponent(id)}`).then(setD).catch((e) => setError(e.message))
+  }, [client, polled, id, tick])
   if (!id) return null
   if (error) return <aside className="parc-detail card" aria-label={tr("Détail de l'agent")}><p className="error" role="alert">{error}</p></aside>
   if (!d) return <aside className="parc-detail card" aria-label={tr("Détail de l'agent")}><p className="muted">{tr('Chargement…')}</p></aside>
@@ -246,7 +257,7 @@ function AgentDetail({ p, id, team, onChanged }) {
       confirm: tr('Ouvrir le ticket'),
       action: () => api(`/parc/${p.client.key}/agents/${encodeURIComponent(d.id)}/ticket`, { method: 'POST' }),
     })
-    if (r) { track(async () => {}, tr('Ticket {ref} : {s}.', { ref: r.result.ref, s: r.result.status === 'created' ? tr('créé') : tr('complété') })); onChanged() }
+    if (r) { track(async () => {}, tr('Ticket {ref} : {s}.', { ref: r.result.ref, s: r.result.status === 'created' ? tr('créé') : tr('complété') })); setTick((n) => n + 1); onChanged() }
   }
   const segLabel = d.timeline_7d.map((s) => `${tr((STATUS[s.status] || STATUS.inconnu).label)} ${Math.round(s.share * 100)} %`).join(', ')
   return (

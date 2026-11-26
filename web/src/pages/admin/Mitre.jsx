@@ -89,6 +89,7 @@ export default function Mitre() {
           ))}
         </tbody>
       </table></div>
+      {list.empty}
       {list.pager}
       {dialog}
     </section>

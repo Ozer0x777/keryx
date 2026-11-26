@@ -51,7 +51,8 @@ def verifier(donnees: bytes) -> None:
         raise Defaut("caractère nul dans le corps (refusé par PostgreSQL)")
     agent = _dict(alerte.get("agent"))
     titre = short_title(_str(regle.get("description"), 500), _str(agent.get("name"), 200))
-    if any(c < " " or c == "\x7f" for c in titre):
+    if any(c < " " or "\x7f" <= c < "\xa0" or "\u202a" <= c <= "\u202e" or "\u2066" <= c <= "\u2069"
+           or "\ud800" <= c <= "\udfff" for c in titre):
         raise Defaut(f"caractère de contrôle dans le titre : {titre[:80]!r}")
     if len(titre) > TITLE_MAX + 1 + len(" — ") + 200:
         raise Defaut(f"titre trop long : {len(titre)} caractères")

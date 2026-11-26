@@ -229,6 +229,7 @@ titre "Image de Keryx"
 # pour une image copiée dans un registre interne après avoir été vérifiée (docs/publication.md, registre relais).
 # Les deux variables exigées par docker-compose.yml n'existent pas encore à la première installation.
 COSIGN_IMAGE="gcr.io/projectsigstore/cosign:v2.4.1@sha256:b03690aa52bfe94054187142fba24dc54137650682810633901767d8a3e15b31"
+EPINGLEE=""
 cosign_verify() {
     if command -v cosign >/dev/null 2>&1; then cosign verify "$@"; else docker run --rm "$COSIGN_IMAGE" verify "$@"; fi
 }
@@ -245,10 +246,18 @@ if [ -n "$PUBLIEE" ]; then
         oui)
             DEPOT=$(printf '%s' "$PUBLIEE" | sed -n 's#^ghcr\.io/\([^/]*\)/\([^/]*\)$#\1/\2#p')
             [ -n "$DEPOT" ] || erreur "la signature se vérifie sur une image ghcr.io/<compte>/<dépôt> : « $PUBLIEE ». Image d'un registre interne, déjà vérifiée avant copie : relancer avec KERYX_VERIFIER_SIGNATURE=non."
-            cosign_verify "$IMAGE" --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-                --certificate-identity-regexp "(?i)^https://github.com/$DEPOT/\.github/workflows/publication\.yml@refs/tags/v" >/dev/null \
+            # On vérifie l'empreinte exacte de l'image récupérée (et non son étiquette, qui pourrait changer entre la
+            # récupération et la vérification), signée par le workflow de publication de ce dépôt sur une étiquette de
+            # version vX.Y.Z poussée.
+            REF=$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGE" 2>/dev/null || true)
+            case "$REF" in "$PUBLIEE"@sha256:*) ;; *) erreur "empreinte de $IMAGE introuvable après sa récupération." ;; esac
+            DEPOT_RE=$(printf '%s' "$DEPOT" | sed 's/\./\\./g')
+            cosign_verify "$REF" --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+                --certificate-github-workflow-trigger push \
+                --certificate-identity-regexp "(?i)^https://github\.com/$DEPOT_RE/\.github/workflows/publication\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+\$" >/dev/null \
                 || erreur "signature de $IMAGE invalide ou absente : image refusée."
-            dire "   signature de $IMAGE vérifiée (publiée par le dépôt $DEPOT)." ;;
+            ETIQ="${IMAGE%%@*}"; EPINGLEE="${ETIQ##*:}@${REF#*@}"
+            dire "   signature de $REF vérifiée (publiée par le dépôt $DEPOT)." ;;
         *) erreur "KERYX_VERIFIER_SIGNATURE vaut « oui » (par défaut) ou « non »." ;;
     esac
 else
@@ -307,6 +316,8 @@ EOF
         [ -z "$D_EAB_KID" ] || printf 'KERYX_ACME_EAB_KID=%s\nKERYX_ACME_EAB_HMAC=%s\n' "$D_EAB_KID" "$D_EAB_HMAC" >> "$TMP"
     fi
     [ -z "$PUBLIEE" ] || printf '# Image publiée de Keryx (récupérée, non construite ici)\nKERYX_IMAGE=%s\n' "$PUBLIEE" >> "$TMP"
+    # Image figée sur l'empreinte vérifiée : un « docker compose up » ultérieur reprend exactement cette image.
+    [ -z "${EPINGLEE:-}" ] || printf '# Version et empreinte vérifiées à l\047installation\nKERYX_VERSION=%s\n' "$EPINGLEE" >> "$TMP"
     # Jamais d'écrasement : si un .env est apparu entre-temps, on s'arrête.
     if ! ln "$TMP" "$ENVF" 2>/dev/null; then
         rm -f "$TMP"

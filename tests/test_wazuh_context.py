@@ -723,19 +723,23 @@ def test_indexeur_partage_exige_une_source_par_client(wapp, db, world, indexer):
     # Motifs différents mais qui se recouvrent : refusé aussi (autorisé avant ADR-0031)
     r = adm.patch("/api/v1/admin/clients/DELTA", json={**base, "wazuh_index_pattern": "wazuh-alerts-4.x-*"})
     assert r.status_code == 422
-    # Une seule des deux sources réglée, puis la même source : refusé
-    r = adm.patch("/api/v1/admin/clients/DELTA", json={**base, "wazuh_indexer_source": "wazuh-manager-02"})
+    # DELTA règle sa source avant ACME : accepté (réglage client par client), mais la lecture attend ACME
+    r = adm.patch("/api/v1/admin/clients/DELTA", json={**base, "wazuh_indexer_source": "manager:wazuh-manager-02"})
+    assert r.status_code == 200
+    fresh(db)
+    delta = db.scalars(select(Tenant).where(Tenant.key == "DELTA")).one()
+    assert wz.source_conflict(db, delta) is not None and wz.source_conflict(db, delta, strict=False) is None
+    # ACME reprend la même source que DELTA (sans tenir compte de la casse) : refusé ; une autre : accepté
+    r = adm.patch("/api/v1/admin/clients/ACME", json={"wazuh_indexer_source": "manager:WAZUH-MANAGER-02"})
     assert r.status_code == 422
-    assert adm.patch("/api/v1/admin/clients/ACME", json={"wazuh_indexer_source": "wazuh-manager-01"}).status_code == 200
-    r = adm.patch("/api/v1/admin/clients/DELTA", json={**base, "wazuh_indexer_source": "WAZUH-MANAGER-01"})
-    assert r.status_code == 422
+    assert adm.patch("/api/v1/admin/clients/ACME", json={"wazuh_indexer_source": "manager:wazuh-manager-01"}).status_code == 200
     # Sources distinctes : accepté ; motifs disjoints : accepté sans source
-    assert adm.patch("/api/v1/admin/clients/DELTA", json={**base, "wazuh_indexer_source": "wazuh-manager-02"}).status_code == 200
+    assert adm.patch("/api/v1/admin/clients/DELTA", json={**base, "wazuh_indexer_source": "manager:wazuh-manager-02"}).status_code == 200
     assert wz.patterns_overlap("wazuh-alerts-*", "wazuh-alerts-4.x-*") and wz.patterns_overlap("*", "a-*")
     assert not wz.patterns_overlap("acme-alerts-*", "delta-alerts-*") and not wz.patterns_overlap("acme", "delta")
     # Source invalide
-    assert adm.patch("/api/v1/admin/clients/DELTA", json={"wazuh_indexer_source": "a b"}).status_code == 422
-    assert adm.get("/api/v1/admin/clients").json()["items"][1]["wazuh_indexer_source"] in ("wazuh-manager-01", "wazuh-manager-02")
+    assert adm.patch("/api/v1/admin/clients/DELTA", json={"wazuh_indexer_source": "manager:a b"}).status_code == 422
+    assert adm.get("/api/v1/admin/clients").json()["items"][1]["wazuh_indexer_source"] in ("manager:wazuh-manager-01", "manager:wazuh-manager-02")
 
 
 @pytest.mark.parametrize("mode", ["normal", "leak"])
@@ -743,7 +747,7 @@ def test_source_ecarte_les_evenements_d_un_autre_manager(wapp, db, world, ticket
     """Même numéro d'agent chez un autre manager du même indexeur : jamais montré, que l'indexeur applique le filtre de
     source ou non (mode « fuite » : Keryx revérifie chaque événement reçu)."""
     _autre_manager(indexer)
-    configure(wapp, db, indexer, wazuh_indexer_source="wazuh-manager-01")
+    configure(wapp, db, indexer, wazuh_indexer_source="manager:wazuh-manager-01")
     indexer.mode = mode
     a = login(wapp, db, "analyst_acme")
     r = fetch(a, 15, 15)
@@ -759,7 +763,7 @@ def test_source_par_nom_de_cluster(wapp, db, world, ticket, indexer):
     for d in indexer.docs:
         d["_source"]["cluster"] = {"name": "cluster-acme"}
     _autre_manager(indexer, manager="wazuh-node-07", cluster="cluster-delta")
-    configure(wapp, db, indexer, wazuh_indexer_source="cluster-acme")
+    configure(wapp, db, indexer, wazuh_indexer_source="cluster:cluster-acme")
     r = fetch(login(wapp, db, "analyst_acme"), 15, 15)
     assert r.status_code == 200 and "SECRET-AUTRE-MANAGER" not in r.text and len(r.json()["document"]["before"]) == 15
 
@@ -775,3 +779,34 @@ def test_reglage_anterieur_partage_sans_source_refuse(wapp, db, world, ticket, i
     db.commit()
     r = fetch(login(wapp, db, "analyst_acme"))
     assert r.status_code == 409 and "source" in r.text
+
+
+def test_indexeurs_ecrits_autrement_et_types_de_source(wapp, db, world, indexer):
+    """Revue : un même indexeur peut s'écrire de plusieurs façons (adresse IP sous une autre forme, alias DNS) ; les
+    adresses ne sont donc plus comparées. Et deux sources de types différents ne s'excluent pas."""
+    configure(wapp, db, indexer, wazuh_indexer_source="manager:mgr-acme")
+    adm = login(wapp, db, "admin")
+    autre = {"wazuh_indexer_url": "https://indexeur-b.example:9200", "wazuh_indexer_user": USER, "wazuh_indexer_password": PASSWORD}
+    assert adm.patch("/api/v1/admin/clients/DELTA", json=autre).status_code == 422                  # autre adresse, même motif
+    r = adm.patch("/api/v1/admin/clients/DELTA", json={**autre, "wazuh_indexer_source": "cluster:mgr-b"})
+    assert r.status_code == 422 and "même type" in r.json()["detail"]                              # types différents
+    assert adm.patch("/api/v1/admin/clients/DELTA", json={**autre, "wazuh_indexer_source": "manager:mgr-b"}).status_code == 200
+    assert adm.patch("/api/v1/admin/clients/DELTA", json={"wazuh_indexer_source": "mgr-b"}).status_code == 422   # sans type
+    assert wz.parse_source("cluster:wazuh") == ("cluster", "wazuh") and wz.parse_source("wazuh") is None
+
+
+def test_reglage_anterieur_se_repare_client_par_client(wapp, db, world, ticket, indexer):
+    """Revue : deux clients partagent un indexeur sans source (réglage d'avant ADR-0031). Chacun peut recevoir sa
+    source séparément ; la lecture reste refusée tant que les deux ne sont pas réglés, puis fonctionne."""
+    configure(wapp, db, indexer)
+    fresh(db)
+    acme = db.scalars(select(Tenant).where(Tenant.key == "ACME")).one()
+    delta = db.scalars(select(Tenant).where(Tenant.key == "DELTA")).one()
+    delta.wazuh_indexer_url = acme.wazuh_indexer_url
+    db.commit()
+    adm, a = login(wapp, db, "admin"), login(wapp, db, "analyst_acme")
+    assert fetch(a).status_code == 409
+    assert adm.patch("/api/v1/admin/clients/ACME", json={"wazuh_indexer_source": "manager:wazuh-manager-01"}).status_code == 200
+    assert fetch(a).status_code == 409                       # DELTA n'a pas encore de source : rien n'est lu
+    assert adm.patch("/api/v1/admin/clients/DELTA", json={"wazuh_indexer_source": "manager:wazuh-manager-02"}).status_code == 200
+    assert fetch(a).status_code == 200
