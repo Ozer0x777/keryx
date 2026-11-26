@@ -7,9 +7,12 @@ import { t as tr } from '../i18n.js'
 import { KANBAN_COLUMNS, STATUS, TRANSITIONS } from '../labels.js'
 import { confirmTransition, needsConfirm } from '../transitions.jsx'
 
+// Statuts d'une colonne : les faux positifs sont rangés avec les tickets clos.
+const columnStatuses = (s) => (s === 'cloture' ? 'cloture,faux_positif' : s)
+const PER_COLUMN = 50     // cartes par colonne : les plus récentes ; les autres sont dans la liste paginée
+
 export default function Kanban() {
-  const [items, setItems] = useState([])
-  const [total, setTotal] = useState(0)
+  const [columns, setColumns] = useState(KANBAN_COLUMNS.map((status) => ({ status, cards: [], total: 0 })))
   const [mine, setMine] = useState(false)
   const [message, setMessage] = useState('')       // succès : zone live en tête de tableau
   const [loadError, setLoadError] = useState('')
@@ -17,7 +20,11 @@ export default function Kanban() {
   const [dragging, setDragging] = useState(null)
   const [ask, dialog] = useConfirm()
 
-  const load = useCallback(() => api('/tickets', { params: { limit: 500, assignee: mine ? 'me' : undefined } }).then((r) => { setItems(r.items); setTotal(r.total ?? r.items.length) }), [mine])
+  // Une requête par colonne : chaque colonne montre ses cartes les plus récentes et son vrai total, quel que soit
+  // le nombre de tickets (auparavant, 500 tickets au plus pour tout le tableau).
+  const load = useCallback(() => Promise.all(KANBAN_COLUMNS.map((status) => api('/tickets', {
+    params: { status: columnStatuses(status), limit: PER_COLUMN, assignee: mine ? 'me' : undefined },
+  }).then((r) => ({ status, cards: r.items, total: r.total ?? r.items.length })))).then(setColumns), [mine])
   useEffect(() => { setLoadError(''); load().catch((e) => setLoadError(e.message)) }, [load])
 
   const move = async (ticket, target) => {
@@ -41,11 +48,6 @@ export default function Kanban() {
     }
   }
 
-  const columns = KANBAN_COLUMNS.map((s) => ({
-    status: s,
-    cards: items.filter((t) => t.status === s || (s === 'cloture' && t.status === 'faux_positif')),
-  }))
-
   return (
     <>
       <header className="page-head">
@@ -62,7 +64,6 @@ export default function Kanban() {
       {loadError && <p className="error" role="alert">{loadError}</p>}
       <p className="live" role="status" aria-live="polite">{message}</p>
       {dialog}
-      {total > items.length && <p className="muted small" role="status">{tr('{n} tickets affichés sur {total} : les plus anciens ne figurent pas dans le tableau.', { n: items.length, total })}</p>}
       <div className="kanban">
         {columns.map((col) => (
           <section key={col.status} className={`column${dragging ? ' droppable' : ''}`} aria-label={STATUS[col.status].label}
@@ -71,7 +72,7 @@ export default function Kanban() {
             <header className="column-head">
               <span className="dot" aria-hidden="true" style={{ background: STATUS[col.status].color }} />
               <h2>{STATUS[col.status].label}</h2>
-              <span className="count">{col.cards.length}</span>
+              <span className="count">{col.total}</span>
             </header>
             <p className="muted small">{STATUS[col.status].phase}</p>
             {col.cards.map((t) => (
@@ -97,6 +98,11 @@ export default function Kanban() {
                 {refused?.ref === t.ref && <p className="error action-status" role="alert">{refused.text}</p>}
               </article>
             ))}
+            {col.total > col.cards.length && (
+              <Link className="small more" to={`/tickets?${new URLSearchParams({ status: columnStatuses(col.status), ...(mine ? { assignee: 'me' } : {}) })}`}>
+                {tr('Voir les {n} autres dans la liste', { n: col.total - col.cards.length })}
+              </Link>
+            )}
           </section>
         ))}
       </div>

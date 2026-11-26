@@ -8,6 +8,11 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 - Liste des tickets paginée : 25, 50 ou 100 par page, page et taille de page dans l'URL (retour depuis une fiche,
   bouton Précédent du navigateur, lien partagé), retour à la page 1 quand un filtre change, barre de pages commune
   (`web/src/components/Pager.jsx`) ; auparavant, 200 tickets au plus étaient affichés.
+- Parc d'agents paginé côté serveur (filtre, recherche, tri et page appliqués par l'API, compteurs des cartes sur tout
+  le parc) : un parc de milliers d'agents n'est plus envoyé d'un bloc au navigateur ; recherche envoyée après une
+  courte pause de frappe.
+- Kanban chargé colonne par colonne : les 50 tickets les plus récents de chaque colonne, son vrai total et un lien
+  vers la liste paginée pour les autres ; auparavant, 500 tickets au plus pour tout le tableau.
 
 ### Sécurité
 - Kit Docker : `install.sh` vérifie toujours la signature de l'image publiée, avec cosign s'il est installé, sinon
