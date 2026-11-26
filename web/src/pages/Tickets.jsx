@@ -4,11 +4,13 @@ import { api } from '../api.js'
 import { useAuth } from '../App.jsx'
 import { Severity, Status, Tlp } from '../components/Badges.jsx'
 import { useConfirm } from '../components/Confirm.jsx'
+import Pager from '../components/Pager.jsx'
 import { utcClock } from '../dates.js'
 import { t as tr } from '../i18n.js'
 import { MITRE_SOURCE, STATUS } from '../labels.js'
 import {
-  cardActive, cardPatch, DEFAULTS, filtersFromSearch, filtersToSearch, OPEN_STATUSES, rememberQueue, SEVERITIES, TO_QUALIFY,
+  cardActive, cardPatch, DEFAULTS, filtersFromSearch, filtersToSearch, OPEN_STATUSES, pageInfo, PER_PAGE, rememberQueue,
+  SEVERITIES, TO_QUALIFY,
 } from '../queue.js'
 
 const REFRESH_MS = 45000
@@ -91,7 +93,7 @@ export default function Tickets() {
     const f = filtersFromSearch(key)
     return { ...f, rex_en_attente: f.rex_en_attente || undefined, overdue: f.overdue || undefined,
       critical_unassigned: f.critical_unassigned || undefined, awaiting_client: f.awaiting_client || undefined,
-      incomplete: f.incomplete || undefined, limit: 200 }
+      incomplete: f.incomplete || undefined, limit: Number(f.per_page), offset: (Number(f.page) - 1) * Number(f.per_page) }
   }, [key])
 
   // Relevé de la liste (premier affichage, changement de filtre, bouton, minuterie). La liste affichée reste en place
@@ -102,6 +104,12 @@ export default function Tickets() {
     try {
       const r = await api('/tickets', { params })
       if (n !== request.current) return
+      const pi = pageInfo(r.total ?? r.items.length, params.offset / params.limit + 1, params.limit)
+      if (pi.page !== params.offset / params.limit + 1) {
+        // Page au-delà de la fin (tickets clos ou filtrés entre-temps) : aller à la dernière page qui existe.
+        setSearch((sp) => { const n = new URLSearchParams(sp); n.set('page', String(pi.page)); return n }, { replace: true })
+        return
+      }
       setItems(r.items); setTotal(r.total ?? r.items.length); setError('')
       setUpdatedAt(new Date()); lastLoad.current = Date.now()
       // Une ligne sortie de la liste (affectée ailleurs, close…) quitte aussi la sélection.
@@ -112,7 +120,7 @@ export default function Tickets() {
     } finally {
       if (n === request.current) setRefreshing(false)
     }
-  }, [params])
+  }, [params, setSearch])
   useEffect(() => { reload() }, [reload])
 
   // Rafraîchissement automatique toutes les 45 s, seulement quand l'onglet est visible ; au retour sur l'onglet,
@@ -137,7 +145,10 @@ export default function Tickets() {
     api('/me/filters').then((r) => setSaved(r.items)).catch(() => {})
   }, [isClient])
 
-  const apply = (next) => { setPicked(new Set()); setMsg(''); setSearch(filtersToSearch(next), { replace: true }) }
+  // Un filtre, un tri ou une vue qui change ramène à la première page ; changer de page garde l'historique (Précédent).
+  const apply = (next) => { setPicked(new Set()); setMsg(''); setSearch(filtersToSearch({ ...next, page: '1' }), { replace: true }) }
+  const goPage = (page) => { setPicked(new Set()); setMsg(''); setSearch(filtersToSearch({ ...filters, page: String(page) })) }
+  const pages = pageInfo(total, filters.page, filters.per_page)
   const set = (patch) => apply({ ...filters, ...patch })
 
   const saveFilter = async () => {
@@ -266,7 +277,7 @@ export default function Tickets() {
 
       <div className="row wrap gap between list-bar">
         <p className="list-count" role="status">{items === null ? tr('Chargement…') : total > items.length
-          ? tr('{n} tickets affichés sur {total} : affinez avec les filtres.', { n: items.length, total })
+          ? tr('Tickets {from} à {to} sur {total}', { from: pages.from, to: pages.to, total })
           : tr('{n} ticket(s)', { n: items.length })}</p>
         <div className="row gap refresh">
           <span className="muted small">{updatedAt ? tr('Mis à jour à {h}', { h: utcClock(updatedAt) }) : ''}</span>
@@ -327,6 +338,10 @@ export default function Tickets() {
           </tbody>
         </table>
       </div>
+      {items !== null && (total > Number(PER_PAGE[0]) || pages.pages > 1) && (
+        <Pager info={pages} label={tr('Pages de la liste')} onPage={goPage} perPage={filters.per_page}
+          perPageOptions={PER_PAGE} onPerPage={(v) => set({ per_page: v })} perPageLabel={tr('Tickets par page')} />
+      )}
       <p className="muted small">{tr('Criticité initiale calculée depuis le niveau de règle Wazuh · gravité fixée à la qualification.')}</p>
     </>
   )

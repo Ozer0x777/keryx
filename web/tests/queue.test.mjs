@@ -1,7 +1,7 @@
 // File de triage : l'état des filtres fait l'aller-retour par l'URL sans perte, et une URL abîmée ne casse pas la liste.
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { cardActive, cardPatch, DEFAULTS, filtersFromSearch, filtersToSearch, OPEN_STATUSES } from '../src/queue.js'
+import { cardActive, cardPatch, DEFAULTS, filtersFromSearch, filtersToSearch, OPEN_STATUSES, pageInfo } from '../src/queue.js'
 
 test('sans paramètre : filtres par défaut, URL vide', () => {
   assert.deepEqual(filtersFromSearch(''), DEFAULTS)
@@ -47,4 +47,21 @@ test('vues de priorisation : un critère propre à chacune, jamais d\'assigné c
   assert.ok(cardActive(k, attenteClient) && !k.overdue)
   const qs = new URLSearchParams(filtersToSearch(k)).toString()
   assert.deepEqual(filtersFromSearch(`?${qs}`), k)                                 // l'URL restitue la vue
+})
+
+test("pagination : la page et la taille de page font l'aller-retour par l'URL, valeurs abîmées corrigées", () => {
+  const f = filtersFromSearch('?page=3&per_page=25&status=nouveau')
+  assert.equal(f.page, '3'); assert.equal(f.per_page, '25')
+  assert.deepEqual(filtersToSearch(f), { status: 'nouveau', page: '3', per_page: '25' })
+  const bad = filtersFromSearch('?page=-2&per_page=1000')
+  assert.equal(bad.page, '1'); assert.equal(bad.per_page, '50')
+  assert.deepEqual(filtersToSearch(filtersFromSearch('')), {})                // page 1 et 50 par page : URL vide
+})
+
+test('pagination : bornes, premières et dernières lignes, décalage', () => {
+  assert.deepEqual(pageInfo(0, 1, 50), { page: 1, pages: 1, size: 50, offset: 0, from: 0, to: 0 })
+  assert.deepEqual(pageInfo(120, 2, 50), { page: 2, pages: 3, size: 50, offset: 50, from: 51, to: 100 })
+  assert.deepEqual(pageInfo(120, 3, 50), { page: 3, pages: 3, size: 50, offset: 100, from: 101, to: 120 })
+  assert.equal(pageInfo(120, 9, 50).page, 3)                                 // au-delà de la fin : dernière page
+  assert.equal(pageInfo(120, 0, 50).page, 1)
 })
