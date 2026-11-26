@@ -86,7 +86,7 @@ signature cryptographique : celle-ci n'est pas exigée.
   `requirements-dev.lock`, eux aussi installés avec `--require-hashes` (régénérer avec `uv pip compile
   requirements-outils.txt --generate-hashes --python-version 3.12 --python-platform linux -o requirements-outils.lock`
   et `uv pip compile requirements-dev.txt -c requirements.lock --generate-hashes --python-version 3.12
-  --python-platform linux -o requirements-dev.lock`). Conteneurs : images officielles `python` et `node`, épinglées
+  --python-platform linux -o requirements-dev.lock` ; de même pour `requirements-fuzz.txt`, le fuzzer Atheris). Conteneurs : images officielles `python` et `node`, épinglées
   par empreinte (`@sha256:`). CI : actions GitHub épinglées par l'empreinte de leur commit, version en commentaire
   (`tests/test_workflows.py` le vérifie). Aucune dépendance n'est copiée dans le dépôt.
 - **Suivi.** Dependabot propose chaque semaine les mises à jour npm, actions GitHub et Docker (empreintes comprises),

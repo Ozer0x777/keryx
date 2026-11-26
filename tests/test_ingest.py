@@ -104,3 +104,24 @@ def test_renvoi_meme_alerte_idempotent(app, db, world, alert):
     ingest(app, k, alert(ALERT_SSH_BRUTEFORCE))
     r = ingest(app, k, alert(ALERT_SSH_BRUTEFORCE))
     assert r.status_code == 200 and r.json()["status"] == "duplicate" and r.json()["occurrences"] == 1
+
+
+def test_caracteres_de_controle_de_l_alerte(app, db, world, alert):
+    """Trouvé par le fuzzing (fuzz/fuzz_alerte_wazuh.py) : un caractère nul ou un retour à la ligne venus de l'alerte
+    (donnée non fiable) ne doivent ni faire échouer l'ingestion (PostgreSQL refuse le caractère nul dans un texte) ni
+    casser le titre sur plusieurs lignes."""
+    a = alert(ALERT_SSH_BRUTEFORCE)
+    a["rule"]["description"] = "sshd:\x00 brute\nforce\r\x1b[31m"
+    a["agent"]["name"] = "srv\x00-web\n-01\t"
+    a["location"] = "/var/log/\x00auth.log"
+    a["full_log"] = "Failed\x00 password\x07 for root"
+    a["data"]["srcuser"] = "ro\x00ot"
+    r = ingest(app, world["keys"]["ACME"], a)
+    assert r.status_code == 201, r.text
+    t = db.scalars(select(Ticket).where(Ticket.ref == r.json()["ticket"])).one()
+    for valeur in (t.title, t.rule_description, t.agent_name, t.body_html):
+        assert "\x00" not in valeur and "\x1b" not in valeur and "\x07" not in valeur
+    assert "\n" not in t.title and "\r" not in t.title
+    assert "sshd: brute force" in t.title and "srv-web -01" in t.title
+    raw = db.scalars(select(RawAlert).where(RawAlert.ticket_id == t.id)).one()
+    assert "\x00" not in raw.payload and "\\u0000" in raw.payload   # original gardé, échappé par JSON

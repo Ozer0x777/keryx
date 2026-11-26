@@ -40,14 +40,37 @@ class IngestResult:
 
 
 # ---------------------------------------------------------------- lecture défensive
+# Caractères de contrôle retirés de toute valeur lue dans l'alerte (sauf tabulation et fins de ligne) : PostgreSQL
+# refuse le caractère nul dans un texte, et une alerte qui le contient ferait échouer l'ingestion, donc perdre le
+# ticket (trouvé par fuzz/fuzz_alerte_wazuh.py). L'alerte brute conservée garde l'original, échappé par JSON.
+_CONTROLES = dict.fromkeys([*range(0, 9), 11, 12, *range(14, 32), 127])
+_UNE_LIGNE = {9: " ", 10: " ", 13: " "}
+_PROFONDEUR_MAX = 32
+
+
+def _sans_controle(v, profondeur: int = 0):
+    if isinstance(v, str):
+        return v.translate(_CONTROLES)
+    if profondeur >= _PROFONDEUR_MAX:
+        return None  # au-delà, rien n'est lu par Keryx (l'original reste dans l'alerte brute)
+    if isinstance(v, dict):
+        return {_sans_controle(k, profondeur + 1) if isinstance(k, str) else k: _sans_controle(x, profondeur + 1)
+                for k, x in v.items()}
+    if isinstance(v, list):
+        return [_sans_controle(x, profondeur + 1) for x in v]
+    return v
+
+
 def _dict(v) -> dict:
     return v if isinstance(v, dict) else {}
 
 
-def _str(v, limit: int) -> str:
+def _str(v, limit: int, lignes: bool = False) -> str:
+    """Texte d'un champ, borné ; sur une seule ligne sauf demande (journal brut)."""
     if v is None or isinstance(v, (dict, list)):
         return ""
-    return str(v)[:limit]
+    texte = str(v).translate(_CONTROLES)
+    return (texte if lignes else texte.translate(_UNE_LIGNE))[:limit]
 
 
 def _str_list(v, limit_items: int = 50, limit_len: int = 120) -> list[str]:
@@ -55,7 +78,7 @@ def _str_list(v, limit_items: int = 50, limit_len: int = 120) -> list[str]:
         v = [v]
     if not isinstance(v, list):
         return []
-    return [str(x)[:limit_len] for x in v[:limit_items] if not isinstance(x, (dict, list))]
+    return [_str(x, limit_len) for x in v[:limit_items] if not isinstance(x, (dict, list))]
 
 
 def _rule(alert: dict) -> dict:
@@ -77,7 +100,8 @@ def short_title(description: str, agent_name: str) -> str:
         cut = text[:TITLE_MAX]
         space = cut.rfind(" ")
         text = (cut[:space] if space >= TITLE_MAX * 0.6 else cut).rstrip(" ,;:-") + "…"
-    return f"{text} — {agent_name or 'agent inconnu'}"
+    agent = " ".join(agent_name.split())
+    return f"{text} — {agent or 'agent inconnu'}"
 
 
 def _classification(rule: dict) -> list[str]:
@@ -108,7 +132,7 @@ def build_body(alert: dict, rule: dict) -> str:
         f"<p>Alerte Wazuh reçue : <strong>{esc(_str(rule.get('description'), 500).rstrip('.'))}</strong>.</p>"
         f"<table><tbody>{table}</tbody></table>"
     )
-    full_log = _str(alert.get("full_log"), 20_000)
+    full_log = _str(alert.get("full_log"), 20_000, lignes=True)
     if full_log:
         body += f"<h3>Journal brut</h3><pre><code>{esc(full_log)}</code></pre>"
     return clean_html(body)
@@ -130,6 +154,7 @@ _CRIT_RANK = {"Faible": 1, "Moyenne": 2, "Élevée": 3, "Critique": 4}
 def ingest_alert(db: DbSession, settings: Settings, tenant: Tenant, alert: dict, actor: str) -> IngestResult:
     if not isinstance(alert, dict):
         raise AlertRejected("Le corps doit être un objet JSON.")
+    original, alert = alert, _sans_controle(alert)
     rule = _rule(alert)
     try:
         level = int(rule["level"])
@@ -149,7 +174,7 @@ def ingest_alert(db: DbSession, settings: Settings, tenant: Tenant, alert: dict,
     agent_id = _str(agent.get("id"), 32)
     detected = parse_wazuh_timestamp(_str(alert.get("timestamp"), 40))
     now = utcnow()
-    raw = json.dumps(alert, ensure_ascii=False, sort_keys=True)
+    raw = json.dumps(original, ensure_ascii=False, sort_keys=True)
     raw_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()
     wazuh_id = _str(alert.get("id"), 64) or None
 

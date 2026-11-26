@@ -1,0 +1,2 @@
+# Fuzzing (fuzz/README.md), installé avec empreintes : requirements-fuzz.lock
+atheris==3.1.0      # fuzzer guidé par la couverture pour Python (Google, Apache-2.0)
