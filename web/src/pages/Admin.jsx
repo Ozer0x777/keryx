@@ -4,6 +4,7 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { api } from '../api.js'
 import { useAuth } from '../App.jsx'
 import Audit from './admin/Audit.jsx'
+import Canaux from './admin/Canaux.jsx'
 import Clients from './admin/Clients.jsx'
 import Keys from './admin/Keys.jsx'
 import Mitre from './admin/Mitre.jsx'
@@ -11,7 +12,7 @@ import Review from './admin/Review.jsx'
 import System from './admin/System.jsx'
 import Users from './admin/Users.jsx'
 
-const TABS = [['comptes', tr('Comptes')], ['clients', tr('Clients')], ['cles', tr("Clés d'API")], ['mitre', tr('MITRE')],
+const TABS = [['comptes', tr('Comptes')], ['clients', tr('Clients')], ['cles', tr("Clés d'API")], ['astreinte', tr("Canaux d'astreinte")], ['mitre', tr('MITRE')],
   ['revue', tr('Revue des comptes')], ['audit', tr("Journal d'audit")], ['systeme', tr('État du système')]]
 
 export default function Admin() {
@@ -42,6 +43,7 @@ export default function Admin() {
         <Route path="comptes" element={<Users />} />
         <Route path="clients" element={<Clients />} />
         <Route path="cles" element={<Keys />} />
+        <Route path="astreinte" element={<Canaux />} />
         <Route path="mitre" element={<Mitre />} />
         <Route path="revue" element={<Review />} />
         <Route path="audit" element={<Audit />} />

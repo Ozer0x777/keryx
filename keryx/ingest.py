@@ -14,7 +14,7 @@ from datetime import timedelta
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session as DbSession
 
-from . import audit
+from . import astreinte, audit
 from .config import Settings
 from .ids import as_utc, parse_wazuh_timestamp, utcnow
 from .mitre import enrich
@@ -252,6 +252,7 @@ def ingest_alert(db: DbSession, settings: Settings, tenant: Tenant, alert: dict,
                        details={"rule_id": rule_id, "rule_level": level, "criticite_initiale": crit,
                                 "mitre_source": mitre_source}))
     notifications = queue_new_ticket(db, settings, tenant, ticket)
+    notifications += astreinte.queue_new_ticket(db, settings, tenant, ticket, actor)   # équipe (ADR-0032)
     audit.record(db, actor, "ticket.create", "ticket", ref, tenant.id,
                  {"rule_id": rule_id, "level": level, "alert_sha256": raw_hash})
     return IngestResult("created", ticket, notifications=notifications)

@@ -73,10 +73,13 @@ def send_pending(session_factory, settings: Settings, notification_ids: list[str
     """Envoie les notifications en attente et met à jour le registre. Appelé hors transaction de requête."""
     if not notification_ids:
         return
+    from .astreinte import send_pending as send_oncall
+    send_oncall(session_factory, settings, notification_ids)     # astreinte de l'équipe d'abord (ADR-0032)
     db = session_factory()
     try:
         rows = db.scalars(select(Notification).where(Notification.id.in_(notification_ids),
-                                                     Notification.status == "en_attente")).all()
+                                                     Notification.status == "en_attente",
+                                                     Notification.canal_id.is_(None))).all()
         for n in rows:
             subject, _, body = n.content.partition("\n")
             if not settings.smtp_host:
@@ -107,7 +110,7 @@ def retry_failed(session_factory, settings: Settings, now=None) -> int:
     now = now or utcnow()
     db = session_factory()
     try:
-        rows = db.scalars(select(Notification).where(Notification.status == "echec",
+        rows = db.scalars(select(Notification).where(Notification.status == "echec", Notification.canal_id.is_(None),
                                                      Notification.attempts < settings.notify_max_attempts)).all()
         due = [n.id for n in rows if as_utc(n.ts) + timedelta(minutes=2 ** (n.attempts or 1)) <= now]
         claimed = []

@@ -56,6 +56,11 @@ class Settings:
     smtp_timeout_s: int = 10
     # Nouvelle tentative des courriels en échec : intervalle de relance en secondes (0 = désactivée), essais maximum.
     notify_retry_interval_s: int = field(default_factory=lambda: _int("KERYX_NOTIFY_RETRY_S", 300))
+    # Astreinte (ADR-0032) : période de la tâche d'escalade et de relance (0 : coupée) ; autorité des webhooks internes
+    # (fichier PEM qui remplace le magasin du système) ; boucle locale acceptée pour les essais seulement.
+    astreinte_tick_s: int = field(default_factory=lambda: _int("KERYX_ASTREINTE_TICK_S", 60))
+    astreinte_ca_file: str | None = field(default_factory=lambda: os.environ.get("KERYX_ASTREINTE_CA_FILE") or None)
+    astreinte_allow_loopback: bool = field(default_factory=lambda: _bool("KERYX_ASTREINTE_ALLOW_LOOPBACK", False))
     notify_max_attempts: int = 5
 
     # Pièces jointes (PRIS VI.5.3.c, VI.2.4, IV.3.q)

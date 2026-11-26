@@ -1,8 +1,8 @@
 # ADR-0032 : Prévenir l'équipe, mesurer l'acquittement, vérifier la chaîne d'alerte de bout en bout
 
 - **Statut** : accepté (26/11/2026). Questions tranchées par le mainteneur le 26/11/2026 (voir « Réglages »).
-  Partie 1 (délai d'acquittement, « Je prends », choix du rapport client) codée le 26/11/2026 ; parties 2
-  (canaux, astreinte, escalade) et 3 (battement de cœur) à coder.
+  Parties 1 (délai d'acquittement, « Je prends », choix du rapport client) et 2 (canaux, astreinte, escalade)
+  codées le 26/11/2026 ; partie 3 (battement de cœur) à coder.
 - **Contexte** : le pire scénario pour un SOC est une alerte critique que personne ne traite parce que personne n'a
   été prévenu, ou une chaîne d'alerte tombée en silence sans que personne ne s'en aperçoive. Aujourd'hui :
   - Keryx garde l'identifiant Wazuh, l'horodatage de détection et l'alerte brute de chaque ticket ;
@@ -66,6 +66,25 @@
   le pilotage, et dans le rapport périodique seulement si le manager a coché ce choix dans « Politique des clients »
   (`acquittement_rapport`, désactivé par défaut, inscrit au journal d'audit). Tests : `tests/test_acquittement.py`,
   `e2e/scenarios/99-acquittement.mjs`.
+- **Partie 2, telle que codée** :
+  - table `canaux_astreinte` (migration `0024`) : l'Admin déclare un canal (webhook JSON générique, webhook
+    Mattermost / Slack, courriel de l'équipe) dans Administration > Canaux d'astreinte. L'adresse, qui contient
+    souvent le jeton du webhook, et le secret de signature sont chiffrés au repos (AES-256-GCM, contexte propre au
+    canal) et ne sont jamais renvoyés : seul l'hôte est affiché. Bouton « Envoyer un essai » sans donnée de ticket ;
+  - le manager règle, par client, dans « Politique des clients » : activation, canal d'astreinte, canal d'escalade
+    (facultatif), criticités qui préviennent (Critique par défaut) et délai d'escalade par criticité (1 à 1440 min ;
+    15, 30, 60, 120 par défaut). Il voit le nom des canaux actifs, jamais leur adresse ;
+  - à l'ingestion, un ticket d'une criticité choisie prévient le canal d'astreinte (`astreinte_at`, événement interne
+    `astreinte`) ; une tâche de fond (`KERYX_ASTREINTE_TICK_S`, 60 s) escalade une fois, par prise atomique, les
+    tickets ouverts non acquittés au-delà du délai (`escalade_at`, événement interne `escalade`, auteur `keryx`) ;
+  - chaque envoi est inscrit au registre des notifications (canal, motif, statut, tentatives, code de réponse) et au
+    journal d'audit ; les envois en échec sont relancés avec un délai croissant, 5 tentatives au plus ;
+  - webhook JSON générique signé si un secret est réglé : `X-Keryx-Timestamp` et
+    `X-Keryx-Signature: sha256=HMAC(secret, horodatage.corps)` ;
+  - règle de sortie du connecteur Wazuh : HTTPS, certificat vérifié (`KERYX_ASTREINTE_CA_FILE` pour une autorité
+    interne), pas d'identifiants dans l'URL, aucune redirection suivie, nom résolu et chaque adresse contrôlée avant
+    la connexion, réponse bornée ;
+  - tests : `tests/test_astreinte.py` (faux service de webhook HTTPS), `e2e/scenarios/99-astreinte.mjs`.
 - **Conséquences** : une table des canaux, des champs de suivi d'acquittement et d'escalade sur le ticket, une tâche
   de fond pour les escalades et la surveillance du battement (comme la relance des notifications), une règle et un
   exemple de tâche planifiée dans `integrations/wazuh/`, des tests avec un faux service de webhook.
