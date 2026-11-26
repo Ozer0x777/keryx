@@ -98,9 +98,23 @@ jobs:
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
-      - uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        with:
+          cosign-release: v3.1.4      # même version que l'image de cosign épinglée dans deploy/docker/install.sh
       - name: Signer l'image (par empreinte, jamais par étiquette)
         run: cosign sign --yes "${{ steps.version.outputs.image }}@${{ steps.build.outputs.digest }}"
+      # La signature est vérifiée ici exactement comme install.sh la vérifiera (émetteur, déclencheur, identité du
+      # workflow sur une étiquette vX.Y.Z) : une signature que l'installation refuserait arrête la publication avant
+      # la création de la version GitHub.
+      - name: Vérifier la signature de l'image comme install.sh
+        env:
+          REF: ${{ steps.version.outputs.image }}@${{ steps.build.outputs.digest }}
+          REPO: ${{ github.repository }}
+        run: |
+          REPO_RE=$(printf '%s' "$REPO" | sed 's/\./\\./g')
+          cosign verify "$REF" --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-github-workflow-trigger push \
+            --certificate-identity-regexp "(?i)^https://github\.com/$REPO_RE/\.github/workflows/publication\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+\$" > /dev/null
 
       - name: SBOM CycloneDX du dépôt
         run: python3 scripts/sbom.py sbom.cdx.json
@@ -111,6 +125,11 @@ jobs:
           git archive --format=tar.gz --prefix="keryx-$V/" -o "keryx-$V-sources.tar.gz" "$GITHUB_SHA"
           sha256sum "keryx-$V-sources.tar.gz" sbom.cdx.json > SHA256SUMS
           cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
+          REPO_RE=$(printf '%s' "$GITHUB_REPOSITORY" | sed 's/\./\\./g')
+          cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-github-workflow-trigger push \
+            --certificate-identity-regexp "(?i)^https://github\.com/$REPO_RE/\.github/workflows/publication\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+\$"
 
       - name: Attestation de provenance des fichiers de la version
         id: provenance

@@ -47,3 +47,19 @@ def test_outils_python_installes_avec_empreintes():
         for ligne in chemin.read_text().splitlines():
             if "pip install" in ligne:
                 assert "--require-hashes" in ligne, f"{chemin.name} : {ligne.strip()}"
+
+
+def test_cosign_meme_version_publication_et_installation():
+    """La publication signe avec la version de cosign que install.sh utilise pour vérifier, et vérifie elle-même la
+    signature avec la même identité : une signature que l'installation refuserait arrête la publication."""
+    racine = Path(__file__).parents[1]
+    install = (racine / "deploy" / "docker" / "install.sh").read_text()
+    image = re.search(r'^COSIGN_IMAGE="gcr\.io/projectsigstore/cosign:(v[\d.]+)@sha256:[0-9a-f]{64}"$', install, re.M)
+    assert image, "COSIGN_IMAGE doit être épinglée par version et par empreinte"
+    etapes = dict(_etapes())
+    installe = [e for i, e in etapes.items() if i.startswith("publication.yml:") and "cosign-installer" in e.get("uses", "")]
+    assert len(installe) == 1 and installe[0]["with"]["cosign-release"] == image.group(1)
+    identite = re.search(r'--certificate-identity-regexp "([^"]+)"', install).group(1).replace("$DEPOT_RE", "$REPO_RE")
+    verif = etapes["publication.yml:publier:Vérifier la signature de l'image comme install.sh"]["run"]
+    assert "cosign verify " in verif and identite in verif and "--certificate-github-workflow-trigger push" in verif
+    assert "cosign verify-blob" in etapes["publication.yml:publier:Archive des sources, liste d'empreintes signée"]["run"]
