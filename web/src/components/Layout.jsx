@@ -4,6 +4,7 @@ import { useAuth } from '../App.jsx'
 import { t, t as tr } from '../i18n.js'
 import { ROLES } from '../labels.js'
 import NotificationBell from './NotificationBell.jsx'
+import ChaineBanner from './ChaineBanner.jsx'
 import Logo from './Logo.jsx'
 
 function Shield() {
@@ -13,8 +14,8 @@ function Shield() {
 // Titre de page propre à chaque écran (RGAA 8.5) : « Écran — Keryx ».
 const TITLES = [
   [/^\/tickets\/[^/]+\/rapport/, "Rapport d'incident"], [/^\/tickets\/[^/]+/, 'Ticket'], [/^\/tickets/, 'Tickets'], [/^\/kanban/, 'Kanban'],
-  [/^\/pilotage/, 'Pilotage'], [/^\/rapports/, 'Rapports'], [/^\/mitre/, 'Table MITRE'], [/^\/audit/, "Journal d'audit"], [/^\/profil/, 'Mon profil'],
-  [/^\/admin\/comptes/, 'Comptes'], [/^\/admin\/clients/, 'Clients'], [/^\/admin\/cles/, "Clés d'API"], [/^\/admin\/mitre/, 'MITRE'],
+  [/^\/pilotage/, 'Pilotage'], [/^\/rapports/, 'Rapports'], [/^\/politique/, 'Politique des clients'], [/^\/mitre/, 'Table MITRE'], [/^\/audit/, "Journal d'audit"], [/^\/profil/, 'Mon profil'],
+  [/^\/admin\/comptes/, 'Comptes'], [/^\/admin\/clients/, 'Clients'], [/^\/admin\/cles/, "Clés d'API"], [/^\/admin\/astreinte/, "Canaux d'astreinte"], [/^\/admin\/mitre/, 'MITRE'],
   [/^\/admin\/revue/, 'Revue des comptes'], [/^\/admin\/audit/, "Journal d'audit"], [/^\/admin\/systeme/, 'État du système'], [/^\/admin/, 'Administration'],
 ]
 
@@ -52,6 +53,7 @@ export default function Layout() {
         <button type="button" className="nav-logout" onClick={logout}>{t('Se déconnecter')}</button>
       </nav>
       <main className="content" id="contenu" tabIndex={-1}>
+        {(me.role === 'analyst' || me.role === 'manager') && <ChaineBanner />}
         <Outlet />
       </main>
     </div>

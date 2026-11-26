@@ -647,4 +647,7 @@ def register(app, ctx) -> None:
             "disk_total_mb": usage.total // (1024 * 1024) if usage else None,
             "notifications_failed_24h": failed,
             "silent_sources": len(silent),
+            # Battement de cœur manquant (ADR-0032) : la chaîne Wazuh vers Keryx d'un client est peut-être coupée.
+            "battements_manquants": sorted(t.key for t in db.scalars(select(Tenant).where(
+                Tenant.battement_active.is_(True), Tenant.battement_manquant_at.is_not(None)))),
         }

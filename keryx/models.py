@@ -100,6 +100,15 @@ class Tenant(Base):
     astreinte_delais: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     astreinte_canal_id: Mapped[str | None] = mapped_column(ForeignKey("canaux_astreinte.id"), nullable=True)
     escalade_canal_id: Mapped[str | None] = mapped_column(ForeignKey("canaux_astreinte.id"), nullable=True)
+    # Battement de cœur de la chaîne Wazuh vers Keryx (ADR-0032, partie 3), réglé par le manager : période de la tâche
+    # planifiée sur le manager Wazuh, délai d'alerte sans battement ; dernière réception, source, début de l'absence.
+    battement_active: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    battement_periode_min: Mapped[int] = mapped_column(Integer, default=5, server_default="5")
+    battement_delai_min: Mapped[int] = mapped_column(Integer, default=15, server_default="15")
+    battement_depuis: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    battement_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    battement_source: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    battement_manquant_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Compte en lecture seule de l'indexeur : chiffré AES-256-GCM comme le secret TOTP (ADR-0006), jamais renvoyé par l'API.
     wazuh_indexer_user: Mapped[str | None] = mapped_column(Text, nullable=True)
     wazuh_indexer_password: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -305,7 +314,8 @@ class Notification(Base):
     __tablename__ = "notifications"
     id: Mapped[str] = _id()
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
-    ticket_id: Mapped[str] = mapped_column(ForeignKey("tickets.id", ondelete="CASCADE"))
+    # Vide pour un message qui ne concerne pas un ticket (battement de cœur manquant ou rétabli, ADR-0032).
+    ticket_id: Mapped[str | None] = mapped_column(ForeignKey("tickets.id", ondelete="CASCADE"), nullable=True)
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     channel: Mapped[str] = mapped_column(String(16))
     recipient: Mapped[str] = mapped_column(String(200))

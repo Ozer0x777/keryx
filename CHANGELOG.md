@@ -11,6 +11,10 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
   comme `install.sh` avant de créer la version.
 
 ### Ajouté
+- Battement de cœur de la chaîne Wazuh vers Keryx (ADR-0032, partie 3) : règle Wazuh et tâche planifiée fournies
+  (`integrations/wazuh/`) ; Keryx reconnaît le battement sans créer de ticket ; le manager l'active par client ; une
+  absence au-delà du délai est signalée une fois (bandeau de l'équipe, état du système, canal d'astreinte, journal
+  d'audit), son retour aussi. Non essayé sur un manager Wazuh réel.
 - Astreinte et escalade de l'équipe (ADR-0032, partie 2) : l'Admin déclare des canaux (webhook JSON générique signé,
   Mattermost / Slack, Microsoft Teams par Workflows, courriel de l'équipe ; adresse et secret chiffrés, jamais réaffichés) ; le manager choisit, par
   client, le canal d'astreinte, le canal d'escalade, les criticités et les délais. Un ticket ouvert prévient

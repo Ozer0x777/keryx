@@ -1,0 +1,17 @@
+<!--
+  Battement de cœur de la chaîne Wazuh vers Keryx (ADR-0032, partie 3).
+  À copier dans /var/ossec/etc/rules/keryx-battement.xml sur chaque manager (chaque nœud qui analyse) d'un client.
+  La ligne écrite par la tâche planifiée (keryx-battement.cron) est reconnue par son programme, « keryx-battement »,
+  extrait par le prédécodeur syslog de Wazuh : aucun décodeur n'est nécessaire.
+  Identifiant 119990 : plage des règles locales (100000 à 120000). Le changer s'il est déjà pris chez vous.
+  Niveau 3 : pas de bruit dans le tableau de bord ; l'envoi vers Keryx passe par un bloc <integration> filtré sur le
+  groupe keryx_battement (voir README.md, section 7), indépendant du seuil de niveau des autres alertes.
+  Non essayé sur un manager Wazuh réel : à valider (wazuh-logtest) avant la mise en service.
+-->
+<group name="keryx_battement,">
+  <rule id="119990" level="3">
+    <program_name>^keryx-battement$</program_name>
+    <description>Keryx : battement de cœur de la chaîne d'alerte</description>
+    <options>no_full_log</options>
+  </rule>
+</group>

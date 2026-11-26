@@ -24,6 +24,7 @@ export default function Admin() {
     sys.clamav === 'injoignable' || sys.clamav === 'réponse inattendue' ? tr("L'antivirus ClamAV est indisponible : les pièces déposées ne sont pas analysées.") : null,
     sys.notifications_failed_24h > 0 ? tr('{n} notification(s) par courriel en échec ces 24 dernières heures.', { n: sys.notifications_failed_24h }) : null,
     sys.silent_sources > 0 ? tr('{n} source(s) Wazuh muette(s) depuis plus de 24 h.', { n: sys.silent_sources }) : null,
+    sys.battements_manquants?.length > 0 ? tr('Battement de cœur manquant : la chaîne Wazuh vers Keryx est peut-être coupée pour {c}.', { c: sys.battements_manquants.join(', ') }) : null,
     sys.storage?.includes('injoignable') ? tr('Le stockage objet des pièces est injoignable.') : null,
     sys.disk_free_mb != null && sys.disk_free_mb < 500 ? tr('Espace disque faible pour les pièces : {n} Mo libres.', { n: sys.disk_free_mb }) : null,
   ].filter(Boolean) : []

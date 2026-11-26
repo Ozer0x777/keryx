@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { ActionStatus, useActionStatus } from '../components/ActionStatus.jsx'
 import { t as tr } from '../i18n.js'
-import { TLPS } from '../labels.js'
+import { TLPS, formatUtc } from '../labels.js'
 
 // Politique des clients, réglée par le manager pour chacun de ses clients :
 // - TLP plancher (ADR-0033) : les tickets et les pièces naissent à ce niveau ; un analyste ne peut pas descendre en
@@ -15,9 +15,11 @@ function Client({ c, canaux, onSaved }) {
   const [plancher, setPlancher] = useState(c.tlp_plancher || '')
   const [rapport, setRapport] = useState(Boolean(c.acquittement_rapport))
   const [ast, setAst] = useState(c.astreinte)
+  const [bat, setBat] = useState({ active: c.battement.active, periode_min: c.battement.periode_min, delai_min: c.battement.delai_min })
   const [status, track, setStatus] = useActionStatus()
   const changed = plancher !== (c.tlp_plancher || '') || rapport !== Boolean(c.acquittement_rapport)
     || JSON.stringify(ast) !== JSON.stringify(c.astreinte)
+    || bat.active !== c.battement.active || bat.periode_min !== c.battement.periode_min || bat.delai_min !== c.battement.delai_min
   const set = (patch) => setAst((a) => ({ ...a, ...patch }))
   const crit = (x, on) => set({ criticites: CRITICITES.filter((k) => (k === x ? on : ast.criticites.includes(k))) })
   const save = async () => {
@@ -25,11 +27,13 @@ function Client({ c, canaux, onSaved }) {
       tlp_plancher: plancher || null, acquittement_rapport: rapport,
       astreinte_active: ast.active, astreinte_criticites: ast.criticites, astreinte_delais: ast.delais,
       astreinte_canal_id: ast.canal_id || null, escalade_canal_id: ast.escalade_canal_id || null,
+      battement_active: bat.active, battement_periode_min: bat.periode_min, battement_delai_min: bat.delai_min,
     }
     const r = await track(() => api(`/politique/${encodeURIComponent(c.key)}`, { method: 'PUT', json }))
     if (!r) return
     onSaved(r)
     setAst(r.astreinte)
+    setBat({ active: r.battement.active, periode_min: r.battement.periode_min, delai_min: r.battement.delai_min })
     setStatus({ ok: r.tickets_releves.length
       ? tr('Enregistré : {n} ticket(s) ouvert(s) relevé(s) au plancher.', { n: r.tickets_releves.length })
       : tr('Enregistré.') })
@@ -82,6 +86,25 @@ function Client({ c, canaux, onSaved }) {
             </fieldset>
             <p className="field-hint">{tr("Sans prise en charge, affectation, changement de statut ou qualification dans ce délai, Keryx prévient une fois le canal d'escalade, puis s'arrête. Le message ne contient que la référence, le client, la criticité et le lien, sauf si le canal prévoit le titre.")}</p>
           </>}
+        <h3>{tr('Battement de cœur de la chaîne Wazuh')}</h3>
+        <label className="check"><input type="checkbox" checked={bat.active} onChange={(e) => setBat({ ...bat, active: e.target.checked })} />{' '}
+          {tr("Surveiller le battement de cœur de ce client")}</label>
+        <div className="grid2">
+          <label>{tr('Période de la tâche planifiée (minutes)')}
+            <input type="number" min={1} max={60} value={bat.periode_min} onChange={(e) => setBat({ ...bat, periode_min: Number(e.target.value) || 1 })} /></label>
+          <label>{tr("Alerte sans battement après (minutes)")}
+            <input type="number" min={2} max={1440} value={bat.delai_min} aria-describedby={id('battement')} onChange={(e) => setBat({ ...bat, delai_min: Number(e.target.value) || 2 })} /></label>
+        </div>
+        <p className="field-hint" id={id('battement')}>{tr("Une ligne de test part du manager Wazuh à chaque période et traverse toute la chaîne (integrations/wazuh, section 7). Sans elle au-delà du délai (au moins deux périodes), l'équipe voit un bandeau et le canal d'astreinte est prévenu : des alertes peuvent ne plus arriver.")}</p>
+        {c.battement.active && (
+          <p className={c.battement.manquant_depuis ? 'banner danger' : 'muted small'} role={c.battement.manquant_depuis ? 'alert' : undefined}>
+            {c.battement.manquant_depuis
+              ? tr('Chaîne muette : aucun battement depuis {d}.', { d: formatUtc(c.battement.dernier || c.battement.manquant_depuis) })
+              : c.battement.dernier ? tr('Dernier battement : {d} ({s}).', { d: formatUtc(c.battement.dernier), s: c.battement.source || '?' }) : tr('Aucun battement reçu pour l’instant.')}
+          </p>
+        )}
+
+        <h3>{tr('Rapport')}</h3>
         <label className="check"><input type="checkbox" checked={rapport} onChange={(e) => setRapport(e.target.checked)} />{' '}
           {tr("Inclure le délai d'acquittement dans le rapport périodique remis au client")}</label>
         <div><button type="button" className="primary" onClick={save} disabled={!changed}>{tr('Enregistrer')}</button></div>
