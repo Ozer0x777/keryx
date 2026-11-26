@@ -4,6 +4,12 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+### Documentation
+- Portail par client (ADR-0027) accepté après lecture intégrale du référentiel PDIS v2.0 : décisions (synchronisation,
+  comptes clients, SQLite, tout-en-un par défaut, fichiers chiffrés, actions demandées au client, pare-feu applicatif
+  Coraza, indicateurs) et découpage dans `docs/conception/portail-par-client.md`. Citations du référentiel ajoutées
+  aux ADR-0032 et 0033.
+
 ## [0.9.0] : 2026-11-26
 
 ### Modifié

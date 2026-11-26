@@ -57,8 +57,14 @@
   4. **Rapport au client** : le manager active ou désactive, client par client, l'envoi du délai d'acquittement dans
      le rapport périodique remis au client (désactivé par défaut). Il reste toujours visible de l'équipe.
   5. Chaque modification de ces réglages est inscrite au journal d'audit, avec son auteur.
-- **Exigences** : PDIS (traitement et suivi des incidents, délais) : sections à citer après lecture du texte, non
-  vérifiées à ce stade. ISO/IEC 27035 (détection et signalement).
+- **Exigences** : PDIS v2.0, lu le 26/11/2026 : IV.4.2.f (astreintes recommandées pour mobiliser l'équipe hors des
+  heures ouvrées) et IV.5.3.10 (la convention de service précise le niveau de compétence du personnel d'astreinte) ;
+  IV.2.2.r (le collecteur détecte une perte de communication) et IV.3.1.b (la perte de communication avec un
+  équipement du service est un incident redouté), auxquels répond le battement de cœur ; IV.5.1.e et g (disponibilité
+  des dispositifs du service) ; IV.5.1.f (délai entre détection et notification, selon la gravité), que complète le
+  délai d'acquittement. Les messages d'astreinte vont à l'équipe : ce ne sont pas des notifications au client au sens
+  d'IV.2.3. Dans une architecture qui vise le référentiel, les canaux restent internes : un service hébergé chez un
+  tiers n'est pas une interconnexion permise par IV.3.10.a. ISO/IEC 27035 (détection et signalement).
 - **Partie 1, telle que codée** : champs `acquitted_at` et `acquitted_by` du ticket (migration `0023`), posés par
   la première action de l'équipe parmi `prise_en_charge`, `affectation`, `statut`, `qualification` (un client, un
   commentaire, une pièce ou une consultation n'acquittent pas) ; route `POST /api/v1/tickets/{ref}/prise-en-charge` ;

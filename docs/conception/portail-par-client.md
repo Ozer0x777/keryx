@@ -1,7 +1,8 @@
 # Conception : un portail par client (vague 4)
 
-**Statut : proposition, à valider avant tout code.** Ce document décrit comment séparer le portail des clients de la
-console d'analyse, pour répondre à PDIS IV.3.13.b. Il ne change rien au code tant qu'il n'est pas validé.
+**Statut : décisions prises le 26/11/2026 (section 6), après lecture intégrale du référentiel PDIS v2.0 du
+21/12/2017 (chapitres I à IV, annexes 1 à 5).** Ce document décrit comment séparer le portail des clients de la
+console d'analyse. Le code se fera dans l'ordre de la section 5.
 
 ## 1. Le problème
 
@@ -11,15 +12,27 @@ clients (portail). Le cloisonnement entre clients est logique : chaque requête 
 
 Le référentiel demande davantage pour la partie exposée aux clients :
 
-| Exigence | Texte ou résumé | Source de la lecture |
+Exigences lues dans le référentiel (résumées ; le texte fait foi) :
+
+| Exigence | Ce qu'elle demande | Effet sur la conception |
 |---|---|---|
-| IV.3.13.b | « Une machine physique ou virtuelle par commanditaire » pour une instance du portail web et de son stockage | lu, cité dans `docs/deploiement-docker.md` |
-| IV.3.8.b | Cloisonner le système d'information du service en zones, dont une zone d'échange commanditaire distincte de la zone d'analyse | lu, idem |
-| IV.3.8.c | Cloisonnement entre zones « par des mécanismes de filtrage, d'authentification et de contrôle d'accès » | lu, idem |
-| IV.3.8.d | Matrice des flux | lu, idem |
-| IV.3.13.c | Annuaire dédié aux commanditaires | lu, idem |
-| IV.3.13.g | Pare-feu applicatif devant le portail | lu, idem |
-| IV.3.13 (autres points) | Contenu exact non relu pour cette conception | **à relire dans le PDF avant validation** |
+| IV.3.8.b, c | Zones de confiance cloisonnées par filtrage, authentification et contrôle d'accès, dont une zone d'échange commanditaire distincte de la zone d'analyse | modes `console` et `portail` |
+| IV.3.8.d | Matrice des flux de référence, seuls les flux strictement nécessaires | une seule interface de synchronisation, flux ouverts par la console |
+| IV.3.8.e, IV.3.10.c | Chiffrement et authentification IP agréés entre zones et avec le SI du commanditaire | relève de l'infrastructure (IPsec agréé) : le TLS mutuel de Keryx s'y ajoute, il ne le remplace pas |
+| IV.3.8.g | Cloisonnement entre commanditaires des tickets, notifications et portail, au minimum logique | physique pour le portail (une VM par client), logique dans la console |
+| IV.3.9.c | Journaliser tous les accès et actions | audit du portail rapatrié par la console |
+| IV.3.9.d | Annuaire des administrateurs et opérateurs, populations séparées | distinct de l'annuaire des clients (IV.3.13.c) |
+| IV.3.12 | Messagerie de notification dans la zone de notification, flux sortants seulement | la console envoie par un relais de cette zone, jamais le portail |
+| IV.3.13.a | Portail (voir et mettre à jour l'état des incidents et des actions engagées) et stockage (contexte des incidents, dépôts du client), selon le « système d'échange » de la note [NT_ADMIN] ; analyse antivirus, traitement spécifique des fichiers chiffrés ou non analysables, journal de l'horodate, du nom et de l'empreinte de chaque fichier analysé | décisions 5 et 6 |
+| IV.3.13.b | Une machine physique ou virtuelle par commanditaire pour le portail **et** le stockage des incidents **et des notifications** | le portail reçoit aussi le registre des notifications du client |
+| IV.3.13.c | Annuaire dédié aux commanditaires ; comptes nominatifs, deux facteurs pour une personne, authentification mutuelle entre machines ; liste à jour des comptes et de leurs privilèges | décision 2 |
+| IV.3.13.d | Recommandé : certificats RGS*** et supports qualifiés | non retenu au départ (recommandation) ; possible plus tard |
+| IV.3.13.e, f | Le client n'accède qu'au nécessaire et n'a aucun droit d'administration ou d'exploitation | le mode `portail` ne sert que les routes du rôle Client |
+| IV.3.13.g | Pare-feu applicatif devant le portail | décision 7 |
+| IV.3.13.h | Filtrage entre la zone d'échange et le SI du client : enclave de consultation et postes nomades seulement | relève de l'infrastructure, décrit dans le kit |
+| IV.2.3.g, h, j | Notification : numéro du ticket seulement ; registre des notifications | inchangé (déjà le cas), copié vers le portail |
+| IV.2.3.l | Portail : voir et mettre à jour l'état des incidents et des actions engagées ; dépôt et récupération de contexte | décision 6 |
+| IV.5.1.e, g | Indicateurs : disponibilité du portail, échecs et succès d'authentification à la zone d'échange, comptes du portail créés et supprimés par mois | décision 8 |
 
 Déployer un Keryx complet par client ne répond pas : la console des analystes et toutes les données internes
 (alertes brutes, commentaires internes, audit de l'équipe) se retrouveraient dans la zone exposée, et les analystes
@@ -72,7 +85,7 @@ auraient un écran par client.
 | API | Fonction unique de projection client ; en mode `portail`, seules les routes du rôle Client répondent ; nouvelles routes de synchronisation, servies sur une interface séparée en TLS mutuel |
 | Console | Tâche de synchronisation par portail : file d'envoi persistante, reprise après coupure, état visible par l'Admin (dernier échange réussi, retard) |
 | Base | Table de suivi des versions envoyées par objet et par portail ; aucune autre migration du modèle existant |
-| Comptes clients | Voir la question ouverte n°2 |
+| Comptes clients | Cycle de vie dans la console, secrets sur le portail seulement (décision 2) |
 | Kit Docker | Un `compose` « portail » à déployer dans chaque VM client ; le `compose` actuel devient la console |
 
 ## 4. Ce qui sera testé
@@ -85,24 +98,71 @@ auraient un écran par client.
 - Coupure du portail pendant une heure : rien n'est perdu, tout est rattrapé dans l'ordre.
 - Une pièce EICAR déposée sur le portail est mise en quarantaine sur place et n'atteint pas la console en clair.
 - Le mode tout-en-un garde exactement son comportement (toute la suite actuelle passe sans changement).
+- La notification au client part après l'accusé de réception du portail, ou au bout de 2 minutes avec la mention
+  « portail en retard ».
+- Aucun secret de compte client n'existe dans la base de la console.
+- Une archive ZIP chiffrée déposée est classée « non analysable » et isolée ; chaque passage par l'antivirus est
+  journalisé avec horodate, nom et empreinte.
+- Le parcours e2e complet du rôle Client passe derrière Coraza et l'OWASP CRS en mode blocage.
 
-## 5. Découpage proposé
+## 5. Découpage
 
 1. Fonction de projection client unique, utilisée par l'API actuelle (aucun changement visible).
-2. Modes `console` et `portail`, routes filtrées par mode.
-3. Synchronisation console vers portail (tickets, commentaires, événements visibles), TLS mutuel.
-4. Rapatriement des saisies du client (commentaires, pièces), analyse antivirus aux deux bouts.
-5. Comptes clients et audit du portail.
-6. Kit de déploiement par VM, documentation d'exploitation, mise à jour de la matrice PDIS.
+2. Liste des exigences PDIS non couvertes en mode tout-en-un (décision 4).
+3. Actions demandées au client, utilisables en tout-en-un (décision 6).
+4. Fichiers chiffrés ou non analysables, journal de passage à l'antivirus (décision 5), après lecture de [NT_ADMIN].
+5. Modes `console` et `portail`, routes filtrées par mode.
+6. Synchronisation console vers portail (tickets, commentaires, événements, notifications visibles), TLS mutuel,
+   notification après accusé de réception (décision 1).
+7. Rapatriement des saisies du client (commentaires, pièces, état des actions).
+8. Comptes clients activés sur le portail, audit et indicateurs du portail (décisions 2 et 8).
+9. Kit de déploiement par VM (SQLite, Caddy avec Coraza et l'OWASP CRS), matrice des flux, documentation
+   d'exploitation, mise à jour de la matrice PDIS.
 
-## 6. Questions ouvertes (à trancher par le mainteneur)
+## 6. Décisions (26/11/2026)
 
-1. **Délai de synchronisation** : la console interroge chaque portail toutes les N secondes (proposé : 15 s). Un délai
-   plus court charge davantage ; une poussée immédiate des réponses du SOC est faite de toute façon.
-2. **Où vivent les comptes clients** : (a) créés depuis la console par l'Admin puis envoyés au portail, le client
-   active son compte sur le portail (proposé, une seule administration) ; ou (b) gérés sur chaque portail par un
-   administrateur local ; ou (c) un Keycloak par portail.
-3. **Base du portail** : PostgreSQL (proposé, comme la console) ou SQLite (plus léger, une VM par client).
-4. **Garder le mode tout-en-un** comme mode par défaut (proposé) ou le réserver aux essais.
-5. **Relire le chapitre IV.3.13 complet** dans le PDF avant validation ; ce document ne s'appuie que sur les points
-   déjà lus et cités dans le dépôt.
+Prises par délégation du mainteneur, après lecture intégrale du référentiel.
+
+1. **Synchronisation.** La console pousse aussitôt chaque changement visible du client. Elle n'envoie la
+   notification au client (qui ne contient que le numéro du ticket, IV.2.3.g) qu'après l'accusé de réception du
+   portail : sinon le client reçoit un numéro qu'il ne peut pas consulter. Si le portail ne répond pas dans les
+   2 minutes, la notification part quand même et le registre le note (« portail en retard »). La console vient
+   chercher les saisies du client toutes les 15 secondes (réglable de 5 à 300) et juste après chaque poussée.
+2. **Comptes des clients.** Le cycle de vie (création, privilèges, désactivation) se décide dans la console, par
+   l'Admin, qui tient le rôle de « responsable des droits d'accès » (annexe 2, VI) et la liste des comptes et de
+   leurs privilèges (IV.3.13.c). Les secrets (mot de passe, second facteur TOTP ou WebAuthn) sont créés par le client
+   sur le portail, à l'activation, avec un code à usage unique remis hors bande, et ne sont stockés que sur le
+   portail : c'est l'annuaire dédié aux clients, distinct de celui de l'équipe (IV.3.9.d). La console ne reçoit
+   jamais un secret de client. Écartés : un administrateur par portail (une administration de plus par client) et
+   un Keycloak par portail (un composant lourd de plus par VM, non exigé). Le realm Keycloak `clients` du kit
+   tout-en-un (ADR-0023) n'est pas utilisé en mode `portail` : il vit hors de la zone d'échange.
+3. **Base du portail : SQLite** (mode WAL, un seul processus), PostgreSQL restant possible par
+   `KERYX_DATABASE_URL`. Un portail ne sert qu'un client, peu d'utilisateurs : moins de composants à durcir, mettre à
+   jour et auditer dans chaque VM (IV.3.2.b, IV.3.4.e), et une sauvegarde réduite à la base et aux pièces (IV.3.6).
+   La tenue en charge sera mesurée dans les tests.
+4. **Le mode tout-en-un reste le mode par défaut** : le projet vise d'abord les petits SOC, qui ne cherchent pas la
+   qualification. Il ne répond pas au cloisonnement en zones du référentiel ; Keryx publiera la liste des exigences
+   PDIS qu'il ne couvre pas dans ce mode, comme le référentiel recommande de la demander pour une prestation non
+   qualifiée (III.3, annexe 3 I.d). Les modes `console` et `portail` servent aux déploiements qui visent
+   l'architecture du référentiel.
+5. **Fichiers.** Toute pièce traverse l'antivirus aux deux bouts (dépôt sur le portail, arrivée dans la console). Une
+   archive chiffrée ou un fichier que l'antivirus ne peut pas analyser reçoit un statut « non analysable » et suit le
+   traitement de la quarantaine : jamais ouvert en clair sur un poste sans action explicite et tracée. Chaque
+   passage par l'antivirus est journalisé avec l'horodate, le nom et l'empreinte SHA-256, dans les deux sens
+   (IV.3.13.a). Le chapitre « Système d'échange » de la note [NT_ADMIN] auquel renvoie IV.3.13.a reste à lire avant
+   l'étape 4 du découpage.
+6. **Ce que le client met à jour.** Le client ne change pas le statut d'un incident : la qualification et le
+   registre restent à l'équipe. Il peut, depuis le portail, mettre à jour l'état des actions que l'équipe lui demande
+   (« à faire », « faite », « impossible », avec un commentaire), signaler qu'un incident est traité de son côté,
+   commenter et déposer des informations de contexte (IV.2.3.l, IV.3.13.a). Les actions demandées au client sont un
+   ajout au modèle, visible aussi en mode tout-en-un.
+7. **Pare-feu applicatif** devant chaque portail (IV.3.13.g) : Coraza avec l'OWASP Core Rule Set, en mode blocage,
+   intégré au mandataire Caddy du kit « portail ». Les parcours e2e du rôle Client passent au travers, pour détecter
+   les faux positifs avant la mise en service.
+8. **Indicateurs** (IV.5.1.e, g) : la console calcule la disponibilité de chaque portail à partir des
+   synchronisations, et rapatrie les succès et échecs d'authentification et les comptes créés et supprimés par mois.
+9. **Hors de Keryx, à la charge de l'infrastructure** et décrit dans le kit : IPsec agréé entre zones et avec le SI du
+   client (IV.3.8.e, IV.3.10.c), filtrage qualifié aux interconnexions (IV.3.10.b, IV.3.13.h), relais de messagerie
+   dans la zone de notification (IV.3.12). Dans une architecture qui vise le référentiel, les canaux d'astreinte
+   (ADR-0032) restent internes : un service de discussion hébergé chez un tiers n'est pas une interconnexion permise
+   par IV.3.10.a.
