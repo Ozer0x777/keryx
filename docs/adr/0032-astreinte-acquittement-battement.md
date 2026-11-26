@@ -1,8 +1,8 @@
 # ADR-0032 : Prévenir l'équipe, mesurer l'acquittement, vérifier la chaîne d'alerte de bout en bout
 
 - **Statut** : accepté (26/11/2026). Questions tranchées par le mainteneur le 26/11/2026 (voir « Réglages »).
-  Parties 1 (délai d'acquittement, « Je prends », choix du rapport client) et 2 (canaux, astreinte, escalade)
-  codées le 26/11/2026 ; partie 3 (battement de cœur) à coder.
+  Parties 1 (délai d'acquittement, « Je prends », choix du rapport client), 2 (canaux, astreinte, escalade) et 3
+  (battement de cœur) codées les 26 et 27/11/2026. La partie 3 n'a pas été essayée sur un manager Wazuh réel.
 - **Contexte** : le pire scénario pour un SOC est une alerte critique que personne ne traite parce que personne n'a
   été prévenu, ou une chaîne d'alerte tombée en silence sans que personne ne s'en aperçoive. Aujourd'hui :
   - Keryx garde l'identifiant Wazuh, l'horodatage de détection et l'alerte brute de chaque ticket ;
@@ -86,6 +86,21 @@
     interne), pas d'identifiants dans l'URL, aucune redirection suivie, nom résolu et chaque adresse contrôlée avant
     la connexion, réponse bornée ;
   - tests : `tests/test_astreinte.py` (faux service de webhook HTTPS), `e2e/scenarios/99-astreinte.mjs`.
+- **Partie 3, telle que codée** :
+  - côté Wazuh (`integrations/wazuh/`, section 7 du README) : tâche planifiée `keryx-battement.cron` qui ajoute une
+    ligne au format syslog à `/var/ossec/logs/keryx-battement.log` toutes les 5 minutes, règle `keryx-battement.xml`
+    (119990, niveau 3, groupe `keryx_battement`, reconnue au programme par le prédécodeur), lecture du journal et
+    second bloc `<integration>` filtré sur le groupe ;
+  - côté Keryx : une alerte du groupe `keryx_battement` est reconnue avant le seuil de niveau, ne crée aucun ticket
+    (réponse 202 « battement ») et note l'heure de réception et le manager d'origine (migration `0025`) ;
+  - le manager active le battement par client dans « Politique des clients » : période de la tâche (5 min) et délai
+    d'alerte (15 min, au moins deux périodes). Le délai court dès l'activation : un client jamais branché est signalé ;
+  - la tâche de fond de l'astreinte signale une fois, par prise atomique, chaque client sans battement au-delà du
+    délai : journal d'audit `battement.manquant`, message « CHAÎNE MUETTE » au canal d'astreinte du client s'il en a
+    un, bandeau « chaîne d'alerte muette » pour l'équipe, alerte dans l'état du système de l'Admin. Le battement
+    suivant efface l'état (`battement.retabli`, message « Chaîne rétablie ») ;
+  - le registre des notifications accepte un message sans ticket (référence au ticket devenue facultative) ;
+  - tests : `tests/test_battement.py`, `e2e/scenarios/99-battement.mjs`.
 - **Conséquences** : une table des canaux, des champs de suivi d'acquittement et d'escalade sur le ticket, une tâche
   de fond pour les escalades et la surveillance du battement (comme la relance des notifications), une règle et un
   exemple de tâche planifiée dans `integrations/wazuh/`, des tests avec un faux service de webhook.

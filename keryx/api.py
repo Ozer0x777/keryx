@@ -677,6 +677,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             commit(db)
             if result.status == "ignored":
                 return JSONResponse({"status": "ignored", "reason": result.reason}, status_code=202)
+            if result.status == "battement":
+                return JSONResponse({"status": "battement"}, status_code=202,
+                                    background=BackgroundTask(send_pending, SessionLocal, settings, notif_ids) if notif_ids else None)
             return JSONResponse(
                 {"status": result.status, "ticket": result.ticket.ref, "occurrences": result.ticket.occurrences},
                 status_code=201 if result.status == "created" else 200,

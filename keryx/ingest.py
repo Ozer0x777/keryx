@@ -33,7 +33,7 @@ class AlertRejected(ValueError):
 
 @dataclass
 class IngestResult:
-    status: str            # created | merged | ignored
+    status: str            # created | merged | ignored | battement
     ticket: Ticket | None
     reason: str | None = None
     notifications: list[Notification] = field(default_factory=list)
@@ -161,6 +161,9 @@ def ingest_alert(db: DbSession, settings: Settings, tenant: Tenant, alert: dict,
         raise AlertRejected("Le corps doit être un objet JSON.")
     original, alert = alert, _sans_controle(alert)
     rule = _rule(alert)
+    if astreinte.est_battement(rule):
+        # Battement de cœur de la chaîne (ADR-0032) : reconnu avant le seuil de niveau, jamais de ticket.
+        return IngestResult("battement", None, notifications=astreinte.receive_heartbeat(db, settings, tenant, alert))
     try:
         level = int(rule["level"])
     except (TypeError, ValueError, OverflowError) as exc:

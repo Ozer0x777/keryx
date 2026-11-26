@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from urllib.parse import urlsplit
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session as DbSession
 
 from . import audit
@@ -267,6 +267,89 @@ def deliver(settings: Settings, box: SecretBox, channel: OnCallChannel, msg: dic
     return status
 
 
+# ---------------------------------------------------------------- battement de cœur (partie 3)
+GROUPE_BATTEMENT = "keryx_battement"
+
+
+def est_battement(rule: dict) -> bool:
+    """Alerte de la règle Wazuh fournie (integrations/wazuh/keryx-battement.xml), reconnue à son groupe."""
+    groups = rule.get("groups")
+    return isinstance(groups, list) and GROUPE_BATTEMENT in groups
+
+
+def message_battement(settings: Settings, tenant: Tenant, etat: str, minutes: int, source: str | None) -> dict:
+    link = f"{settings.public_url}/"
+    if etat == "manquant":
+        subject = f"[Keryx] CHAÎNE MUETTE {tenant.key} : aucun battement de cœur depuis {minutes} min"
+        text = (f"[Keryx] CHAÎNE MUETTE : aucun battement de cœur du client {tenant.key} depuis {minutes} min. La chaîne "
+                f"Wazuh vers Keryx est peut-être coupée (manager, règle, intégration, réseau) : des alertes peuvent ne "
+                f"plus arriver. {link}")
+    else:
+        subject = f"[Keryx] Chaîne rétablie {tenant.key} : battement de cœur reçu après {minutes} min"
+        text = f"[Keryx] Chaîne rétablie : battement de cœur du client {tenant.key} reçu de nouveau après {minutes} min. {link}"
+    data = {"type": f"keryx.battement_{etat}", "client": tenant.key, "minutes": minutes, "url": link}
+    if source:
+        data["source"] = source
+    return {"subject": subject, "text": text, "data": data}
+
+
+def _queue_client(db: DbSession, tenant: Tenant, msg: dict) -> Notification | None:
+    """Message sans ticket vers le canal d'astreinte du client, s'il en a un (battement manquant ou rétabli)."""
+    channel = _channel(db, tenant.astreinte_canal_id)
+    if channel is None:
+        return None
+    n = Notification(tenant_id=tenant.id, ticket_id=None, channel=channel.kind[:16], recipient=channel.name[:200],
+                     content=json.dumps(msg, ensure_ascii=False), status="en_attente", canal_id=channel.id,
+                     motif="battement")
+    db.add(n)
+    db.flush()          # identifiant attribué tout de suite : l'appelant le transmet à l'envoi après validation
+    return n
+
+
+def receive_heartbeat(db: DbSession, settings: Settings, tenant: Tenant, alert: dict) -> list[Notification]:
+    """Battement reçu : aucune création de ticket ; heure et source notées ; fin d'une absence signalée."""
+    now = utcnow()
+    manager = alert.get("manager") if isinstance(alert.get("manager"), dict) else {}
+    agent = alert.get("agent") if isinstance(alert.get("agent"), dict) else {}
+    source = str(manager.get("name") or agent.get("name") or "")[:200] or None
+    precedent = tenant.battement_at or tenant.battement_depuis
+    tenant.battement_at, tenant.battement_source = now, source
+    out = []
+    if tenant.battement_manquant_at is not None:
+        tenant.battement_manquant_at = None
+        minutes = int((now - as_utc(precedent)).total_seconds() // 60) if precedent else 0
+        audit.record(db, "keryx", "battement.retabli", "tenant", tenant.key, tenant.id, {"source": source})
+        if tenant.battement_active:
+            n = _queue_client(db, tenant, message_battement(settings, tenant, "retabli", minutes, source))
+            if n is not None:
+                out.append(n)
+    return out
+
+
+def check_heartbeats(db: DbSession, settings: Settings, now) -> tuple[list[Notification], int]:
+    """Signale une fois chaque client dont aucun battement n'est arrivé depuis son délai d'alerte. Renvoie les messages
+    à envoyer et le nombre de clients signalés (avec ou sans canal d'astreinte)."""
+    out, signales = [], 0
+    for tenant in db.scalars(select(Tenant).where(Tenant.battement_active.is_(True), Tenant.battement_manquant_at.is_(None))):
+        ref = tenant.battement_at or tenant.battement_depuis
+        delai = int(tenant.battement_delai_min or 15)
+        if ref is None or as_utc(ref) + timedelta(minutes=delai) > now:
+            continue
+        seuil = now - timedelta(minutes=delai)
+        if not db.execute(update(Tenant).where(Tenant.id == tenant.id, Tenant.battement_manquant_at.is_(None),
+                                               or_(Tenant.battement_at.is_(None), Tenant.battement_at <= seuil))
+                          .values(battement_manquant_at=now).execution_options(synchronize_session=False)).rowcount:
+            continue          # un autre processus l'a signalé, ou un battement vient d'arriver
+        minutes = int((now - as_utc(ref)).total_seconds() // 60)
+        signales += 1
+        audit.record(db, "keryx", "battement.manquant", "tenant", tenant.key, tenant.id,
+                     {"dernier": rfc3339(tenant.battement_at), "minutes": minutes})
+        n = _queue_client(db, tenant, message_battement(settings, tenant, "manquant", minutes, tenant.battement_source))
+        if n is not None:
+            out.append(n)
+    return out, signales
+
+
 # ---------------------------------------------------------------- file d'envoi
 def _channel(db: DbSession, channel_id: str | None) -> OnCallChannel | None:
     c = db.get(OnCallChannel, channel_id) if channel_id else None
@@ -350,8 +433,9 @@ def tick(session_factory, settings: Settings, now=None) -> dict:
                               .values(escalade_at=now)).rowcount:
                 continue
             escalated.append(_queue(db, settings, "escalade", t, tenant, channel, "keryx", delai))
+        silences, signales = check_heartbeats(db, settings, now)
         db.flush()
-        escalated = [n.id for n in escalated]
+        escalated = [n.id for n in escalated + silences]
         failed = db.scalars(select(Notification).where(Notification.canal_id.is_not(None), Notification.status == "echec",
                                                        Notification.attempts < MAX_ATTEMPTS)).all()
         for n in failed:
@@ -364,4 +448,4 @@ def tick(session_factory, settings: Settings, now=None) -> dict:
     finally:
         db.close()
     send_pending(session_factory, settings, escalated + retried)
-    return {"escalades": len(escalated), "relances": len(retried)}
+    return {"escalades": len(escalated) - len(silences), "battements_manquants": signales, "relances": len(retried)}

@@ -1,0 +1,8 @@
+# Battement de cœur de la chaîne Wazuh vers Keryx (ADR-0032, partie 3).
+# À copier dans /etc/cron.d/keryx-battement sur chaque manager (chaque nœud qui analyse) d'un client.
+# Toutes les 5 minutes (la période réglée dans Keryx, Politique des clients), une ligne au format syslog est ajoutée à
+# un journal lu par Wazuh (bloc <localfile> du README.md, section 7). Elle traverse toute la chaîne : collecte, analyse,
+# règle 119990, intégration custom-keryx, réseau, Keryx. Environ 100 000 lignes par an : prévoir une rotation
+# (logrotate) si besoin.
+SHELL=/bin/sh
+*/5 * * * * root printf '\%s \%s keryx-battement: battement de la chaîne vers Keryx\n' "$(LC_ALL=C date '+\%b \%e \%H:\%M:\%S')" "$(hostname)" >> /var/ossec/logs/keryx-battement.log

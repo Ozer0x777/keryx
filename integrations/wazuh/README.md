@@ -82,6 +82,45 @@ Puis, dans Keryx (Admin, Administration > Clients > Paramétrer > Parc d'agents 
 Wazuh des agents du client (obligatoire si le manager sert plusieurs clients), identifiant et mot de passe. La même
 autorité de certification que pour l'indexeur est utilisée. Keryx doit pouvoir joindre le manager (sortie réseau).
 
+## 7. (Optionnel) Battement de cœur de la chaîne d'alerte
+
+Une ligne de test part régulièrement du manager et traverse toute la chaîne (collecte, analyse, règle, intégration,
+réseau) jusqu'à Keryx. Keryx la reconnaît, ne crée aucun ticket, note l'heure de réception et signale son absence :
+bandeau de l'équipe, état du système de l'Admin, et canal d'astreinte du client s'il en a un. Sans battement, un
+silence ne dit pas si la chaîne est coupée ou si tout est calme. Non essayé sur un manager Wazuh réel : à valider.
+
+Sur **chaque manager (chaque nœud qui analyse)** du client :
+
+1. la tâche planifiée : `sudo cp keryx-battement.cron /etc/cron.d/keryx-battement` (une ligne toutes les 5 minutes
+   dans `/var/ossec/logs/keryx-battement.log`) ;
+2. la règle : `sudo cp keryx-battement.xml /var/ossec/etc/rules/keryx-battement.xml` puis
+   `sudo chown wazuh:wazuh /var/ossec/etc/rules/keryx-battement.xml` (règle 119990, niveau 3, groupe
+   `keryx_battement` ; changer l'identifiant s'il est déjà pris) ;
+3. dans `/var/ossec/etc/ossec.conf`, la lecture du journal et un second bloc d'intégration, filtré sur le groupe (le
+   premier, filtré sur le niveau 7, ne l'enverrait pas) :
+
+```xml
+<localfile>
+  <log_format>syslog</log_format>
+  <location>/var/ossec/logs/keryx-battement.log</location>
+</localfile>
+
+<integration>
+  <name>custom-keryx</name>
+  <hook_url>https://keryx.example.eu/api/v1/ingest/wazuh</hook_url>
+  <api_key>kx_MEME_CLE_QUE_LE_PREMIER_BLOC</api_key>
+  <group>keryx_battement</group>
+  <alert_format>json</alert_format>
+</integration>
+```
+
+4. `sudo systemctl restart wazuh-manager`, puis vérifier la règle : `sudo /var/ossec/bin/wazuh-logtest` et coller une
+   ligne du journal (attendu : règle 119990, groupe `keryx_battement`).
+
+Dans Keryx, le manager active le battement du client dans **Politique des clients**, avec la période de la tâche
+planifiée (5 minutes) et le délai d'alerte (15 minutes par défaut, au moins deux périodes). Le délai court dès
+l'activation : un client activé mais jamais branché est signalé. Le retour des battements est signalé aussi.
+
 ## Rétention des alertes côté Wazuh : 12 mois (à relever)
 
 Le plan de projet fixe 12 mois pour les index `wazuh-alerts-*` (PDIS IV.2.2.w : 6 mois minimum ; PDIS IV.2.1.ee : analyse rétroactive sur 6 mois à la demande). Les exemples de la documentation Wazuh sont à 90 jours : à relever. Exemple de politique ISM (Wazuh indexer, onglet Dev Tools) :

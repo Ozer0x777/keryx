@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
 from . import audit
-from .ids import utcnow
+from .ids import rfc3339, utcnow
 from .astreinte import CRITICITES, DELAIS_DEFAUT
 from .models import TLP, OnCallChannel, Tenant, Ticket, TicketEvent, User, tlp_rang
 
@@ -30,6 +30,16 @@ class PolitiqueIn(BaseModel):
     astreinte_delais: dict[str, int] | None = None
     astreinte_canal_id: str | None = Field(default=None, max_length=36)
     escalade_canal_id: str | None = Field(default=None, max_length=36)
+    # Battement de cœur (ADR-0032, partie 3)
+    battement_active: bool | None = None
+    battement_periode_min: int | None = Field(default=None, ge=1, le=60)
+    battement_delai_min: int | None = Field(default=None, ge=2, le=1440)
+
+
+def battement_vue(t: Tenant) -> dict:
+    return {"active": bool(t.battement_active), "periode_min": int(t.battement_periode_min or 5),
+            "delai_min": int(t.battement_delai_min or 15), "dernier": rfc3339(t.battement_at),
+            "source": t.battement_source, "manquant_depuis": rfc3339(t.battement_manquant_at)}
 
 
 def register(app, ctx) -> None:
@@ -41,7 +51,8 @@ def register(app, ctx) -> None:
                 "astreinte": {"active": bool(t.astreinte_active),
                               "criticites": list(t.astreinte_criticites or ["Critique"]),
                               "delais": {**DELAIS_DEFAUT, **(t.astreinte_delais or {})},
-                              "canal_id": t.astreinte_canal_id, "escalade_canal_id": t.escalade_canal_id}}
+                              "canal_id": t.astreinte_canal_id, "escalade_canal_id": t.escalade_canal_id},
+                "battement": battement_vue(t)}
 
     @app.get("/api/v1/politique")
     def politiques(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
@@ -88,6 +99,32 @@ def register(app, ctx) -> None:
                  "delais": tenant.astreinte_delais, "canal": tenant.astreinte_canal_id, "escalade": tenant.escalade_canal_id}
         return {"astreinte_avant": avant, "astreinte": apres} if avant != apres else {}
 
+    def regler_battement(tenant: Tenant, body: PolitiqueIn) -> dict:
+        avant = {"active": bool(tenant.battement_active), "periode": tenant.battement_periode_min,
+                 "delai": tenant.battement_delai_min}
+        if body.battement_periode_min is not None:
+            tenant.battement_periode_min = body.battement_periode_min
+        if body.battement_delai_min is not None:
+            tenant.battement_delai_min = body.battement_delai_min
+        if int(tenant.battement_delai_min or 15) < 2 * int(tenant.battement_periode_min or 5):
+            raise HTTPException(422, "Le délai d'alerte du battement doit valoir au moins deux périodes : un battement "
+                                     "retardé ou perdu ne doit pas suffire à donner l'alerte.")
+        if body.battement_active is not None and body.battement_active != bool(tenant.battement_active):
+            tenant.battement_active = body.battement_active
+            # Le délai court depuis l'activation : un client jamais branché est signalé, pas ignoré.
+            tenant.battement_depuis = utcnow() if body.battement_active else None
+            tenant.battement_manquant_at = None
+        apres = {"active": bool(tenant.battement_active), "periode": tenant.battement_periode_min,
+                 "delai": tenant.battement_delai_min}
+        return {"battement_avant": avant, "battement": apres} if avant != apres else {}
+
+    @app.get("/api/v1/battements")
+    def battements(user: User = Depends(current_user)):
+        """État de la chaîne Wazuh vers Keryx des clients de l'équipe (bandeau de l'interface)."""
+        require_role(user, "analyst", "manager")
+        return {"items": [{"key": t.key, "name": t.name, **battement_vue(t)}
+                          for t in sorted(user.tenants, key=lambda t: t.key) if t.battement_active]}
+
     @app.put("/api/v1/politique/{client}")
     def regler(client: str, body: PolitiqueIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         require_role(user, "manager")
@@ -103,7 +140,7 @@ def register(app, ctx) -> None:
         tenant.tlp_plancher = nouveau
         if body.acquittement_rapport is not None:
             tenant.acquittement_rapport = body.acquittement_rapport
-        trace_astreinte = regler_astreinte(db, tenant, body)
+        trace_astreinte = {**regler_astreinte(db, tenant, body), **regler_battement(tenant, body)}
         releves = []
         if tlp_rang(nouveau) > tlp_rang(avant):
             # Plancher relevé : les tickets ouverts en dessous montent (plus restrictif, sans risque), chacun tracé.
