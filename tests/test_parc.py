@@ -401,3 +401,32 @@ def test_silencieux_ne_lit_que_la_source_du_client(papp, db, world, tmp_path):
     finally:
         api.stop()
         idx.stop()
+
+
+def test_pagination_filtre_et_recherche_cote_serveur(papp, db, world, wapi):
+    """Un parc de milliers d'agents n'est pas envoyé d'un bloc : compteurs des cartes sur tout le parc, liste filtrée,
+    cherchée, triée (le plus urgent en tête) et découpée par le serveur."""
+    import datetime as dt
+    configure(papp, db, wapi)
+    a = login(papp, db, "analyst_acme")
+    assert a.post("/api/v1/parc/ACME/refresh").status_code == 200
+    acme = db.scalars(select(Tenant).where(Tenant.key == "ACME")).one()
+    now = utcnow()
+    for i in range(54):
+        db.add(WazuhAgent(tenant_id=acme.id, agent_id=f"{100 + i}", name=f"poste-{i:02d}", ip=f"10.9.0.{i}", os_name="Windows",
+                          version="4.12.0", status="active", groups=["acme"], status_since=now - dt.timedelta(days=1)))
+    db.commit()
+    p = a.get("/api/v1/parc", params={"per_page": 25}).json()
+    assert p["total"] == 60 and p["matched"] == 60 and p["pages"] == 3 and len(p["agents"]) == 25
+    assert p["counts"]["all"] == 60 and p["counts"]["active"] >= 54 and p["counts"]["down24"] == 1
+    assert p["agents"][0]["down24"]                                         # le plus urgent en tête de la page 1
+    p3 = a.get("/api/v1/parc", params={"per_page": 25, "page": 99}).json()
+    assert p3["page"] == 3 and len(p3["agents"]) == 10                       # au-delà : dernière page
+    assert a.get("/api/v1/parc", params={"per_page": 7}).json()["per_page"] == 50   # taille hors liste : 50
+    d = a.get("/api/v1/parc", params={"filtre": "disconnected"}).json()
+    assert d["matched"] == d["counts"]["disconnected"] and all(x["status"] == "disconnected" for x in d["agents"])
+    assert d["counts"]["all"] == 60                                          # compteurs inchangés par le filtre
+    s = a.get("/api/v1/parc", params={"q": "POSTE-0"}).json()
+    assert s["matched"] == 10 and {x["name"] for x in s["agents"]} == {f"poste-0{i}" for i in range(10)}
+    assert a.get("/api/v1/parc", params={"filtre": "inconnu"}).json()["matched"] == 60
+    assert a.get("/api/v1/parc", params={"q": "x" * 101}).status_code == 422

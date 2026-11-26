@@ -34,4 +34,9 @@ export default async ({ stack, BASE, check, login }) => {
   check(await eventually(async () => (await compte()).startsWith('Tickets 1 à 25 sur 30')), 'recherche « pagination » : 30 tickets, page 1')
   await nav.getByLabel('Tickets par page').selectOption('50')
   check(await eventually(async () => (await compte()) === '30 ticket(s)' && (await m.locator('tbody tr').count()) === 30), '50 par page : les 30 tickets sur une seule page')
+  // Kanban : chargé colonne par colonne, la somme des colonnes est le total de la liste (plus rien n'est perdu)
+  await m.goto(`${BASE}/kanban`)
+  await m.waitForSelector('.kanban .column .count')
+  const somme = async () => (await m.locator('.kanban .column .count').allInnerTexts()).reduce((n, x) => n + Number(x), 0)
+  check(await eventually(async () => (await somme()) === total), `Kanban : la somme des colonnes est le total de la liste (${total})`)
 }

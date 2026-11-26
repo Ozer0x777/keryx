@@ -13,7 +13,7 @@ import logging
 import threading
 from datetime import timedelta
 
-from fastapi import Depends, HTTPException, Response
+from fastapi import Depends, HTTPException, Query, Response
 from fastapi.responses import JSONResponse
 from starlette.background import BackgroundTask
 from sqlalchemy import func, select
@@ -170,8 +170,27 @@ def register(app, ctx) -> None:
             out.update({"node": a.node, "open_tickets": tickets.get(a.agent_id, 0)})
         return out
 
+    # Cartes-filtres du parc (mêmes clés que l'écran) : compteurs sur tout le parc, liste filtrée côté serveur.
+    filtres = {
+        "all": lambda a: True,
+        "active": lambda a: a["status"] == "active",
+        "disconnected": lambda a: a["status"] == "disconnected",
+        "down24": lambda a: a["down24"],
+        "never": lambda a: a["status"] in ("never_connected", "pending"),
+        "outdated": lambda a: a["outdated"],
+        "silent": lambda a: a["silent"] is True,
+    }
+
+    def ordre(a: dict) -> tuple:
+        """Le plus urgent en tête : hors ligne depuis plus de 24 h, puis déconnectés (le plus ancien d'abord), puis
+        par nom."""
+        deconnecte = a["status"] == "disconnected"
+        return (not a["down24"], not deconnecte, (a["status_since"] or "") if deconnecte else "", (a["name"] or "").casefold())
+
     @app.get("/api/v1/parc")
-    def parc(client: str | None = None, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    def parc(client: str | None = None, filtre: str | None = Query(default=None, max_length=20),
+             q: str | None = Query(default=None, max_length=100), page: int = 1, per_page: int = 50,
+             user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         tenant = tenant_for(user, client)
         team = user.role in ("analyst", "manager")
         now = utcnow()
@@ -183,6 +202,15 @@ def register(app, ctx) -> None:
         for a in agents:
             if a["version"]:
                 versions[a["version"]] = versions.get(a["version"], 0) + 1
+        # Pagination côté serveur : un parc peut compter des milliers d'agents (20 000 au plus par relevé).
+        counts = {k: sum(1 for a in agents if fn(a)) for k, fn in filtres.items()}
+        garder = filtres.get(filtre or "all", filtres["all"])
+        needle = (q or "").strip().casefold()
+        matched = sorted((a for a in agents if garder(a) and (not needle or needle in " ".join(
+            str(x) for x in (a["name"], a["id"], a["ip"], a["os"], " ".join(a["groups"])) if x).casefold())), key=ordre)
+        per_page = per_page if per_page in (25, 50, 100) else 50
+        pages = max(1, -(-len(matched) // per_page))
+        page = min(max(1, page), pages)
         audit.record(db, user.username, "parc.view", "tenant", tenant.key, tenant.id, {"agents": len(agents)})
         commit(db)
         out = {
@@ -190,7 +218,9 @@ def register(app, ctx) -> None:
             "clients": [{"key": t.key, "name": t.name} for t in sorted(user.tenants, key=lambda t: t.key)],
             "configured": wa.api_configured(tenant), "manager_version": tenant.wazuh_manager_version,
             "polled_at": rfc3339(tenant.wazuh_agents_polled_at), "poll_interval_s": settings.wazuh_agents_poll_s,
-            "events_known": known, "agents": agents,
+            "events_known": known, "total": len(agents), "counts": counts, "matched": len(matched),
+            "page": page, "pages": pages, "per_page": per_page,
+            "agents": matched[(page - 1) * per_page: page * per_page],
             "versions": [{"version": v, "count": n, "gap": wa.version_gap(v, tenant.wazuh_manager_version)}
                          for v, n in sorted(versions.items(), key=lambda x: wa.version_tuple(x[0]) or (0, 0, 0), reverse=True)],
         }

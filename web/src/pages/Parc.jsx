@@ -1,15 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, downloadBlob } from '../api.js'
 import { useAuth } from '../App.jsx'
 import { ActionStatus, useActionStatus } from '../components/ActionStatus.jsx'
 import { useConfirm } from '../components/Confirm.jsx'
+import Pager from '../components/Pager.jsx'
 import { t as tr } from '../i18n.js'
 import { formatUtc } from '../labels.js'
+import { pageInfo, PER_PAGE } from '../queue.js'
 
 // Parc d'agents Wazuh (ADR-0030) : état, version et disponibilité des agents d'un client, relevés en lecture seule dans
 // l'API du manager. Équipe : tout, relevé à la demande, export, ticket « agent déconnecté ». Client : son parc seulement.
-// Filtres, recherche et agent choisi vivent dans l'URL (retour arrière, lien partagé).
+// Filtres, recherche, page et agent choisi vivent dans l'URL (retour arrière, lien partagé). Le serveur filtre, trie et
+// découpe la liste : un parc peut compter des milliers d'agents.
 
 const STATUS = {
   active: { label: 'Actif', cls: 'ok' },
@@ -22,13 +25,13 @@ const STATUS = {
 const GAP = { retard: 'en retard', tres_ancienne: 'très ancienne', plus_recente: 'plus récente que le manager' }
 
 const FILTERS = [
-  ['all', 'Agents', 'enregistrés chez le client', () => true],
-  ['active', 'Actifs', 'contact récent avec le manager', (a) => a.status === 'active'],
-  ['disconnected', 'Déconnectés', 'plus de contact', (a) => a.status === 'disconnected'],
-  ['down24', 'Hors ligne > 24 h', 'à traiter en priorité', (a) => a.down24],
-  ['never', 'Jamais connectés', 'ou en attente d’enregistrement', (a) => a.status === 'never_connected' || a.status === 'pending'],
-  ['outdated', 'Versions en retard', 'plus anciennes que le manager', (a) => a.outdated],
-  ['silent', 'Silencieux', 'actifs, aucun événement depuis 24 h', (a) => a.silent === true],
+  ['all', 'Agents', 'enregistrés chez le client'],
+  ['active', 'Actifs', 'contact récent avec le manager'],
+  ['disconnected', 'Déconnectés', 'plus de contact'],
+  ['down24', 'Hors ligne > 24 h', 'à traiter en priorité'],
+  ['never', 'Jamais connectés', 'ou en attente d’enregistrement'],
+  ['outdated', 'Versions en retard', 'plus anciennes que le manager'],
+  ['silent', 'Silencieux', 'actifs, aucun événement depuis 24 h'],
 ]
 
 // Durée lisible, de la seconde au jour.
@@ -55,7 +58,10 @@ export default function Parc() {
   const client = search.get('client') || ''
   const filter = FILTERS.some(([k]) => k === search.get('filtre')) ? search.get('filtre') : 'all'
   const q = search.get('q') || ''
+  const page = search.get('page') || '1'
+  const perPage = PER_PAGE.includes(search.get('per_page')) ? search.get('per_page') : '50'
   const selected = search.get('agent') || ''
+  const [draft, setDraft] = useState(q)
   const [p, setP] = useState(null)
   const [error, setError] = useState('')
   const [status, track] = useActionStatus()
@@ -66,29 +72,29 @@ export default function Parc() {
     return n
   }, { replace: true }), [setSearch])
 
-  const load = useCallback(() => api('/parc', { params: { client: client || undefined } })
-    .then((r) => { setP(r); setError('') }).catch((e) => setError(e.message)), [client])
+  const load = useCallback(() => api('/parc', { params: { client: client || undefined, filtre: filter === 'all' ? undefined : filter,
+    q: q || undefined, page, per_page: perPage } })
+    .then((r) => { setP(r); setError('') }).catch((e) => setError(e.message)), [client, filter, q, page, perPage])
   useEffect(() => { load() }, [load])
+  // Recherche envoyée au serveur après une courte pause de frappe, pas à chaque touche ; retour à la page 1.
+  useEffect(() => { setDraft(q) }, [q])
+  useEffect(() => {
+    if (draft === q) return undefined
+    const id = setTimeout(() => setParam({ q: draft, page: '' }), 300)
+    return () => clearTimeout(id)
+  }, [draft, q, setParam])
 
   const refresh = () => track(async () => { await api(`/parc/${p.client.key}/refresh`, { method: 'POST' }); await load() }, tr('Relevé terminé.'))
   const exportCsv = () => track(async () => {
     downloadBlob(await api(`/parc/${p.client.key}/export.csv`), `parc-${p.client.key}.csv`)
   }, tr('Export téléchargé.'))
 
-  const counts = useMemo(() => Object.fromEntries(FILTERS.map(([k, , , fn]) => [k, (p?.agents || []).filter(fn).length])), [p])
-  const rows = useMemo(() => {
-    if (!p) return []
-    const fn = FILTERS.find(([k]) => k === filter)[3]
-    const needle = q.trim().toLowerCase()
-    return p.agents.filter(fn)
-      .filter((a) => !needle || [a.name, a.id, a.ip, a.os, (a.groups || []).join(' ')].join(' ').toLowerCase().includes(needle))
-      .sort((a, b) => (b.down24 - a.down24) || ((b.status === 'disconnected') - (a.status === 'disconnected'))
-        || (a.status === 'disconnected' ? Date.parse(a.status_since) - Date.parse(b.status_since) : 0) || a.name.localeCompare(b.name))
-  }, [p, filter, q])
-
   if (error) return <p className="error" role="alert">{error}</p>
   if (!p) return <p className="loading">{tr('Chargement…')}</p>
-  const down24 = p.agents.filter((a) => a.down24)
+  const counts = p.counts
+  const rows = p.agents
+  const info = pageInfo(p.matched, p.page, p.per_page)
+  const down24 = counts.down24
   const filters = FILTERS.filter(([k]) => k !== 'silent' || p.events_known)
 
   return (
@@ -109,12 +115,12 @@ export default function Parc() {
             </label>
           )}
           {team && p.configured && <button type="button" onClick={refresh}>{tr('Relever maintenant')}</button>}
-          {team && p.agents.length > 0 && <button type="button" onClick={exportCsv}>{tr('Exporter (CSV)')}</button>}
+          {team && p.total > 0 && <button type="button" onClick={exportCsv}>{tr('Exporter (CSV)')}</button>}
         </div>
       </header>
       <ActionStatus state={status} live />
 
-      {!p.configured && p.agents.length === 0 ? (
+      {!p.configured && p.total === 0 ? (
         <p className="banner">{team
           ? tr("Le suivi du parc n'est pas activé pour ce client : un Admin règle l'accès à l'API du manager Wazuh (Administration, Clients).")
           : tr("Le suivi de votre parc n'est pas activé. Votre contact au SOC peut le mettre en place.")}</p>
@@ -128,10 +134,10 @@ export default function Parc() {
             {p.error && <span className="pill danger">{team ? p.error : tr("Le dernier relevé a échoué : l'état affiché peut être ancien.")}</span>}
           </section>
 
-          {down24.length > 0 && (
+          {down24 > 0 && (
             <div className="banner danger row wrap gap between" role="status">
-              <span><strong>{tr('{n} agent(s) hors ligne depuis plus de 24 h.', { n: down24.length })}</strong> {tr("Les alertes de ces machines n'arrivent plus au SOC.")}</span>
-              {filter !== 'down24' && <button type="button" onClick={() => setParam({ filtre: 'down24' })}>{tr('Voir ces agents')}</button>}
+              <span><strong>{tr('{n} agent(s) hors ligne depuis plus de 24 h.', { n: down24 })}</strong> {tr("Les alertes de ces machines n'arrivent plus au SOC.")}</span>
+              {filter !== 'down24' && <button type="button" onClick={() => setParam({ filtre: 'down24', page: '' })}>{tr('Voir ces agents')}</button>}
             </div>
           )}
 
@@ -140,7 +146,7 @@ export default function Parc() {
               const on = filter === k
               return (
                 <button type="button" key={k} className={`card stat stat-filter${on ? ' on' : ''}`} aria-pressed={on}
-                  onClick={() => setParam({ filtre: on || k === 'all' ? '' : k })}>
+                  onClick={() => setParam({ filtre: on || k === 'all' ? '' : k, page: '' })}>
                   <span className="stat-label">{tr(label)}</span>
                   <strong>{counts[k]}</strong>
                   <span className="stat-hint small">{on && k !== 'all' ? tr('filtre actif') : tr(hint)}</span>
@@ -153,9 +159,11 @@ export default function Parc() {
             <section className="parc-main" aria-label={tr('Agents')}>
               <div className="row wrap gap between">
                 <label className="filter grow">{tr('Recherche')}
-                  <input type="search" value={q} placeholder={tr('Nom, identifiant, adresse, système, groupe…')} onChange={(e) => setParam({ q: e.target.value })} />
+                  <input type="search" value={draft} placeholder={tr('Nom, identifiant, adresse, système, groupe…')} onChange={(e) => setDraft(e.target.value)} />
                 </label>
-                <p className="muted small" role="status">{tr('{n} agent(s) affiché(s) sur {total}', { n: rows.length, total: p.agents.length })}</p>
+                <p className="muted small" role="status">{p.matched > rows.length
+                  ? tr('Agents {from} à {to} sur {n} ({total} au total)', { from: info.from, to: info.to, n: p.matched, total: p.total })
+                  : tr('{n} agent(s) affiché(s) sur {total}', { n: rows.length, total: p.total })}</p>
               </div>
               <div className="table-wrap card">
                 <table className="grid">
@@ -166,7 +174,7 @@ export default function Parc() {
                     {team && <th scope="col" className="num">{tr('Tickets')}</th>}
                   </tr></thead>
                   <tbody>
-                    {rows.length === 0 && <tr><td colSpan={team ? 7 : 6} className="muted">{tr('Aucun agent ne correspond.')} <button type="button" className="link" onClick={() => setParam({ filtre: '', q: '' })}>{tr('Retirer les filtres')}</button></td></tr>}
+                    {rows.length === 0 && <tr><td colSpan={team ? 7 : 6} className="muted">{tr('Aucun agent ne correspond.')} <button type="button" className="link" onClick={() => setParam({ filtre: '', q: '', page: '' })}>{tr('Retirer les filtres')}</button></td></tr>}
                     {rows.map((a) => (
                       <tr key={a.id} className={a.id === selected ? 'selected' : ''}>
                         <td><StatusPill status={a.status} /></td>
@@ -184,6 +192,11 @@ export default function Parc() {
                   </tbody>
                 </table>
               </div>
+              {p.matched > Number(PER_PAGE[0]) && (
+                <Pager info={info} label={tr('Pages des agents')} onPage={(n) => setParam({ page: n > 1 ? String(n) : '' })}
+                  perPage={String(p.per_page)} perPageOptions={PER_PAGE} onPerPage={(v) => setParam({ per_page: v === '50' ? '' : v, page: '' })}
+                  perPageLabel={tr('Agents par page')} />
+              )}
               <Versions versions={p.versions} manager={p.manager_version} />
             </section>
             <AgentDetail key={`${p.client.key}-${selected || rows[0]?.id}`} p={p} id={selected || rows[0]?.id} team={team} onChanged={load} />
