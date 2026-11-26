@@ -17,6 +17,12 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
   ou manque, une fois par ticket, avec le seul numéro du ticket ; essai tracé du moyen secondaire et alerte s'il date
   de plus de six mois ; registre des notifications par client, consultable et exportable en CSV. Migration 0028.
 
+### Ajouté
+- Suivi par le client (PDIS IV.2.3.l) : sur sa fiche, le client modifie l'état du ticket de son côté (pris en compte,
+  en cours chez lui, traité de son côté) et demande la clôture ou la réouverture ; l'équipe accepte en changeant le
+  statut ou refuse avec un motif visible du client. Actions demandées au client par l'équipe, mises à jour par le
+  client (à faire, faite, impossible). Tout est inscrit au registre des actions et signalé à l'équipe. Migration 0029.
+
 ### Documentation
 - Portail par client (ADR-0027) accepté après lecture intégrale du référentiel PDIS v2.0 : décisions (synchronisation,
   comptes clients, SQLite, tout-en-un par défaut, fichiers chiffrés, actions demandées au client, pare-feu applicatif

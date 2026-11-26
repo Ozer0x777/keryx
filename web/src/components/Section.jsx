@@ -6,14 +6,14 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react'
 // Un panneau replié garde son contenu monté : une saisie en cours n'est pas perdue.
 export const OPEN_BY_STATUS = {
   nouveau: ['description', 'alerte', 'qualification', 'affectation'],
-  en_evaluation: ['description', 'alerte', 'preuves', 'commentaires', 'qualification', 'mitre', 'affectation'],
-  en_reponse: ['description', 'preuves', 'actions', 'commentaires', 'qualification', 'mitre', 'isi', 'affectation', 'liens'],
+  en_evaluation: ['description', 'alerte', 'preuves', 'suivi-client', 'commentaires', 'qualification', 'mitre', 'affectation'],
+  en_reponse: ['description', 'preuves', 'actions', 'suivi-client', 'commentaires', 'qualification', 'mitre', 'isi', 'affectation', 'liens'],
   cloture: ['synthese', 'commentaires', 'isi', 'details'],
   faux_positif: ['description', 'commentaires', 'qualification', 'details'],
   retour_experience: ['synthese', 'actions', 'commentaires', 'details'],
 }
 // Portail client : peu de panneaux, l'essentiel est ouvert.
-export const OPEN_FOR_CLIENT = ['description', 'preuves', 'commentaires']
+export const OPEN_FOR_CLIENT = ['description', 'suivi-client', 'preuves', 'commentaires']
 
 export const PhaseContext = createContext({ status: '', open: null })
 

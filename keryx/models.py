@@ -267,6 +267,11 @@ class Ticket(Base):
     niveau_classification: Mapped[str] = mapped_column(String(40), default="Non protégé", server_default="Non protégé")
     rule_version: Mapped[str | None] = mapped_column(String(120), nullable=True)
     collecteur: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Suivi par le client (PDIS IV.2.3.l) : état du ticket de son côté et demande de clôture ou de réouverture,
+    # que l'équipe accepte (par le statut) ou refuse. La qualification et la clôture restent à l'équipe.
+    etat_client: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    demande_client: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    etat_client_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     occurrences: Mapped[int] = mapped_column(Integer, default=1)
     rex_required: Mapped[bool] = mapped_column(Boolean, default=False)
     # Synthèse évolutive de l'incident [PRIS VI.5.3.e]
@@ -629,3 +634,19 @@ class Timestamp(Base):
     tsa_url: Mapped[str] = mapped_column(String(500))
     created_by: Mapped[str] = mapped_column(String(120))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ActionClient(Base):
+    """Action demandée au client par l'équipe (PDIS IV.2.3.l : état des actions engagées, visible et mis à jour par
+    le client sur le portail)."""
+    __tablename__ = "actions_client"
+    id: Mapped[str] = _id()
+    ticket_id: Mapped[str] = mapped_column(ForeignKey("tickets.id", ondelete="CASCADE"), index=True)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    libelle: Mapped[str] = mapped_column(String(500))
+    etat: Mapped[str] = mapped_column(String(16), default="a_faire", server_default="a_faire")
+    commentaire: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cree_par: Mapped[str] = mapped_column(String(64))
+    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    maj_par: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    maj_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
