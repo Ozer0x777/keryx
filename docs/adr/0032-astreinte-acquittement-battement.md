@@ -1,6 +1,6 @@
 # ADR-0032 : Prévenir l'équipe, mesurer l'acquittement, vérifier la chaîne d'alerte de bout en bout
 
-- **Statut** : proposé (26/11/2026). Rien n'est codé : ce document est à valider avant.
+- **Statut** : accepté (26/11/2026), à coder. Questions tranchées par le mainteneur le 26/11/2026 (voir « Réglages »).
 - **Contexte** : le pire scénario pour un SOC est une alerte critique que personne ne traite parce que personne n'a
   été prévenu, ou une chaîne d'alerte tombée en silence sans que personne ne s'en aperçoive. Aujourd'hui :
   - Keryx garde l'identifiant Wazuh, l'horodatage de détection et l'alerte brute de chaque ticket ;
@@ -42,15 +42,19 @@
     d'ajouter le titre ;
   - le client ne voit ni les canaux d'astreinte ni les escalades ; l'Admin règle les canaux sans lire les tickets ;
   - chaque envoi, escalade et battement manqué est inscrit au journal d'audit.
-- **Questions ouvertes (à trancher avant de coder)** :
-  1. Quelles criticités notifient l'astreinte : Critique seulement, ou aussi Élevée ?
-  2. Délai avant escalade par défaut (proposition : 15 minutes pour Critique, 60 pour Élevée) et heures ouvrées ou
-     non (proposition : en continu, l'astreinte étant justement là hors des heures ouvrées).
-  3. Formats de webhook à fournir d'abord (proposition : JSON générique et Mattermost / Slack, qui couvre aussi
-     beaucoup d'outils).
-  4. Un canal par instance, ou par client (un MSSP peut avoir une équipe par client) ?
-  5. Période du battement de cœur et délai d'alerte (proposition : ligne toutes les 5 minutes, alerte après 15).
-  6. Le délai d'acquittement figure-t-il dans le rapport remis au client ?
+- **Réglages (décisions du mainteneur, 26/11/2026)** :
+  1. **Par client** (cas du MSSP : une équipe ou une astreinte par client). Le **manager** règle, pour chaque client
+     dont il a la charge : l'activation de l'astreinte, les **criticités** qui la préviennent (Critique, Élevée,
+     Moyenne, Faible), les **délais d'escalade** par criticité, et la période et le délai d'alerte du **battement de
+     cœur**. Valeurs proposées à la création : Critique seulement, escalade à 15 minutes, battement toutes les
+     5 minutes et alerte après 15, en continu.
+  2. **Canaux** : l'**Admin** déclare les canaux (adresse du webhook, format, secret chiffré, ou adresse courriel de
+     l'équipe), parce qu'une adresse appelée par le serveur est un réglage de sécurité, comme les connecteurs Wazuh et
+     VirusTotal ; le manager choisit, pour chaque client, le canal d'astreinte et le canal d'escalade parmi eux.
+  3. **Formats** d'abord : JSON générique et Mattermost / Slack (couvre aussi beaucoup d'autres outils).
+  4. **Rapport au client** : le manager active ou désactive, client par client, l'envoi du délai d'acquittement dans
+     le rapport périodique remis au client (désactivé par défaut). Il reste toujours visible de l'équipe.
+  5. Chaque modification de ces réglages est inscrite au journal d'audit, avec son auteur.
 - **Exigences** : PDIS (traitement et suivi des incidents, délais) : sections à citer après lecture du texte, non
   vérifiées à ce stade. ISO/IEC 27035 (détection et signalement).
 - **Conséquences** : une table des canaux, des champs de suivi d'acquittement et d'escalade sur le ticket, une tâche
