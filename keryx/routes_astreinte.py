@@ -114,7 +114,7 @@ def register(app, ctx) -> None:
         if c is None:
             raise HTTPException(404, "Canal inconnu.")
         text = f"[Keryx] Essai du canal « {c.name} » : message de test, aucune action demandée."
-        msg = {"text": text, "data": {"type": "keryx.essai", "canal": c.name}}
+        msg = {"subject": f"[Keryx] Essai du canal « {c.name} »", "text": text, "data": {"type": "keryx.essai", "canal": c.name}}
         try:
             code = astreinte.deliver(settings, box, c, msg)
             out = {"statut": "envoye", "code": code}

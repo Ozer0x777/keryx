@@ -199,3 +199,52 @@ def test_essai_du_canal(app, db, world, hook):
     # canal désactivé : plus proposé au manager
     assert adm.put(f"/api/v1/admin/canaux/{c['id']}", json={"active": False}).json()["active"] is False
     assert login(app, db, "manager").get("/api/v1/politique").json()["canaux"] == []
+
+
+# ---------------------------------------------------------------- canal courriel (astreinte par courriel de l'équipe)
+@pytest.fixture
+def smtp(settings, monkeypatch):
+    from keryx import notify
+
+    from .test_notifications import FakeSMTP
+    FakeSMTP.sent, FakeSMTP.fail = [], False
+    monkeypatch.setattr(notify.smtplib, "SMTP", FakeSMTP)
+    settings.smtp_host = "smtp.example.eu"
+    yield FakeSMTP
+    FakeSMTP.fail = False
+
+
+def test_astreinte_et_escalade_par_courriel(app, db, world, alert, smtp, settings):
+    adm = login(app, db, "admin")
+    astr = _canal(adm, "astreinte-mail", "astreinte@soc.example", kind="email")
+    esc = _canal(adm, "chef-de-quart", "chef@soc.example", kind="email")
+    assert astr["target"] == "astreinte@soc.example"
+    m = login(app, db, "manager")
+    assert m.put("/api/v1/politique/ACME", json={"astreinte_active": True, "astreinte_canal_id": astr["id"],
+                                                "escalade_canal_id": esc["id"]}).status_code == 200
+    ref = ingest(app, world["keys"]["ACME"], alert(ALERT_CRITICAL)).json()["ticket"]
+    mails = [x for x in smtp.sent if x["To"] == "astreinte@soc.example"]
+    assert len(mails) == 1
+    assert mails[0]["Subject"] == f"[Keryx] Astreinte {ref} (Critique, ACME) : nouveau ticket"
+    corps = mails[0].get_content()
+    assert f"https://keryx.local/tickets/{ref}" in corps and "Correlated exfiltration" not in corps     # pas le titre
+    n = db.scalars(select(Notification).where(Notification.motif == "astreinte")).one()
+    assert n.status == "envoye" and n.channel == "email" and n.recipient == "astreinte-mail"
+    t = _ticket(db, ref)
+    assert astreinte.tick(_factory(app), settings, now=t.astreinte_at + timedelta(minutes=16))["escalades"] == 1
+    chef = [x for x in smtp.sent if x["To"] == "chef@soc.example"]
+    assert len(chef) == 1 and chef[0]["Subject"].startswith(f"[Keryx] ESCALADE {ref} (Critique, ACME)")
+    assert "15 min" in chef[0]["Subject"]
+
+
+def test_courriel_sans_smtp_ou_en_panne(app, db, world, alert, smtp, settings):
+    adm = login(app, db, "admin")
+    c = _canal(adm, "astreinte-mail", "astreinte@soc.example", kind="email")
+    smtp.fail = True
+    r = adm.post(f"/api/v1/admin/canaux/{c['id']}/essai").json()
+    assert r == {"statut": "echec", "code": None, "erreur": "smtp"}
+    smtp.fail = False
+    assert adm.post(f"/api/v1/admin/canaux/{c['id']}/essai").json() == {"statut": "envoye", "code": None}
+    assert smtp.sent[-1]["Subject"] == "[Keryx] Essai du canal « astreinte-mail »"
+    settings.smtp_host = None
+    assert adm.post(f"/api/v1/admin/canaux/{c['id']}/essai").json()["erreur"] == "smtp_absent"
