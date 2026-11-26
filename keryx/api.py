@@ -45,7 +45,8 @@ from .ingest import AlertRejected, ingest_alert
 from .mitre import valid_technique
 from .models import (
     LIFECYCLE, SEVERITIES, STATUSES, TLP, VERDICTS, ApiKey, Attachment, AuditEntry, Comment, CustodyEvent, MitreTechnique, RateHit,
-    RawAlert, Session, WebAuthnCredential, Tenant, Ticket, TicketEvent, User, tlp_initial, tlp_rang,
+    NIVEAUX_CLASSIFICATION, RawAlert, Session, WebAuthnCredential, Tenant, Ticket, TicketEvent, User, tlp_initial,
+    tlp_rang,
 )
 from .notify import retry_failed, send_pending
 from .s3store import StorageError
@@ -179,6 +180,7 @@ class QualificationIn(BaseModel):
     risque: str | None = Field(default=None, max_length=5000)
     tlp: str | None = None
     motif_tlp: str | None = Field(default=None, max_length=2000)   # TLP sous le plancher du client (manager, ADR-0033)
+    niveau_classification: str | None = None                        # IGI 1300 / II 901 (PDIS IV.2.1.w)
     from_proposal: bool = False   # dommages retenus depuis la proposition affichée (ADR-0028), tracé au registre
 
 
@@ -417,6 +419,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(422, f"La sensibilité d'une pièce de ce client ne descend pas sous {plancher} (politique "
                                      "fixée par le manager).")
         return valeur
+
+    def collecteur(db, t: Ticket) -> str | None:
+        """Manager Wazuh qui a transmis l'alerte (PDIS IV.2.1.w) ; pour un ticket ancien, lu dans l'alerte brute."""
+        if t.collecteur:
+            return t.collecteur
+        raw = db.scalars(select(RawAlert.payload).where(RawAlert.ticket_id == t.id).limit(1)).first()
+        try:
+            raw = json.loads(raw) if raw else None
+        except ValueError:
+            raw = None
+        m = raw.get("manager") if isinstance(raw, dict) else None
+        return str(m.get("name"))[:200] if isinstance(m, dict) and m.get("name") else None
 
     def event(db, t: Ticket, user: User, action: str, details: dict, visible_client: bool = False):
         if action in ACQUITTEMENT and user.role in ("analyst", "manager") and t.acquitted_at is None:
@@ -940,7 +954,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         out.update({
             "body_html": t.body_html, "verdict": t.verdict, "dommages": t.dommages, "importance": t.importance,
             "impact": t.impact, "risque": t.risque, "rex_required": t.rex_required,
-            "rule": {"id": t.rule_id, "level": t.rule_level, "description": t.rule_description, "groups": t.rule_groups},
+            "rule": {"id": t.rule_id, "level": t.rule_level, "description": t.rule_description, "groups": t.rule_groups,
+                     "version": t.rule_version},
+            "niveau_classification": t.niveau_classification, "collecteur": collecteur(db, t),
             "agent": {"id": t.agent_id, "name": t.agent_name, "ip": t.agent_ip},
             "mitre_detail": t.mitre, "classification": t.classification,
             "isi": t.isi if not is_client else None,
@@ -999,6 +1015,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if "tlp" in sent and body.tlp not in TLP:
             raise HTTPException(422, f"Marquage attendu parmi : {', '.join(TLP)}.")
         tenant = db.get(Tenant, t.tenant_id)
+        if "niveau_classification" in sent and body.niveau_classification != t.niveau_classification:
+            if body.niveau_classification not in NIVEAUX_CLASSIFICATION:
+                raise HTTPException(422, f"Niveau de classification attendu parmi : {', '.join(NIVEAUX_CLASSIFICATION)}.")
+            if (NIVEAUX_CLASSIFICATION.index(body.niveau_classification) < NIVEAUX_CLASSIFICATION.index(t.niveau_classification)
+                    and user.role != "manager"):
+                raise HTTPException(422, "Seul un manager abaisse le niveau de classification d'un incident.")
+            t.niveau_classification = body.niveau_classification
         sous_plancher = None
         if "tlp" in sent and body.tlp != t.tlp and tlp_rang(body.tlp) < tlp_rang(tenant.tlp_plancher):
             # TLP plancher du client (ADR-0033) : l'analyste peut monter, pas descendre en dessous ; le manager le peut
@@ -1022,7 +1045,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                               and is_rex_required(t.gravite or t.criticite_initiale))
         t.qualified_at = t.updated_at = utcnow()
         details = {"verdict": t.verdict, "gravite": t.gravite, "dommages": t.dommages, "importance": t.importance,
-                   "tlp": t.tlp}
+                   "tlp": t.tlp, "niveau_classification": t.niveau_classification}
         if body.from_proposal and "dommages" in sent:
             details["source"] = "proposition"
         event(db, t, user, "qualification", details)

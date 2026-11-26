@@ -13,11 +13,14 @@ const CRITICITES = ['Critique', 'Élevée', 'Moyenne', 'Faible']
 
 function Client({ c, canaux, onSaved }) {
   const [plancher, setPlancher] = useState(c.tlp_plancher || '')
+  const [niveau, setNiveau] = useState(c.niveau_classification_defaut)
+  const [versionRegles, setVersionRegles] = useState(c.version_regles || '')
   const [rapport, setRapport] = useState(Boolean(c.acquittement_rapport))
   const [ast, setAst] = useState(c.astreinte)
   const [bat, setBat] = useState({ active: c.battement.active, periode_min: c.battement.periode_min, delai_min: c.battement.delai_min })
   const [status, track, setStatus] = useActionStatus()
   const changed = plancher !== (c.tlp_plancher || '') || rapport !== Boolean(c.acquittement_rapport)
+    || niveau !== c.niveau_classification_defaut || versionRegles !== (c.version_regles || '')
     || JSON.stringify(ast) !== JSON.stringify(c.astreinte)
     || bat.active !== c.battement.active || bat.periode_min !== c.battement.periode_min || bat.delai_min !== c.battement.delai_min
   const set = (patch) => setAst((a) => ({ ...a, ...patch }))
@@ -25,6 +28,7 @@ function Client({ c, canaux, onSaved }) {
   const save = async () => {
     const json = {
       tlp_plancher: plancher || null, acquittement_rapport: rapport,
+      niveau_classification_defaut: niveau, version_regles: versionRegles,
       astreinte_active: ast.active, astreinte_criticites: ast.criticites, astreinte_delais: ast.delais,
       astreinte_canal_id: ast.canal_id || null, escalade_canal_id: ast.escalade_canal_id || null,
       battement_active: bat.active, battement_periode_min: bat.periode_min, battement_delai_min: bat.delai_min,
@@ -51,6 +55,16 @@ function Client({ c, canaux, onSaved }) {
           </select>
         </label>
         <p className="field-hint" id={id('plancher')}>{tr("Les nouveaux tickets et pièces de ce client naissent à ce niveau. Un analyste peut monter, jamais descendre en dessous ; un manager peut descendre un ticket en dessous avec un motif. Relever le plancher relève les tickets ouverts qui sont en dessous ; le baisser ne baisse aucun ticket.")}</p>
+
+        <div className="grid2">
+          <label>{tr('Niveau de classification par défaut des incidents')}
+            <select value={niveau} onChange={(e) => setNiveau(e.target.value)}>
+              {['Non protégé', 'Diffusion Restreinte'].map((x) => <option key={x}>{x}</option>)}
+            </select></label>
+          <label>{tr('Version du jeu de règles de détection en service')}
+            <input value={versionRegles} maxLength={120} placeholder={tr('ex. wazuh-4.9.1 + règles locales 2026-11-20')} onChange={(e) => setVersionRegles(e.target.value)} /></label>
+        </div>
+        <p className="field-hint">{tr("Reportés sur chaque nouveau ticket (PDIS IV.2.1.w). Seul un manager abaisse ensuite le niveau d'un ticket.")}</p>
 
         <h3>{tr('Astreinte')}</h3>
         {canaux.length === 0

@@ -43,6 +43,9 @@ SEVERITIES = ("Faible", "Moyenne", "Élevée", "Critique")
 VERDICTS = ("vrai_positif_avere", "vrai_positif_non_avere", "faux_positif")
 TLP = ("TLP:CLEAR", "TLP:GREEN", "TLP:AMBER", "TLP:AMBER+STRICT", "TLP:RED")  # FIRST TLP 2.0, du moins au plus restrictif
 TLP_DEFAUT = "TLP:AMBER"
+# Niveau de classification d'un incident au sens d'[IGI_1300] et d'[II_901] (PDIS IV.2.1.e, IV.2.1.w), du moins au plus
+# protégé. Keryx ne traite pas d'information classifiée de défense : seuls ces deux niveaux sont proposés.
+NIVEAUX_CLASSIFICATION = ("Non protégé", "Diffusion Restreinte")
 
 
 def tlp_rang(valeur: str | None) -> int:
@@ -76,6 +79,10 @@ class Tenant(Base):
     # la prestation. Vrai par défaut : la purge des alertes brutes ne touche pas ce client. L'Admin peut le décocher
     # (prestation hors référentiel, minimisation) ; la durée de rétention s'applique alors.
     conserver_contexte: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    # Contenu du ticket (PDIS IV.2.1.w), réglé par le manager : niveau de classification par défaut des incidents du
+    # client, et version du jeu de règles de détection en service (reportée sur chaque ticket créé).
+    niveau_classification_defaut: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    version_regles: Mapped[str | None] = mapped_column(String(120), nullable=True)
     # Délais cibles par gravité, en heures : {"Critique": {"qualification": 1, "resolution": 8}, ...}
     sla: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Taille maximale d'une pièce, en Mio (1 à 20) ; vide = 20 Mio, plafond fixé par le plan [PRIS VI.2.4]
@@ -249,6 +256,11 @@ class Ticket(Base):
     mitre: Mapped[list] = mapped_column(JSON, default=list)
     mitre_source: Mapped[str] = mapped_column(String(16), default="a_completer")
     classification: Mapped[list] = mapped_column(JSON, default=list)  # groupes + tags conformité
+    # PDIS IV.2.1.w : niveau de classification de l'incident, version de la règle déclenchée, collecteur (manager
+    # Wazuh) qui a transmis l'évènement.
+    niveau_classification: Mapped[str] = mapped_column(String(40), default="Non protégé", server_default="Non protégé")
+    rule_version: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    collecteur: Mapped[str | None] = mapped_column(String(200), nullable=True)
     occurrences: Mapped[int] = mapped_column(Integer, default=1)
     rex_required: Mapped[bool] = mapped_column(Boolean, default=False)
     # Synthèse évolutive de l'incident [PRIS VI.5.3.e]

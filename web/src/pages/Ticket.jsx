@@ -5,6 +5,8 @@ import { api, downloadBlob } from '../api.js'
 import { useAuth } from '../App.jsx'
 import { tlpAuMoins, tlpSous } from '../tlp.js'
 import { fmtMin } from '../components/Acquittement.jsx'
+
+const NIVEAUX_CLASSIFICATION = ['Non protégé', 'Diffusion Restreinte']
 import { ActionStatus, useActionStatus } from '../components/ActionStatus.jsx'
 import { Severity, Status, Tlp } from '../components/Badges.jsx'
 import { useConfirm } from '../components/Confirm.jsx'
@@ -386,10 +388,11 @@ function AlertBlock({ t }) {
   return (
     <Section id="alerte" title={tr("Alerte Wazuh")} summary={tr('{n} alerte(s) brute(s) conservée(s) avec empreinte SHA-256', { n: t.raw_alerts })}>
       <dl className="kv">
-        <dt>{tr("Règle")}</dt><dd className="mono">{tr('{id} · niveau {level}', { id: t.rule.id, level: t.rule.level })}</dd>
+        <dt>{tr("Règle")}</dt><dd className="mono">{tr('{id} · niveau {level}', { id: t.rule.id, level: t.rule.level })}{t.rule.version ? ` · ${tr('version {v}', { v: t.rule.version })}` : ''}</dd>
         <dt>{tr("Description")}</dt><dd>{t.rule.description}</dd>
         <dt>{tr("Groupes")}</dt><dd className="mono">{t.rule.groups.join(', ') || '—'}</dd>
         <dt>{tr("Agent")}</dt><dd className="mono">{[t.agent.id, t.agent.name, t.agent.ip].filter(Boolean).join(' · ') || '—'}</dd>
+        <dt>{tr("Collecteur")}</dt><dd className="mono">{t.collecteur || '—'}</dd>
         <dt>{tr("Classification")}</dt><dd className="mono small">{t.classification.join(', ') || '—'}</dd>
       </dl>
     </Section>
@@ -719,7 +722,7 @@ function Comments({ t, enc, isClient, me, run, onImage, templates }) {
 
 function Qualification({ t, enc, run, open }) {
   const { me } = useAuth()
-  const [v, setV] = useState({ verdict: t.verdict || '', dommages: t.dommages || '', importance: t.importance, impact: t.impact || '', risque: t.risque || '', tlp: t.tlp })
+  const [v, setV] = useState({ verdict: t.verdict || '', dommages: t.dommages || '', importance: t.importance, impact: t.impact || '', risque: t.risque || '', tlp: t.tlp, niveau: t.niveau_classification })
   // TLP plancher du client (ADR-0033) : l'analyste ne descend pas en dessous ; le manager le peut, avec un motif.
   const [motifTlp, setMotifTlp] = useState('')
   const sousPlancher = v.tlp !== t.tlp && tlpSous(v.tlp, t.tlp_plancher)
@@ -727,10 +730,10 @@ function Qualification({ t, enc, run, open }) {
   const [status, track] = useActionStatus()
   // Modifié = différent de ce que la fiche affiche (rechargée après un enregistrement).
   const dirty = open && (v.verdict !== (t.verdict || '') || v.dommages !== (t.dommages || '') || v.importance !== t.importance
-    || v.impact !== (t.impact || '') || v.risque !== (t.risque || '') || v.tlp !== t.tlp)
+    || v.impact !== (t.impact || '') || v.risque !== (t.risque || '') || v.tlp !== t.tlp || v.niveau !== t.niveau_classification)
   useUnsaved('qualification', tr('qualification'), dirty)
   const save = () => {
-    const json = { importance: v.importance, impact: v.impact, risque: v.risque, tlp: v.tlp }
+    const json = { importance: v.importance, impact: v.impact, risque: v.risque, tlp: v.tlp, niveau_classification: v.niveau }
     if (sousPlancher) json.motif_tlp = motifTlp
     if (v.verdict && !verdictLocked) json.verdict = v.verdict
     if (v.dommages) json.dommages = v.dommages
@@ -782,6 +785,9 @@ function Qualification({ t, enc, run, open }) {
       {t.tlp_plancher && <p className="field-hint" id={`tlp-plancher-${t.ref}`}>{me.role === 'manager'
         ? tr('TLP plancher de ce client : {p}. Descendre en dessous demande un motif, inscrit au registre.', { p: t.tlp_plancher })
         : tr('TLP plancher de ce client : {p}. On peut monter, pas descendre en dessous (politique fixée par le manager).', { p: t.tlp_plancher })}</p>}
+      <label>{tr('Niveau de classification (IGI 1300 / II 901)')}<select value={v.niveau} disabled={!open} onChange={(e) => setV({ ...v, niveau: e.target.value })}>
+        {NIVEAUX_CLASSIFICATION.map((x, i) => <option key={x} disabled={me.role !== 'manager' && i < NIVEAUX_CLASSIFICATION.indexOf(t.niveau_classification)}>{x}</option>)}
+      </select></label>
       {sousPlancher && me.role === 'manager' && (
         <label>{tr('Motif du passage sous le TLP plancher (10 caractères au moins)')}
           <textarea rows="2" value={motifTlp} required minLength={10} onChange={(e) => setMotifTlp(e.target.value)} />
