@@ -70,7 +70,9 @@ export default function System() {
       {ret && (
         <div role="status">
           <p className="banner ok">{ret.dry_run ? tr('Simulation') : tr('Purge effectuée')} : {ret.total} {tr('alerte(s)')} {ret.dry_run ? tr('concernée(s)') : tr('supprimée(s)')}.</p>
-          <ul className="small">{ret.items.map((r) => <li key={r.client}>{tr('{client} : {n} alerte(s) antérieure(s) au {before} ({months} mois)', { client: r.client, n: r.alerts, before: r.before, months: r.months })}</li>)}</ul>
+          <ul className="small">{ret.items.map((r) => <li key={r.client}>{r.conserve
+            ? tr('{client} : contexte conservé toute la prestation, aucune purge', { client: r.client })
+            : tr('{client} : {n} alerte(s) antérieure(s) au {before} ({months} mois)', { client: r.client, n: r.alerts, before: r.before, months: r.months })}</li>)}</ul>
         </div>
       )}
     </section>

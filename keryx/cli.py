@@ -400,6 +400,9 @@ def _main(argv: list[str] | None = None) -> int:
         if args.apply:
             db.commit()
         for r in report:
+            if r.get("conserve"):
+                print(f"{r['client']} : contexte conservé toute la prestation (PDIS IV.5.3.6), aucune purge")
+                continue
             print(f"{r['client']} : {r['alerts']} alerte(s) brute(s) antérieure(s) au {r['before']} ({r['months']} mois)"
                   + ("" if args.apply else " [simulation]"))
         return 0

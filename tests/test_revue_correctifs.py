@@ -93,7 +93,16 @@ def test_rapports_plafond_sur_la_periode_et_statuts_en_sql(app, db, world, alert
     assert d["by_status"] == {"nouveau": 1, "faux_positif": 1}  # décompte sur tous les tickets, pas seulement la période
 
 
+def _purge_autorisee(db, key="ACME"):
+    """Les clients conservent leur contexte toute la prestation par défaut (PDIS IV.5.3.6) : la purge se choisit."""
+    from sqlalchemy import update
+    from keryx.models import Tenant
+    db.execute(update(Tenant).where(Tenant.key == key).values(conserver_contexte=False))
+    db.commit()
+
+
 def test_retention_exige_un_ticket_clos_depuis_plus_longtemps_que_la_duree(app, db, world, alert):
+    _purge_autorisee(db)
     ingest(app, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE))
     a = login(app, db, "analyst_acme")
     a.post("/api/v1/tickets/ACME-1/status", json={"status": "en_evaluation"})

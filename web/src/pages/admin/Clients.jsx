@@ -124,6 +124,7 @@ function WazuhApiSettings({ client, v, set }) {
 function ClientEditor({ client, onSaved }) {
   const [emails, setEmails] = useState((client.contact_emails || []).join(', '))
   const [retention, setRetention] = useState(client.retention_months ?? '')
+  const [conserver, setConserver] = useState(client.conserver_contexte !== false)
   const [maxMb, setMaxMb] = useState(client.max_attachment_mb ?? '')
   const [grid, setGrid] = useState(client.severity_grid || null)
   const [sla, setSla] = useState(client.sla || {})
@@ -150,6 +151,7 @@ function ClientEditor({ client, onSaved }) {
     const ok = await track(() => api(`/admin/clients/${client.key}`, { method: 'PATCH', json: {
       contact_emails: emails.split(/[,\s;]+/).filter(Boolean),
       retention_months: retention === '' ? null : Number(retention),
+      conserver_contexte: conserver,
       max_attachment_mb: maxMb === '' ? null : Number(maxMb),
       severity_grid: grid, sla: Object.keys(cleanSla).length ? cleanSla : null,
       wazuh_dashboard_url: wz.dashboard.trim() || null, wazuh_indexer_url: wz.indexer.trim() || null,
@@ -163,7 +165,10 @@ function ClientEditor({ client, onSaved }) {
   return (
     <form className="subform" onSubmit={save}>
       <label>{tr("Contacts de notification (séparés par des virgules)")}<input value={emails} onChange={(e) => setEmails(e.target.value)} /></label>
-      <label>{tr("Rétention des alertes brutes, en mois (6 minimum, vide = durée par défaut de l'instance)")}<input type="number" min="6" max="120" value={retention} onChange={(e) => setRetention(e.target.value)} /></label>
+      <label className="check"><input type="checkbox" checked={conserver} onChange={(e) => setConserver(e.target.checked)} />{' '}
+        {tr("Conserver le contexte des incidents (alertes brutes) pendant toute la prestation (PDIS IV.5.3.6)")}</label>
+      <label>{tr("Rétention des alertes brutes, en mois (6 minimum, vide = durée par défaut de l'instance)")}<input type="number" min="6" max="120" value={retention} disabled={conserver} onChange={(e) => setRetention(e.target.value)} /></label>
+      {conserver && <p className="field-hint">{tr("Aucune purge pour ce client tant que cette case est cochée. Décocher seulement pour une prestation hors référentiel ; la fin de prestation passe par l'export puis la destruction des données du client.")}</p>}
       <label>{tr("Taille maximale d'une pièce, en Mo (1 à 20, vide = 20 : plafond fixé par le plan)")}<input type="number" min="1" max="20" value={maxMb} onChange={(e) => setMaxMb(e.target.value)} /></label>
       <h3>{tr("Grille de gravité")} {grid ? tr('(propre au client)') : tr('(grille par défaut)')}</h3>
       <div className="table-wrap"><table className="grid">
