@@ -30,8 +30,9 @@ Chaque essai réel donne lieu à une correction ou à une note dans la documenta
 
 ## 3. Conformité documentée
 
-- Couverture des exigences PDIS chapitre IV : statut et preuve vérifiée pour chaque exigence
-  (`docs/matrice-tracabilite.md` étendue).
+- Couverture des exigences PDIS faite le 26/11/2026 (`docs/conformite/couverture-pdis.md`) : corriger les écarts du
+  logiciel dans l'ordre de sa dernière section (conservation du contexte, contenu du ticket, notifications, état
+  modifiable par le client, réversibilité, VirusTotal, journalisation, indicateurs).
 
 ## 4. Robustesse et exploitation
 

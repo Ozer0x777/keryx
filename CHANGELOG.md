@@ -9,6 +9,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
   comptes clients, SQLite, tout-en-un par défaut, fichiers chiffrés, actions demandées au client, pare-feu applicatif
   Coraza, indicateurs) et découpage dans `docs/conception/portail-par-client.md`. Citations du référentiel ajoutées
   aux ADR-0032 et 0033.
+- Couverture du référentiel PDIS v2.0 et de sa trame d'évaluation v1.1 (addendum n°42) par Keryx, exigence par
+  exigence, avec la liste des écarts du logiciel par priorité : `docs/conformite/couverture-pdis.md`.
 
 ## [0.9.0] : 2026-11-26
 
