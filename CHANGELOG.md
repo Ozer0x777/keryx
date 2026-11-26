@@ -18,6 +18,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
   ticket qui rattache des milliers d'alertes répétées n'est plus envoyé d'un bloc.
 - Parc d'agents : la frise d'un agent et la disponibilité du pilotage et du rapport ne lisent plus que la période
   utile (dernier état avant la période et changements de la période), et non tout l'historique, conservé sans limite.
+- Administration (comptes, revue des comptes) et table MITRE : recherche et pages de 50 lignes
+  (`web/src/components/LocalList.jsx`).
 
 ### Sécurité
 - Kit Docker : `install.sh` vérifie toujours la signature de l'image publiée, avec cosign s'il est installé, sinon

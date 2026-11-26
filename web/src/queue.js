@@ -65,3 +65,12 @@ export function queuePath() {
   qs = qs.replace(/^\?/, '')
   return qs ? `/tickets?${qs}` : '/tickets'
 }
+
+// Liste chargée en entier mais affichée par pages (comptes, table MITRE…) : filtre par texte (sans tenir compte de la
+// casse) puis découpe. `texte` donne le texte cherchable d'une ligne.
+export function localPage(items, texte, q, page, perPage = 50) {
+  const needle = (q || '').trim().toLowerCase()
+  const filtered = (items || []).filter((x) => !needle || texte(x).toLowerCase().includes(needle))
+  const info = pageInfo(filtered.length, page, perPage)
+  return { info, total: filtered.length, rows: filtered.slice(info.offset, info.offset + info.size) }
+}

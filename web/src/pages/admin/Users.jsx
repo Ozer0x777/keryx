@@ -1,4 +1,7 @@
 import { t as tr } from '../../i18n.js'
+import { useLocalList } from '../../components/LocalList.jsx'
+
+const texteCompte = (u) => [u.username, u.display_name, u.email, u.role, ...u.clients].filter(Boolean).join(' ')
 import { useCallback, useEffect, useId, useState } from 'react'
 import { api } from '../../api.js'
 import { useAuth } from '../../App.jsx'
@@ -103,6 +106,7 @@ function EditUser({ user, clients, self, onSaved, onClose }) {
 export default function Users() {
   const { me } = useAuth()
   const [items, setItems] = useState(null)
+  const list = useLocalList(items, texteCompte, tr('Pages des comptes'))
   const [clients, setClients] = useState([])
   const [form, setForm] = useState(null)
   const [editing, setEditing] = useState(null)
@@ -220,12 +224,13 @@ export default function Users() {
           <div className="row gap end"><button type="button" onClick={() => setForm(null)}>{tr("Annuler")}</button><button className="primary">{tr("Créer")}</button></div>
         </form>
       )}
+      {list.search}
       <div className="table-wrap">
         <table className="grid">
           <thead><tr><th scope="col">{tr("Identifiant")}</th><th scope="col">{tr("Nom")}</th><th scope="col">{tr("Rôle")}</th><th scope="col">{tr("Clients")}</th><th scope="col">{tr("Dernière connexion")}</th><th scope="col">{tr("État")}</th><th scope="col">{tr("Actions")}</th></tr></thead>
           <tbody>
             {items === null && <tr><td colSpan="7" className="muted">{tr("Chargement…")}</td></tr>}
-            {items?.map((u) => (
+            {list.rows?.map((u) => (
               <tr key={u.username}>
                 <td className="mono">{u.username}</td><td>{u.display_name}{u.email && <div className="muted small">{u.email}</div>}</td><td>{ROLES[u.role]}</td>
                 <td className="mono small">{u.clients.join(', ') || '—'}</td>
@@ -243,6 +248,7 @@ export default function Users() {
           </tbody>
         </table>
       </div>
+      {list.pager}
     </section>
   )
 }

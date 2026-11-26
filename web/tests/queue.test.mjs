@@ -1,7 +1,7 @@
 // File de triage : l'état des filtres fait l'aller-retour par l'URL sans perte, et une URL abîmée ne casse pas la liste.
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { cardActive, cardPatch, DEFAULTS, filtersFromSearch, filtersToSearch, OPEN_STATUSES, pageInfo } from '../src/queue.js'
+import { cardActive, cardPatch, DEFAULTS, filtersFromSearch, filtersToSearch, localPage, OPEN_STATUSES, pageInfo } from '../src/queue.js'
 
 test('sans paramètre : filtres par défaut, URL vide', () => {
   assert.deepEqual(filtersFromSearch(''), DEFAULTS)
@@ -64,4 +64,14 @@ test('pagination : bornes, premières et dernières lignes, décalage', () => {
   assert.deepEqual(pageInfo(120, 3, 50), { page: 3, pages: 3, size: 50, offset: 100, from: 101, to: 120 })
   assert.equal(pageInfo(120, 9, 50).page, 3)                                 // au-delà de la fin : dernière page
   assert.equal(pageInfo(120, 0, 50).page, 1)
+})
+
+test('liste locale : recherche sans casse, page bornée, découpe par 50', () => {
+  const items = Array.from({ length: 120 }, (_, i) => ({ nom: i % 2 ? `Analyste ${i}` : `client ${i}` }))
+  const texte = (x) => x.nom
+  const tout = localPage(items, texte, '', 3)
+  assert.equal(tout.total, 120); assert.equal(tout.rows.length, 20); assert.equal(tout.info.page, 3)
+  const cherche = localPage(items, texte, 'ANALYSTE', 9)
+  assert.equal(cherche.total, 60); assert.equal(cherche.info.page, 2); assert.equal(cherche.rows.length, 10)
+  assert.equal(localPage(null, texte, '', 1).total, 0)
 })
