@@ -20,6 +20,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
   utile (dernier état avant la période et changements de la période), et non tout l'historique, conservé sans limite.
 - Administration (comptes, revue des comptes) et table MITRE : recherche et pages de 50 lignes
   (`web/src/components/LocalList.jsx`).
+- README à jour : captures régénérées (dont le parc d'agents Wazuh), pagination, source Wazuh d'un indexeur partagé,
+  sécurité de la publication et des dépendances, nombre de tests ; `e2e/shots.mjs` prend aussi le parc.
 
 ### Sécurité
 - Kit Docker : `install.sh` vérifie toujours la signature de l'image publiée, avec cosign s'il est installé, sinon
