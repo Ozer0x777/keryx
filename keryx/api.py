@@ -493,10 +493,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                               .values(failed_attempts=User.failed_attempts + 1)
                               .returning(User.failed_attempts)).scalar_one()
         db.refresh(user)
+        audit.record(db, user.username, "auth.totp_failed", "user", user.id, None, {"ip": ip})
         if failures >= settings.max_failed_logins:
             _lock(user)
             db.execute(delete(Session).where(Session.user_id == user.id, Session.stage == "password"))
-        audit.record(db, user.username, "auth.totp_failed", "user", user.id, None, {"ip": ip})
+            # PDIS IV.3.9.c (vérifié par la trame) : le verrouillage suite à des échecs a sa propre entrée.
+            audit.record(db, "keryx", "auth.account_locked", "user", user.id, None,
+                         {"compte": user.username, "ip": ip, "echecs": failures, "minutes": settings.lockout_minutes})
         commit(db)
 
     def promote(db: DbSession, s: Session, user: User, response: Response, ip: str, method: str) -> dict:

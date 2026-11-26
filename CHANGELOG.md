@@ -29,6 +29,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 - Accord du client à la recherche VirusTotal (PDIS IV.1.g) : une empreinte ne part chez ce tiers que si le manager a
   enregistré l'accord du client dans « Politique des clients » ; refusée par défaut, y compris pour les clients
   existants (migration 0030).
+- Journal d'audit (PDIS IV.3.9.c) : entrée propre `auth.account_locked` au verrouillage d'un compte après des échecs
+  d'authentification.
 
 ### Documentation
 - Portail par client (ADR-0027) accepté après lecture intégrale du référentiel PDIS v2.0 : décisions (synchronisation,

@@ -120,3 +120,21 @@ def test_revue_des_comptes_reservee_admin(app, db, world):
     assert {"last_login_at", "recovery_codes_left", "locked", "active"} <= set(items["admin"])
     for user in ("analyst_acme", "client_acme"):
         assert login(app, db, user).get("/api/v1/admin/revue-comptes").status_code == 403
+
+
+def test_verrouillage_journalise(app, db, world):
+    """PDIS IV.3.9.c : le verrouillage d'un compte après des échecs d'authentification a sa propre entrée d'audit."""
+    from sqlalchemy import select
+
+    from keryx.models import AuditEntry
+    from .conftest import PASSWORD
+    from fastapi.testclient import TestClient
+    c = TestClient(app)
+    for _ in range(10):
+        r = c.post("/api/v1/auth/login", json={"username": "analyst_acme", "password": PASSWORD})
+        if r.status_code != 200:
+            break
+        c.post("/api/v1/auth/totp", json={"code": "000000"})
+    db.rollback()
+    e = db.scalars(select(AuditEntry).where(AuditEntry.action == "auth.account_locked")).first()
+    assert e is not None and e.details["compte"] == "analyst_acme" and e.details["minutes"] > 0
