@@ -27,6 +27,8 @@ class PolitiqueIn(BaseModel):
     # Contenu du ticket (PDIS IV.2.1.w)
     niveau_classification_defaut: str | None = Field(default=None, max_length=40)
     version_regles: str | None = Field(default=None, max_length=120)
+    # Moyen secondaire de notification (PDIS IV.2.3.b)
+    notif_secours_canal_id: str | None = Field(default=None, max_length=36)
     # Astreinte (ADR-0032)
     astreinte_active: bool | None = None
     astreinte_criticites: list[str] | None = Field(default=None, max_length=4)
@@ -39,6 +41,16 @@ class PolitiqueIn(BaseModel):
     battement_delai_min: int | None = Field(default=None, ge=2, le=1440)
 
 
+ESSAI_SECOURS_JOURS = 182      # PDIS IV.2.3.b : moyen secondaire testé au minimum tous les six mois
+
+
+def secours_vue(t: Tenant) -> dict:
+    from .ids import as_utc
+    teste = t.notif_secours_teste_at
+    en_retard = bool(t.notif_secours_canal_id) and (teste is None or (utcnow() - as_utc(teste)).days >= ESSAI_SECOURS_JOURS)
+    return {"canal_id": t.notif_secours_canal_id, "teste_le": rfc3339(teste), "essai_en_retard": en_retard}
+
+
 def battement_vue(t: Tenant) -> dict:
     return {"active": bool(t.battement_active), "periode_min": int(t.battement_periode_min or 5),
             "delai_min": int(t.battement_delai_min or 15), "dernier": rfc3339(t.battement_at),
@@ -47,11 +59,13 @@ def battement_vue(t: Tenant) -> dict:
 
 def register(app, ctx) -> None:
     get_db, current_user, require_role, commit = ctx.get_db, ctx.current_user, ctx.require_role, ctx.commit
+    settings = ctx.settings
 
     def vue(t: Tenant) -> dict:
         return {"key": t.key, "name": t.name, "tlp_plancher": t.tlp_plancher,
                 "niveau_classification_defaut": t.niveau_classification_defaut or "Non protégé",
                 "version_regles": t.version_regles,
+                "notif_secours": secours_vue(t),
                 "acquittement_rapport": bool(t.acquittement_rapport),
                 "astreinte": {"active": bool(t.astreinte_active),
                               "criticites": list(t.astreinte_criticites or ["Critique"]),
@@ -124,6 +138,37 @@ def register(app, ctx) -> None:
                  "delai": tenant.battement_delai_min}
         return {"battement_avant": avant, "battement": apres} if avant != apres else {}
 
+    @app.post("/api/v1/politique/{client}/essai-secours")
+    def essai_secours(client: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        """Essai du moyen secondaire de notification (PDIS IV.2.3.b), sans donnée de ticket, inscrit au registre."""
+        import json as _json
+        from . import astreinte
+        from .models import Notification
+        require_role(user, "manager")
+        tenant = next((t for t in user.tenants if t.key == client.upper()), None)
+        if tenant is None:
+            raise HTTPException(404, "Client inconnu.")
+        tenant = db.get(Tenant, tenant.id)
+        c = db.get(OnCallChannel, tenant.notif_secours_canal_id) if tenant.notif_secours_canal_id else None
+        if c is None or not c.active:
+            raise HTTPException(422, "Aucun moyen secondaire actif pour ce client.")
+        text = f"[Keryx] Essai du moyen de notification secondaire du client {tenant.key} : aucune action demandée."
+        msg = {"subject": f"[Keryx] Essai du moyen secondaire ({tenant.key})", "text": text,
+               "data": {"type": "keryx.essai_notification", "client": tenant.key}}
+        try:
+            code, statut, erreur = astreinte.deliver(settings, ctx.box, c, msg), "envoye", None
+        except astreinte.DeliveryError as exc:
+            code, statut, erreur = exc.http_status, "echec", exc.reason
+        db.add(Notification(tenant_id=tenant.id, ticket_id=None, channel=c.kind[:16], recipient=c.name[:200],
+                            content=_json.dumps(msg, ensure_ascii=False), status=statut, attempts=1, canal_id=c.id,
+                            motif="essai_secours", http_status=code))
+        if statut == "envoye":
+            tenant.notif_secours_teste_at = utcnow()
+        audit.record(db, user.username, "notification.essai_secours", "tenant", tenant.key, tenant.id,
+                     {"canal": c.name, "statut": statut, "code": code, **({"erreur": erreur} if erreur else {})})
+        commit(db)
+        return {"statut": statut, "code": code, **({"erreur": erreur} if erreur else {}), "notif_secours": secours_vue(tenant)}
+
     @app.get("/api/v1/battements")
     def battements(user: User = Depends(current_user)):
         """État de la chaîne Wazuh vers Keryx des clients de l'équipe (bandeau de l'interface)."""
@@ -153,6 +198,10 @@ def register(app, ctx) -> None:
             trace_astreinte["niveau_classification_defaut"] = tenant.niveau_classification_defaut = body.niveau_classification_defaut
         if "version_regles" in sent:
             trace_astreinte["version_regles"] = tenant.version_regles = (body.version_regles or "").strip() or None
+        if "notif_secours_canal_id" in sent and body.notif_secours_canal_id != tenant.notif_secours_canal_id:
+            tenant.notif_secours_canal_id = canal(db, body.notif_secours_canal_id)
+            tenant.notif_secours_teste_at = None          # nouveau moyen : pas encore essayé
+            trace_astreinte["notif_secours_canal_id"] = tenant.notif_secours_canal_id
         releves = []
         if tlp_rang(nouveau) > tlp_rang(avant):
             # Plancher relevé : les tickets ouverts en dessous montent (plus restrictif, sans risque), chacun tracé.

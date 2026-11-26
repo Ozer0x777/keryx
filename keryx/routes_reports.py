@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
 
@@ -182,6 +183,51 @@ def register(app, ctx) -> None:
                      {"from": out["period"]["from"], "to": out["period"]["to"], "incidents": len(rows)})
         commit(db)
         return out
+
+    @app.get("/api/v1/registre-notifications")
+    def notification_registry(client: str, start: date | None = Query(default=None, alias="from"), to: date | None = None,
+                              format: str = "json", user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        """Registre centralisé et chronologique des notifications d'un client [PDIS IV.2.3.h, i, j]."""
+        from .models import Notification
+        require_role(user, "analyst", "manager")
+        tenants = scope(user, client, db)
+        if format not in ("json", "csv"):
+            raise HTTPException(422, "Format attendu : json ou csv.")
+        s, e = period(start, to) if (start or to) else (_day_start(date(2000, 1, 1)), _day_start(utcnow().date()) + timedelta(days=1))
+        tenant = next(iter(tenants.values()))
+        rows = db.execute(select(Notification, Ticket.ref).outerjoin(Ticket, Ticket.id == Notification.ticket_id)
+                          .where(Notification.tenant_id == tenant.id, Notification.ts >= s, Notification.ts < e)
+                          .order_by(Notification.ts).limit(MAX_TICKETS + 1)).all()
+        if len(rows) > MAX_TICKETS:
+            raise HTTPException(422, "Trop de notifications pour une même requête : restreindre la période.")
+        header = ["date", "ticket", "mode", "destinataire", "objet", "statut", "tentatives", "motif", "code_reponse"]
+
+        def objet(n) -> str:
+            if n.canal_id:
+                try:
+                    return json.loads(n.content).get("subject") or ""
+                except ValueError:
+                    return ""
+            return n.content.partition("\n")[0]
+
+        def line(n, ref) -> list:
+            return [rfc3339(n.ts), ref or "", n.channel, n.recipient, objet(n), n.status, n.attempts or 0,
+                    n.motif or "client", n.http_status if n.http_status is not None else ""]
+
+        audit.record(db, user.username, "notifications.export", "tenant", tenant.key, tenant.id,
+                     {"format": format, "rows": len(rows)})
+        commit(db)
+        if format == "json":
+            return {"client": tenant.key, "generated_at": rfc3339(utcnow()),
+                    "items": [dict(zip(header, line(n, ref), strict=True)) for n, ref in rows]}
+        buf = io.StringIO()
+        w = csv.writer(buf, lineterminator="\r\n")
+        w.writerow(header)
+        for n, ref in rows:
+            w.writerow([csv_cell(v) for v in line(n, ref)])
+        return Response(buf.getvalue(), media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": f'attachment; filename="notifications-{tenant.key}.csv"',
+                                 "Cache-Control": "no-store"})
 
     @app.get("/api/v1/registre")
     def registry(client: str, start: date | None = Query(default=None, alias="from"), to: date | None = None,

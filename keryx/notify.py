@@ -18,6 +18,9 @@ from .config import Settings
 from .ids import as_utc, utcnow
 from .models import Notification, Tenant, Ticket
 
+CRITICITES = ("Faible", "Moyenne", "Élevée", "Critique")     # du moins au plus grave
+ECHECS_NOMINAL = ("echec", "non_envoye_smtp_absent", "sans_destinataire")
+
 
 def message_for(settings: Settings, ticket: Ticket) -> tuple[str, str]:
     subject = f"[Keryx] Nouveau ticket {ticket.ref}"
@@ -32,6 +35,10 @@ def queue_new_ticket(db: DbSession, settings: Settings, tenant: Tenant, ticket: 
     """Enregistre une notification « en_attente » par contact du client (envoi après validation de la transaction)."""
     subject, body = message_for(settings, ticket)
     recipients = [e for e in (tenant.contact_emails or []) if isinstance(e, str) and "@" in e]
+    # Personnes à notifier selon la gravité (PDIS IV.2.3.d) : un contact peut ne recevoir qu'à partir d'une criticité.
+    seuils = tenant.contacts_criticite or {}
+    rang = CRITICITES.index(ticket.criticite_initiale) if ticket.criticite_initiale in CRITICITES else len(CRITICITES)
+    recipients = [e for e in recipients if seuils.get(e) not in CRITICITES or CRITICITES.index(seuils[e]) <= rang]
     out = []
     if not recipients:
         n = Notification(tenant_id=tenant.id, ticket_id=ticket.id, channel="email", recipient="(aucun contact)",
@@ -96,9 +103,40 @@ def send_pending(session_factory, settings: Settings, notification_ids: list[str
             n.ts = utcnow()
             audit.record(db, "keryx", "notification.send", "notification", n.id, n.tenant_id,
                          {"status": n.status, "recipient": n.recipient})
+        echecs = db.scalars(select(Notification).where(Notification.id.in_(notification_ids), Notification.canal_id.is_(None),
+                                                       Notification.status.in_(ECHECS_NOMINAL))).all()
+        secours = [s.id for n in echecs for s in [queue_secours(db, settings, n)] if s]
         db.commit()
     finally:
         db.close()
+    if secours:
+        from .astreinte import send_pending as send_oncall
+        send_oncall(session_factory, settings, secours)
+
+
+def queue_secours(db: DbSession, settings: Settings, n: Notification) -> Notification | None:
+    """Moyen secondaire (PDIS IV.2.3.b) : le courriel d'un ticket a échoué ; le canal secondaire du client reçoit le
+    même contenu (numéro du ticket et lien), une seule fois par ticket."""
+    from .astreinte import _channel
+    if n.ticket_id is None:
+        return None
+    tenant = db.get(Tenant, n.tenant_id)
+    canal = _channel(db, tenant.notif_secours_canal_id) if tenant else None
+    if canal is None or db.scalars(select(Notification).where(Notification.ticket_id == n.ticket_id,
+                                                               Notification.motif == "secours")).first():
+        return None
+    ticket = db.get(Ticket, n.ticket_id)
+    subject, body = message_for(settings, ticket)
+    msg = {"subject": subject, "text": f"{subject}\n{body}",
+           "data": {"type": "keryx.notification", "ticket": ticket.ref, "url": f"{settings.public_url}/tickets/{ticket.ref}"}}
+    import json
+    s = Notification(tenant_id=tenant.id, ticket_id=ticket.id, channel=canal.kind[:16], recipient=canal.name[:200],
+                     content=json.dumps(msg, ensure_ascii=False), status="en_attente", canal_id=canal.id, motif="secours")
+    db.add(s)
+    db.flush()
+    audit.record(db, "keryx", "notification.secours", "ticket", ticket.ref, tenant.id,
+                 {"canal": canal.name, "echec_nominal": n.status})
+    return s
 
 
 def retry_failed(session_factory, settings: Settings, now=None) -> int:

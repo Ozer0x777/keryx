@@ -687,7 +687,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             except AlertRejected as exc:
                 db.rollback()
                 raise HTTPException(422, str(exc))
-            notif_ids = [n.id for n in result.notifications if n.status == "en_attente"]
+            # Toutes les notifications : celles sans destinataire déclenchent aussi le moyen secondaire (PDIS IV.2.3.b).
+            notif_ids = [n.id for n in result.notifications if n.status in ("en_attente", "sans_destinataire")]
             commit(db)
             if result.status == "ignored":
                 return JSONResponse({"status": "ignored", "reason": result.reason}, status_code=202)

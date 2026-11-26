@@ -59,6 +59,7 @@ class ClientCreateIn(BaseModel):
 class ClientPatchIn(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     contact_emails: list[str] | None = Field(default=None, max_length=50)
+    contacts_criticite: dict[str, str] | None = None     # adresse -> criticité minimale (PDIS IV.2.3.d)
     severity_grid: dict | None = None
     retention_months: int | None = Field(default=None, ge=6, le=120)  # PDIS IV.2.2.w : 6 mois minimum
     conserver_contexte: bool | None = None                          # PDIS IV.5.3.6 : toute la prestation
@@ -284,6 +285,7 @@ def register(app, ctx) -> None:
     # ---------------------------------------------------------------- clients
     def client_view(t: Tenant, tickets: int = 0) -> dict:
         return {"key": t.key, "name": t.name, "contact_emails": t.contact_emails or [],
+                "contacts_criticite": t.contacts_criticite or {},
                 "severity_grid": t.severity_grid, "retention_months": t.retention_months,
                 "conserver_contexte": bool(t.conserver_contexte), "sla": t.sla,
                 "max_attachment_mb": t.max_attachment_mb,
@@ -445,6 +447,12 @@ def register(app, ctx) -> None:
         if "contact_emails" in sent:
             t.contact_emails = [e.strip() for e in (body.contact_emails or []) if "@" in e and len(e) <= 254]
             changed.append("contact_emails")
+        if "contacts_criticite" in sent:
+            seuils = {k.strip(): v for k, v in (body.contacts_criticite or {}).items()}
+            if any(v not in ("Faible", "Moyenne", "Élevée", "Critique") for v in seuils.values()):
+                raise HTTPException(422, "Criticité minimale attendue parmi : Faible, Moyenne, Élevée, Critique.")
+            t.contacts_criticite = {k: v for k, v in seuils.items() if k in (t.contact_emails or []) and v != "Faible"} or None
+            changed.append("contacts_criticite")
         if "severity_grid" in sent:
             if body.severity_grid is not None and not _grid_ok(body.severity_grid):
                 raise HTTPException(422, "Grille invalide : 3 niveaux de dommages × 3 importances, gravités connues.")
@@ -652,6 +660,10 @@ def register(app, ctx) -> None:
             "disk_total_mb": usage.total // (1024 * 1024) if usage else None,
             "notifications_failed_24h": failed,
             "silent_sources": len(silent),
+            # PDIS IV.2.3.b : moyen secondaire de notification absent, ou pas essayé depuis six mois.
+            "sans_moyen_secondaire": sorted(t.key for t in db.scalars(select(Tenant)) if not t.notif_secours_canal_id),
+            "secours_a_essayer": sorted(t.key for t in db.scalars(select(Tenant)) if t.notif_secours_canal_id and (
+                t.notif_secours_teste_at is None or (utcnow() - as_utc(t.notif_secours_teste_at)).days >= 182)),
             # Battement de cœur manquant (ADR-0032) : la chaîne Wazuh vers Keryx d'un client est peut-être coupée.
             "battements_manquants": sorted(t.key for t in db.scalars(select(Tenant).where(
                 Tenant.battement_active.is_(True), Tenant.battement_manquant_at.is_not(None)))),
