@@ -324,7 +324,7 @@ class OnCallChannel(Base):
     __tablename__ = "canaux_astreinte"
     id: Mapped[str] = _id()
     name: Mapped[str] = mapped_column(String(80), unique=True)
-    kind: Mapped[str] = mapped_column(String(24))                 # webhook_json | webhook_mattermost | email
+    kind: Mapped[str] = mapped_column(String(24))                 # webhook_json | webhook_mattermost | webhook_teams | email
     target_enc: Mapped[str] = mapped_column(Text)
     target_label: Mapped[str] = mapped_column(String(300))
     secret_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
