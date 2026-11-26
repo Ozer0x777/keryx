@@ -23,5 +23,8 @@
 - **Conséquences** : migration `0022` (colonne `tlp_plancher` du client), routes `GET /api/v1/politique` et
   `PUT /api/v1/politique/{client}`. L'écran « Politique des clients » accueillera aussi les réglages d'astreinte du
   client (ADR-0032).
+- **Exigences** : PDIS v2.0, lu le 26/11/2026 : IV.2.1.h cite le TLP comme modalité de diffusion possible des règles
+  de détection ; IV.2.3.d demande de fixer le niveau de sensibilité des notifications. Le TLP n'est pas une
+  classification au sens d'[IGI_1300] et d'[II_901] (IV.2.1.e, IV.2.1.w) : le plancher ne la remplace pas.
 - **Tests** : `tests/test_politique.py`, `web/tests/tlp.test.mjs`, `e2e/scenarios/99-politique.mjs`, page vérifiée
   par axe-core (`90-accessibilite.mjs`).

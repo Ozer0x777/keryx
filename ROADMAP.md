@@ -39,11 +39,13 @@ Chaque essai réel donne lieu à une correction ou à une note dans la documenta
   son expiration, ADR-0017).
 - Validation de l'export IODEF contre le schéma officiel complet ; PDF des rapports produit côté serveur.
 
-## 5. Portail par client (plus tard, optionnel)
+## 5. Portail par client (optionnel)
 
 Séparer le portail client de la console d'analyse, une machine par client (PDIS IV.3.13.b), pour un prestataire qui
-vise la qualification. Conception proposée dans `docs/conception/portail-par-client.md` et l'ADR-0027 (statut
-« proposé ») ; aucun code avant validation. Le mode tout-en-un reste le produit principal.
+vise la qualification. ADR-0027 accepté le 26/11/2026 après lecture intégrale du référentiel : décisions et découpage
+dans `docs/conception/portail-par-client.md`. Premières étapes, utiles aussi en tout-en-un : liste publiée des
+exigences PDIS non couvertes par ce mode, actions demandées au client, traitement des fichiers chiffrés ou non
+analysables. Le mode tout-en-un reste le produit principal.
 
 ## Souhaité, selon les moyens
 
