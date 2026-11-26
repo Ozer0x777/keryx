@@ -26,6 +26,9 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
   (manager, « Politique des clients », ou `keryx export-client`), sans aucun secret ; destruction complète des
   données d'un client en fin de prestation (`keryx destroy-client`, simulation par défaut, export préalable exigé),
   inscrite au journal d'audit, ses comptes Client désactivés.
+- Accord du client à la recherche VirusTotal (PDIS IV.1.g) : une empreinte ne part chez ce tiers que si le manager a
+  enregistré l'accord du client dans « Politique des clients » ; refusée par défaut, y compris pour les clients
+  existants (migration 0030).
 
 ### Documentation
 - Portail par client (ADR-0027) accepté après lecture intégrale du référentiel PDIS v2.0 : décisions (synchronisation,

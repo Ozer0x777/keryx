@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session as DbSession
 from . import audit
 from . import virustotal as vt
 from .ids import rfc3339
-from .models import Attachment, CustodyEvent, HashLookup, RawAlert, Ticket, User
+from .models import Attachment, CustodyEvent, HashLookup, RawAlert, Ticket, User, Tenant
 from .wazuh_context import clean_text
 
 log = logging.getLogger("keryx.virustotal")
@@ -59,7 +59,7 @@ def ticket_view(db: DbSession, t: Ticket) -> dict:
     déjà faites sur ce ticket, de la plus récente à la plus ancienne."""
     rows = db.scalars(select(HashLookup).where(HashLookup.ticket_id == t.id)
                       .order_by(HashLookup.created_at.desc(), HashLookup.id.desc()).limit(MAX_LOOKUPS_SHOWN)).all()
-    return {"lookups": [lookup_view(r) for r in rows]}
+    return {"lookups": [lookup_view(r) for r in rows], "autorise": bool(db.get(Tenant, t.tenant_id).virustotal_autorise)}
 
 
 def piece_hash(db: DbSession, a: Attachment) -> tuple[str, str]:
@@ -191,6 +191,9 @@ def register(app, ctx) -> None:
         l'empreinte de la pièce lui-même ; « alerte » : l'empreinte doit figurer dans une alerte brute du ticket ;
         « saisie » : empreinte saisie par l'analyste."""
         t = ctx.load_ticket(db, user, ref)
+        if not db.get(Tenant, t.tenant_id).virustotal_autorise:
+            raise HTTPException(403, "Le client n'a pas donné son accord à la recherche d'empreintes chez VirusTotal "
+                                     "(PDIS IV.1.g) : le manager l'enregistre dans « Politique des clients ».")
         attachment, origin = None, None
         if body.source == "piece":
             if body.hash is not None or not body.attachment_id:

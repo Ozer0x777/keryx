@@ -89,6 +89,9 @@ class Tenant(Base):
     contacts_criticite: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     notif_secours_canal_id: Mapped[str | None] = mapped_column(ForeignKey("canaux_astreinte.id"), nullable=True)
     notif_secours_teste_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # PDIS IV.1.g : accord du client avant toute communication d'informations à un tiers. Une recherche VirusTotal
+    # envoie une empreinte à un service externe : refusée tant que le manager n'a pas enregistré cet accord.
+    virustotal_autorise: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     # Délais cibles par gravité, en heures : {"Critique": {"qualification": 1, "resolution": 8}, ...}
     sla: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Taille maximale d'une pièce, en Mio (1 à 20) ; vide = 20 Mio, plafond fixé par le plan [PRIS VI.2.4]
