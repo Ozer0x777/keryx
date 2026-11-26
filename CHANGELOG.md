@@ -8,6 +8,10 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 - Conservation (PDIS IV.5.3.6) : par défaut, le contexte des incidents d'un client (alertes brutes) se conserve
   toute la durée de la prestation ; la purge ne s'applique plus qu'aux clients pour lesquels l'Admin la choisit
   (case « Conserver le contexte des incidents » décochée). Migration 0026, vraie pour les clients existants.
+- Contenu du ticket (PDIS IV.2.1.w) : niveau de classification (Non protégé, Diffusion Restreinte ; défaut réglé par
+  le manager, seul un manager l'abaisse sur un ticket), version de la règle déclenchée (celle de l'alerte, sinon la
+  version du jeu de règles déclarée par le manager), collecteur (manager Wazuh). Dans la fiche, le rapport et le
+  registre. Migration 0027.
 
 ### Documentation
 - Portail par client (ADR-0027) accepté après lecture intégrale du référentiel PDIS v2.0 : décisions (synchronisation,

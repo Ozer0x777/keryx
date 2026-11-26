@@ -27,8 +27,10 @@ export default function TicketReport() {
         <p className="muted small">{t.client} · {t.tlp} · {tr('statut {s}', { s: STATUS[t.status]?.label })}</p>
         <dl className="kv">
           <dt>{tr("Détecté le")}</dt><dd>{formatUtc(t.detected_at)}</dd>
-          <dt>{tr("Règle Wazuh")}</dt><dd>{t.rule.id} ({tr('niveau {level}', { level: t.rule.level })}) — {t.rule.description}</dd>
+          <dt>{tr("Niveau de classification")}</dt><dd>{t.niveau_classification}</dd>
+          <dt>{tr("Règle Wazuh")}</dt><dd>{t.rule.id} ({tr('niveau {level}', { level: t.rule.level })}{t.rule.version ? `, ${tr('version {v}', { v: t.rule.version })}` : ''}) — {t.rule.description}</dd>
           <dt>{tr("Équipement")}</dt><dd>{t.agent.name} {t.agent.ip || ''}</dd>
+          <dt>{tr("Collecteur")}</dt><dd>{t.collecteur || '—'}</dd>
           <dt>{tr("Criticité initiale")}</dt><dd><Severity value={t.criticite_initiale} /></dd>
           <dt>{tr("Gravité qualifiée")}</dt><dd><Severity value={t.gravite} /></dd>
           <dt>{tr("Verdict")}</dt><dd>{VERDICTS[t.verdict] || tr('À qualifier')}</dd>

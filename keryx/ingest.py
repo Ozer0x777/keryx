@@ -246,6 +246,9 @@ def ingest_alert(db: DbSession, settings: Settings, tenant: Tenant, alert: dict,
         rule_groups=_str_list(rule.get("groups")),
         agent_id=agent_id, agent_name=_str(agent.get("name"), 200), agent_ip=agent_ip,
         mitre=mitre, mitre_source=mitre_source, classification=_classification(rule),
+        niveau_classification=tenant.niveau_classification_defaut or "Non protégé",
+        rule_version=_str(rule.get("version"), 120) or tenant.version_regles,
+        collecteur=_str(_dict(alert.get("manager")).get("name"), 200) or None,
         occurrences=1, detected_at=detected, last_seen_at=now, created_at=now, updated_at=now,
     )
     db.add(ticket)

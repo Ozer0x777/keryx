@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session as DbSession
 from . import audit
 from .ids import rfc3339, utcnow
 from .astreinte import CRITICITES, DELAIS_DEFAUT
-from .models import TLP, OnCallChannel, Tenant, Ticket, TicketEvent, User, tlp_rang
+from .models import NIVEAUX_CLASSIFICATION, TLP, OnCallChannel, Tenant, Ticket, TicketEvent, User, tlp_rang
 
 OUVERTS = ("nouveau", "en_evaluation", "en_reponse")
 
@@ -24,6 +24,9 @@ class PolitiqueIn(BaseModel):
     """Seuls les champs envoyés changent."""
     tlp_plancher: str | None = Field(default=None, max_length=20)
     acquittement_rapport: bool | None = None
+    # Contenu du ticket (PDIS IV.2.1.w)
+    niveau_classification_defaut: str | None = Field(default=None, max_length=40)
+    version_regles: str | None = Field(default=None, max_length=120)
     # Astreinte (ADR-0032)
     astreinte_active: bool | None = None
     astreinte_criticites: list[str] | None = Field(default=None, max_length=4)
@@ -47,6 +50,8 @@ def register(app, ctx) -> None:
 
     def vue(t: Tenant) -> dict:
         return {"key": t.key, "name": t.name, "tlp_plancher": t.tlp_plancher,
+                "niveau_classification_defaut": t.niveau_classification_defaut or "Non protégé",
+                "version_regles": t.version_regles,
                 "acquittement_rapport": bool(t.acquittement_rapport),
                 "astreinte": {"active": bool(t.astreinte_active),
                               "criticites": list(t.astreinte_criticites or ["Critique"]),
@@ -60,6 +65,7 @@ def register(app, ctx) -> None:
         # Le manager voit le nom et le type des canaux actifs, jamais leur adresse.
         canaux = db.scalars(select(OnCallChannel).where(OnCallChannel.active.is_(True)).order_by(OnCallChannel.name)).all()
         return {"items": [vue(t) for t in sorted(user.tenants, key=lambda t: t.key)], "tlp": list(TLP),
+                "niveaux_classification": list(NIVEAUX_CLASSIFICATION),
                 "criticites": list(CRITICITES), "canaux": [{"id": c.id, "name": c.name, "kind": c.kind} for c in canaux]}
 
     def canal(db: DbSession, canal_id: str | None) -> str | None:
@@ -141,6 +147,12 @@ def register(app, ctx) -> None:
         if body.acquittement_rapport is not None:
             tenant.acquittement_rapport = body.acquittement_rapport
         trace_astreinte = {**regler_astreinte(db, tenant, body), **regler_battement(tenant, body)}
+        if "niveau_classification_defaut" in sent:
+            if body.niveau_classification_defaut not in NIVEAUX_CLASSIFICATION:
+                raise HTTPException(422, f"Niveau de classification attendu parmi : {', '.join(NIVEAUX_CLASSIFICATION)}.")
+            trace_astreinte["niveau_classification_defaut"] = tenant.niveau_classification_defaut = body.niveau_classification_defaut
+        if "version_regles" in sent:
+            trace_astreinte["version_regles"] = tenant.version_regles = (body.version_regles or "").strip() or None
         releves = []
         if tlp_rang(nouveau) > tlp_rang(avant):
             # Plancher relevé : les tickets ouverts en dessous montent (plus restrictif, sans risque), chacun tracé.

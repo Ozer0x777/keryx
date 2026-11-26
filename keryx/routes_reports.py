@@ -197,12 +197,14 @@ def register(app, ctx) -> None:
         rows.sort(key=lambda t: as_utc(t.detected_at))
         users = {u.id: u for u in db.scalars(select(User).where(User.id.in_({t.assignee_id for t in rows if t.assignee_id})))}
         header = ["reference", "detecte_le", "titre", "criticite_initiale", "gravite", "statut", "verdict", "assigne",
-                  "occurrences", "regle", "agent", "mitre", "qualifie_le", "clos_le"]
+                  "occurrences", "regle", "version_regle", "agent", "collecteur", "niveau_classification", "mitre",
+                  "qualifie_le", "clos_le"]
 
         def line(t: Ticket) -> list:
             return [t.ref, rfc3339(t.detected_at), t.title, t.criticite_initiale, t.gravite or "", t.status,
                     t.verdict or "", users[t.assignee_id].username if t.assignee_id in users else "", t.occurrences,
-                    t.rule_id, t.agent_name, " ".join(m["id"] for m in t.mitre), rfc3339(t.qualified_at) or "",
+                    t.rule_id, t.rule_version or "", t.agent_name, t.collecteur or "", t.niveau_classification,
+                    " ".join(m["id"] for m in t.mitre), rfc3339(t.qualified_at) or "",
                     rfc3339(t.closed_at) or ""]
 
         audit.record(db, user.username, "registry.export", "tenant", tenant.key, tenant.id,
