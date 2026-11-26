@@ -36,6 +36,25 @@ def _mean(values: list[float]) -> float | None:
     return round(sum(values) / len(values), 1) if values else None
 
 
+def _p90(values: list[float]) -> float | None:
+    """90e centile (rang le plus proche) : 9 tickets sur 10 sont acquittés en ce délai ou moins."""
+    if not values:
+        return None
+    v = sorted(values)
+    return round(v[max(0, -(-9 * len(v) // 10) - 1)], 1)
+
+
+def acquittement(tickets: list[Ticket]) -> dict:
+    """Délai d'acquittement en minutes (ADR-0032) par criticité initiale, sur les tickets créés dans la période :
+    moyenne et 90e centile des tickets acquittés, nombre de tickets pas encore acquittés."""
+    out = {}
+    for crit in ("Critique", "Élevée", "Moyenne", "Faible"):
+        rows = [t for t in tickets if t.criticite_initiale == crit]
+        d = [(as_utc(t.acquitted_at) - as_utc(t.detected_at)).total_seconds() / 60 for t in rows if t.acquitted_at]
+        out[crit] = {"moyenne_min": _mean(d), "p90_min": _p90(d), "acquittes": len(d), "non_acquittes": len(rows) - len(d)}
+    return out
+
+
 def csv_cell(value) -> str:
     s = "" if value is None else str(value)
     return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
@@ -117,6 +136,7 @@ def register(app, ctx) -> None:
             "delays": {"qualification_hours_avg": _mean([_hours(t.created_at, t.qualified_at) for t in qualified]),
                        "resolution_hours_avg": _mean([_hours(t.created_at, t.closed_at) for t in closed]),
                        "qualified_count": len(qualified), "closed_count": len(closed)},
+            "acquittement": acquittement(created),
             "sla": {"resolution_within_target": within, "closed": len(closed),
                     "rate_percent": round(100 * within / len(closed)) if closed else None},
             "trend": list(per_day.values()),
@@ -149,6 +169,10 @@ def register(app, ctx) -> None:
         rows = [t for t in load(db, tenants, s, e) if s <= as_utc(t.created_at) < e or (t.closed_at and s <= as_utc(t.closed_at) < e)]
         rows.sort(key=lambda t: as_utc(t.created_at))
         out["client"] = {"key": tenant.key, "name": tenant.name}
+        # Délai d'acquittement : dans le rapport remis au client seulement si le manager l'a choisi (ADR-0032).
+        out["acquittement_inclus"] = bool(tenant.acquittement_rapport)
+        if not tenant.acquittement_rapport:
+            out.pop("acquittement")
         out["generated_at"] = rfc3339(utcnow())
         out["incidents"] = [{"ref": t.ref, "title": t.title, "detected_at": rfc3339(t.detected_at), "status": t.status,
                              "criticite_initiale": t.criticite_initiale, "gravite": t.gravite, "verdict": t.verdict,

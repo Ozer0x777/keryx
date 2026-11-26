@@ -4,6 +4,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api, downloadBlob } from '../api.js'
 import { useAuth } from '../App.jsx'
 import { tlpAuMoins, tlpSous } from '../tlp.js'
+import { fmtMin } from '../components/Acquittement.jsx'
 import { ActionStatus, useActionStatus } from '../components/ActionStatus.jsx'
 import { Severity, Status, Tlp } from '../components/Badges.jsx'
 import { useConfirm } from '../components/Confirm.jsx'
@@ -216,7 +217,15 @@ export default function Ticket() {
               <dt>{tr('Assigné à')}</dt>
               <dd>{t.assignee
                 ? <>{t.assignee}{t.assignee_active === false ? ` ${tr('(inactif)')}` : ''}</>
-                : open ? <span className="pill warn">{tr('Non assigné')}</span> : tr('Personne')}</dd>
+                : open ? <span className="pill warn">{tr('Non assigné')}</span> : tr('Personne')}
+                {open && t.assignee_username !== me.username && (
+                  <> <button type="button" className="small" onClick={() => run(() => api(`/tickets/${enc}/prise-en-charge`, { method: 'POST' }), tr('Ticket pris en charge.'))}>{tr('Je prends')}</button></>
+                )}</dd>
+            </div>
+            <div>
+              <dt>{tr('Acquitté')}</dt>
+              <dd title={tr("De la détection Wazuh à la première action de l'équipe (prise en charge, affectation, statut, qualification)")}>
+                {t.acquitted_at ? tr('en {d}, par {who}', { d: fmtMin(t.acquittement_s / 60), who: t.acquitted_by }) : open ? <span className="pill warn">{tr('Pas encore')}</span> : tr('Jamais')}</dd>
             </div>
           </dl>
         )}

@@ -1,4 +1,5 @@
-"""Politique du client (ADR-0033), réglée par le manager pour les clients dont il a la charge : TLP plancher.
+"""Politique du client (ADR-0033, ADR-0032), réglée par le manager pour les clients dont il a la charge : TLP plancher,
+délai d'acquittement dans le rapport remis au client.
 
 Les tickets et les pièces d'un client naissent à son TLP plancher ; un analyste ne peut pas descendre en dessous, un
 manager le peut sur un ticket avec un motif tracé (keryx/api.py, qualification). Relever le plancher relève les tickets
@@ -19,14 +20,17 @@ OUVERTS = ("nouveau", "en_evaluation", "en_reponse")
 
 
 class PolitiqueIn(BaseModel):
+    """Seuls les champs envoyés changent."""
     tlp_plancher: str | None = Field(default=None, max_length=20)
+    acquittement_rapport: bool | None = None
 
 
 def register(app, ctx) -> None:
     get_db, current_user, require_role, commit = ctx.get_db, ctx.current_user, ctx.require_role, ctx.commit
 
     def vue(t: Tenant) -> dict:
-        return {"key": t.key, "name": t.name, "tlp_plancher": t.tlp_plancher}
+        return {"key": t.key, "name": t.name, "tlp_plancher": t.tlp_plancher,
+                "acquittement_rapport": bool(t.acquittement_rapport)}
 
     @app.get("/api/v1/politique")
     def politiques(user: User = Depends(current_user)):
@@ -40,11 +44,14 @@ def register(app, ctx) -> None:
         if tenant is None:
             raise HTTPException(404, "Client inconnu.")       # même réponse qu'un client inexistant
         tenant = db.get(Tenant, tenant.id)
-        nouveau = body.tlp_plancher or None
+        sent = body.model_fields_set
+        nouveau = (body.tlp_plancher or None) if "tlp_plancher" in sent else tenant.tlp_plancher
         if nouveau is not None and nouveau not in TLP:
             raise HTTPException(422, f"Marquage attendu parmi : {', '.join(TLP)}.")
-        avant = tenant.tlp_plancher
+        avant, rapport_avant = tenant.tlp_plancher, bool(tenant.acquittement_rapport)
         tenant.tlp_plancher = nouveau
+        if body.acquittement_rapport is not None:
+            tenant.acquittement_rapport = body.acquittement_rapport
         releves = []
         if tlp_rang(nouveau) > tlp_rang(avant):
             # Plancher relevé : les tickets ouverts en dessous montent (plus restrictif, sans risque), chacun tracé.
@@ -56,6 +63,8 @@ def register(app, ctx) -> None:
                     t.tlp, t.updated_at = nouveau, now
                     releves.append(t.ref)
         audit.record(db, user.username, "client.politique", "tenant", tenant.key, tenant.id,
-                     {"tlp_plancher_avant": avant, "tlp_plancher": nouveau, "tickets_releves": len(releves)})
+                     {"tlp_plancher_avant": avant, "tlp_plancher": nouveau, "tickets_releves": len(releves),
+                      "acquittement_rapport_avant": rapport_avant,
+                      "acquittement_rapport": bool(tenant.acquittement_rapport)})
         commit(db)
         return {**vue(tenant), "tickets_releves": releves}

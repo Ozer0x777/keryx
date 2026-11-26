@@ -1,3 +1,4 @@
+import { AcquittementTable } from '../components/Acquittement.jsx'
 import { t as tr } from '../i18n.js'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -51,6 +52,11 @@ export default function Dashboard() {
               <dl className="kv"><dt>{tr("Qualification")}</dt><dd>{fmtH(d.delays.qualification_hours_avg)} <span className="muted small">({d.delays.qualified_count} ticket(s))</span></dd>
                 <dt>{tr("Résolution")}</dt><dd>{fmtH(d.delays.resolution_hours_avg)} <span className="muted small">({d.delays.closed_count} ticket(s))</span></dd></dl>
               <p className="muted small">{tr('Mesurés depuis la création du ticket. Les cibles se règlent par client (Administration > Clients).')}</p>
+            </section>
+            <section className="card section" aria-label={tr("Délai d'acquittement")}>
+              <h2>{tr("Délai d'acquittement")}</h2>
+              <AcquittementTable data={d.acquittement} caption={tr("Délai d'acquittement par criticité")} />
+              <p className="muted small">{tr("De la détection Wazuh à la première action de l'équipe, pour les tickets créés sur la période. Une consultation ou un commentaire n'acquittent pas.")}</p>
             </section>
             <section className="card section" aria-label={tr("Tickets ouverts par gravité")}><h2>{tr("Ouverts par gravité")}</h2>
               <BarList label={tr("Tickets ouverts par gravité")} colors={SEV_COLORS} rows={Object.entries(d.open_by_severity).map(([label, value]) => ({ label, value, key: label }))} /></section>
