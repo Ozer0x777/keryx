@@ -243,7 +243,7 @@ services:
   clamav:
     <<: *durci
     profiles: [antivirus]
-    image: clamav/clamav:1.4.7@sha256:b7357e2c1c59480628839df301b0d27923561389b36cf341911e1dd9e02cdd05
+    image: clamav/clamav:1.5.5@sha256:64e30c0bf976198024deb3dc6d5cfe2485fb969c0f73549ba0fdb364b9469614
     user: "100:101"                       # utilisateur « clamav » de l'image
     entrypoint: ["/init-unprivileged"]    # point d'entrée de l'image prévu pour un démarrage sans root
     volumes:
