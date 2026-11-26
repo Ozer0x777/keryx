@@ -1,0 +1,42 @@
+# Fuzzing des entrées non fiables avec Atheris (fuzz/README.md) : 1 minute par cible sur chaque demande de fusion,
+# 10 minutes chaque semaine et à la demande. Une entrée qui viole une propriété de sécurité est gardée en artefact.
+name: Fuzzing
+on:
+  pull_request:
+  schedule:
+    - cron: "7 3 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cible: [fuzz_assainissement, fuzz_alerte_wazuh]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: pip install --require-hashes -r requirements.lock && pip install --require-hashes -r requirements-fuzz.lock
+      - name: Fuzzing
+        env:
+          CIBLE: ${{ matrix.cible }}
+          EVENEMENT: ${{ github.event_name }}
+        run: |
+          DUREE=600
+          [ "$EVENEMENT" = "pull_request" ] && DUREE=60
+          mkdir -p corpus defauts
+          python "fuzz/$CIBLE.py" corpus -max_total_time="$DUREE" -artifact_prefix=defauts/ -print_final_stats=1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: defaut-${{ matrix.cible }}
+          path: defauts/
+          retention-days: 30

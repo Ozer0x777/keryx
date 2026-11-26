@@ -18,7 +18,7 @@ def _etapes():
 
 
 def test_workflows_presents():
-    assert {p.name for p in WORKFLOWS} >= {"ci.yml", "codeql.yml", "publication.yml", "scorecard.yml", "veille-vulnerabilites.yml"}
+    assert {p.name for p in WORKFLOWS} >= {"ci.yml", "codeql.yml", "fuzzing.yml", "publication.yml", "scorecard.yml", "veille-vulnerabilites.yml"}
 
 
 @pytest.mark.parametrize("ident,etape", list(_etapes()), ids=lambda v: v if isinstance(v, str) else "")
