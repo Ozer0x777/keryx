@@ -224,14 +224,19 @@ URL="https://$DOMAINE$SUFFIXE"
 
 # ------------------------------------------------------------------------------------------------ image
 titre "Image de Keryx"
-# Image publiée (KERYX_IMAGE) : récupérée, et sa signature TOUJOURS vérifiée (cosign installé, sinon son image
-# officielle épinglée par empreinte) ; sinon construite ici. Seule exception, explicite : KERYX_VERIFIER_SIGNATURE=non,
+# Image publiée (KERYX_IMAGE) : récupérée, et sa signature TOUJOURS vérifiée (cosign 3 ou plus récent s'il est installé,
+# sinon son image officielle épinglée par empreinte) ; sinon construite ici. Depuis la 0.9.0, les images sont signées
+# par cosign 3 (nouveau format de preuve) : cosign 2 ne les trouve pas, il n'est donc pas utilisé. Seule exception, explicite : KERYX_VERIFIER_SIGNATURE=non,
 # pour une image copiée dans un registre interne après avoir été vérifiée (docs/publication.md, registre relais).
 # Les deux variables exigées par docker-compose.yml n'existent pas encore à la première installation.
-COSIGN_IMAGE="gcr.io/projectsigstore/cosign:v2.4.1@sha256:b03690aa52bfe94054187142fba24dc54137650682810633901767d8a3e15b31"
+COSIGN_IMAGE="gcr.io/projectsigstore/cosign:v3.1.4@sha256:0f06154836d2de34f887a5c273506d52ca43edaa1d9e53e6510fa78a48f69c2d"
 EPINGLEE=""
+cosign_local() {
+    command -v cosign >/dev/null 2>&1 || return 1
+    cosign version 2>/dev/null | grep -Eq '^GitVersion:[[:space:]]+v?([3-9]|[1-9][0-9]+)\.'
+}
 cosign_verify() {
-    if command -v cosign >/dev/null 2>&1; then cosign verify "$@"; else docker run --rm "$COSIGN_IMAGE" verify "$@"; fi
+    if cosign_local; then cosign verify "$@"; else docker run --rm "$COSIGN_IMAGE" verify "$@"; fi
 }
 if [ "$NOUVEAU" = 1 ]; then PUBLIEE=$D_IMAGE; else PUBLIEE=$(env_lire KERYX_IMAGE); fi
 dc_init() { if [ "$NOUVEAU" = 1 ]; then env KERYX_SECRET_KEY=construction POSTGRES_PASSWORD=construction KERYX_IMAGE="$PUBLIEE" docker compose "$@"; else dc "$@"; fi; }

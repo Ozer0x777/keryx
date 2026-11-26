@@ -10,7 +10,8 @@ Quand une étiquette `vX.Y.Z` est poussée, le workflow `.github/workflows/publi
    d'étiquette `latest` : on déploie un numéro, pas une cible mouvante) ;
 3. attache à l'image une attestation de provenance (SLSA, construite par GitHub Actions depuis ce commit) et une SBOM ;
 4. **signe l'image par son empreinte** avec cosign, en signature sans clé : le certificat de signature, émis par
-   Sigstore, nomme ce workflow et l'étiquette qui l'a déclenché ;
+   Sigstore, nomme ce workflow et l'étiquette qui l'a déclenché. La signature est aussitôt vérifiée comme
+   `install.sh` la vérifiera : une signature que l'installation refuserait arrête la publication ;
 5. joint à la version l'archive des sources de l'étiquette et une SBOM CycloneDX des dépendances, **signe la liste
    de leurs empreintes SHA-256** (`SHA256SUMS`) de la même façon, sans clé (preuve : `SHA256SUMS.sigstore.json`),
    et joint leur attestation de provenance SLSA (`keryx-X.Y.Z.intoto.jsonl`, à partir de la
@@ -25,12 +26,17 @@ KERYX_IMAGE=ghcr.io/ozer0x777/keryx KERYX_VERSION=0.8.4 ./install.sh
 ```
 
 `install.sh` récupère l'image au lieu de la construire, l'inscrit dans `.env`, et **vérifie toujours sa signature** :
-avec `cosign` s'il est installé, sinon avec l'image officielle de cosign, épinglée par empreinte, lancée par Docker.
+avec `cosign` s'il est installé en version 3 ou plus récente, sinon avec l'image officielle de cosign 3, épinglée
+par empreinte, lancée par Docker.
 Une signature absente ou invalide arrête l'installation. La seule exception est explicite,
 `KERYX_VERIFIER_SIGNATURE=non`, pour une image copiée dans un registre interne après vérification (voir ci-dessous) ;
 l'installation l'affiche en avertissement.
 
 ## Vérifier une image à la main
+
+**cosign 3 ou plus récent est nécessaire.** Depuis la 0.9.0, les images sont signées par cosign 3, qui range la
+preuve sous le nouveau format de Sigstore : cosign 2 répond « no signatures found ». cosign 3 vérifie aussi les
+images plus anciennes (jusqu'à la 0.8.4), signées par cosign 2.
 
 ```bash
 cosign verify ghcr.io/ozer0x777/keryx:0.8.4 \
@@ -49,6 +55,9 @@ dépôt interdit aussi de déplacer ou de supprimer une étiquette `v*` une fois
 version désigne toujours le même commit. Elle ne prouve pas que le code est exempt de défaut.
 
 ## Vérifier les fichiers d'une version
+
+Avec cosign 3. Avec cosign 2, ajouter `--new-bundle-format` pour les versions signées par cosign 3 (0.9.0 et
+suivantes).
 
 Depuis la 0.8.2 (la 0.8.0 et la 0.8.1 n'ont que leur image signée). Télécharger `SHA256SUMS`,
 `SHA256SUMS.sigstore.json` et les fichiers voulus depuis la page de la version, puis :

@@ -4,6 +4,12 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+### Modifié
+- Signature des versions avec cosign 3 (3.1.4) : nouveau format de preuve de Sigstore. `install.sh` vérifie avec
+  cosign 3 (installé, sinon son image officielle épinglée) et ignore un cosign 2, qui ne trouve pas ces signatures ;
+  les images déjà publiées (jusqu'à la 0.8.4) restent vérifiées. Le workflow de publication vérifie chaque signature
+  comme `install.sh` avant de créer la version.
+
 ### Ajouté
 - Astreinte et escalade de l'équipe (ADR-0032, partie 2) : l'Admin déclare des canaux (webhook JSON générique signé,
   Mattermost / Slack, Microsoft Teams par Workflows, courriel de l'équipe ; adresse et secret chiffrés, jamais réaffichés) ; le manager choisit, par
