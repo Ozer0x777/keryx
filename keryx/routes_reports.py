@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from . import audit, sla, wazuh_agents
 from .ids import as_utc, rfc3339, utcnow
-from .models import Tenant, Ticket, User
+from .models import AuditEntry, Notification, RawAlert, Tenant, Ticket, User, UserTenant
 
 MAX_DAYS = 366
 MAX_TICKETS = 20000
@@ -54,6 +54,85 @@ def acquittement(tickets: list[Ticket]) -> dict:
         d = [(as_utc(t.acquitted_at) - as_utc(t.detected_at)).total_seconds() / 60 for t in rows if t.acquitted_at]
         out[crit] = {"moyenne_min": _mean(d), "p90_min": _p90(d), "acquittes": len(d), "non_acquittes": len(rows) - len(d)}
     return out
+
+
+def _stats(values: list[float]) -> dict:
+    return {"min": round(min(values), 1), "moyenne": _mean(values), "max": round(max(values), 1), "n": len(values)} if values \
+        else {"min": None, "moyenne": None, "max": None, "n": 0}
+
+
+def _mois(start: datetime, end: datetime) -> list[tuple[str, datetime, datetime]]:
+    """Mois de la période : (« AAAA-MM », début, fin exclue), bornés à la période."""
+    out, d = [], start.replace(day=1)
+    while d < end:
+        nxt = (d.replace(day=28) + timedelta(days=4)).replace(day=1)
+        out.append((d.strftime("%Y-%m"), max(d, start), min(nxt, end)))
+        d = nxt
+    return out
+
+
+def indicateurs_pdis(db, tenants: dict, tickets: list[Ticket], start: datetime, end: datetime) -> dict:
+    """Indicateurs minimaux de PDIS IV.5.1.e, f, g que Keryx peut produire (tickets, notifications, comptes du portail).
+    Les indicateurs d'évènements, de collecteurs et de règles relèvent de Wazuh."""
+    ids = list(tenants)
+    dans = lambda v: v is not None and start <= as_utc(v) < end      # noqa: E731
+    clos = [t for t in tickets if dans(t.closed_at)]
+    crees = [t for t in tickets if dans(t.created_at)]
+    # f) durée moyenne de qualification par typologie (catégorie ETSI ISI) et par gravité
+    qualif: dict = {}
+    for t in crees:
+        if t.qualified_at:
+            typo = (t.isi or {}).get("category") or "non classé"
+            qualif.setdefault(typo, {}).setdefault(t.gravite or t.criticite_initiale, []).append(_hours(t.created_at, t.qualified_at))
+    # f) délai entre détection et première notification envoyée au client, par gravité
+    premieres = dict(db.execute(select(Notification.ticket_id, func.min(Notification.ts)).where(
+        Notification.tenant_id.in_(ids), Notification.status == "envoye", Notification.canal_id.is_(None),
+        Notification.ticket_id.in_([t.id for t in crees])).group_by(Notification.ticket_id)).all())
+    notif: dict = {}
+    for t in crees:
+        if t.id in premieres:
+            notif.setdefault(t.criticite_initiale, []).append((as_utc(premieres[t.id]) - as_utc(t.detected_at)).total_seconds() / 60)
+    # e, g) séries mensuelles
+    alertes = Counter(as_utc(r).strftime("%Y-%m") for r in db.scalars(select(RawAlert.received_at).where(
+        RawAlert.tenant_id.in_(ids), RawAlert.received_at >= start, RawAlert.received_at < end)))
+    tous = db.scalars(select(Ticket).where(Ticket.tenant_id.in_(ids), Ticket.created_at < end)).all()
+    par_mois = []
+    for mois, debut, fin in _mois(start, end):
+        dedans = lambda v, d=debut, f=fin: v is not None and d <= as_utc(v) < f      # noqa: E731
+        ouverts = Counter(t.criticite_initiale for t in tous
+                          if as_utc(t.created_at) < fin and (t.closed_at is None or as_utc(t.closed_at) >= fin))  # noqa: B023
+        par_mois.append({"mois": mois, "crees": sum(dedans(t.created_at) for t in tous),
+                         "clos": sum(dedans(t.closed_at) for t in tous),
+                         "averes": sum(dedans(t.qualified_at) and t.verdict == "vrai_positif_avere" for t in tous),
+                         "alertes": alertes.get(mois, 0),
+                         "ouverts_cumules": {c: ouverts.get(c, 0) for c in ("Critique", "Élevée", "Moyenne", "Faible")},
+                         "resolution_moyenne_h": _mean([_hours(t.created_at, t.closed_at) for t in tous if dedans(t.closed_at)])})
+    # e) les 20 règles les plus déclenchées (alertes reçues sur la période)
+    top = db.execute(select(Ticket.rule_id, Ticket.rule_description, func.count(RawAlert.id)).join(
+        RawAlert, RawAlert.ticket_id == Ticket.id).where(RawAlert.tenant_id.in_(ids), RawAlert.received_at >= start,
+        RawAlert.received_at < end).group_by(Ticket.rule_id, Ticket.rule_description)
+        .order_by(func.count(RawAlert.id).desc()).limit(20)).all()
+    # e) comptes du portail et authentifications des comptes Client
+    clients = db.scalars(select(User).join(UserTenant, UserTenant.user_id == User.id).where(
+        UserTenant.tenant_id.in_(ids), User.role == "client")).unique().all()
+    noms = {u.username for u in clients}
+    # horodatage du journal : texte RFC 3339 (figé dans l'empreinte), comparé et découpé comme tel
+    auth = Counter((e.action, e.ts[:7]) for e in db.scalars(select(AuditEntry).where(
+        AuditEntry.action.in_(("auth.login_success", "auth.login_failed")), AuditEntry.actor.in_(noms),
+        AuditEntry.ts >= rfc3339(start), AuditEntry.ts < rfc3339(end)))) if noms else Counter()
+    return {
+        "resolution_h": _stats([_hours(t.created_at, t.closed_at) for t in clos]),
+        "qualification_par_typologie_h": {k: {g: _mean(v) for g, v in d.items()} for k, d in qualif.items()},
+        "detection_notification_min": {c: _stats(v) for c, v in notif.items()},
+        "par_mois": par_mois,
+        "regles_les_plus_declenchees": [{"regle": r, "description": d, "alertes": n} for r, d, n in top],
+        "portail": {"comptes_actifs": sum(u.active for u in clients),
+                    "comptes_crees_par_mois": dict(Counter(as_utc(u.created_at).strftime("%Y-%m") for u in clients
+                                                           if start <= as_utc(u.created_at) < end)),
+                    "authentifications_par_mois": [{"mois": m, "reussies": auth.get(("auth.login_success", m), 0),
+                                                    "echouees": auth.get(("auth.login_failed", m), 0)}
+                                                   for m, _, _ in _mois(start, end)]},
+    }
 
 
 def csv_cell(value) -> str:
@@ -138,6 +217,7 @@ def register(app, ctx) -> None:
                        "resolution_hours_avg": _mean([_hours(t.created_at, t.closed_at) for t in closed]),
                        "qualified_count": len(qualified), "closed_count": len(closed)},
             "acquittement": acquittement(created),
+            "indicateurs_pdis": indicateurs_pdis(db, tenants, tickets, start, end),
             "sla": {"resolution_within_target": within, "closed": len(closed),
                     "rate_percent": round(100 * within / len(closed)) if closed else None},
             "trend": list(per_day.values()),
@@ -171,6 +251,7 @@ def register(app, ctx) -> None:
         rows.sort(key=lambda t: as_utc(t.created_at))
         out["client"] = {"key": tenant.key, "name": tenant.name}
         # Délai d'acquittement : dans le rapport remis au client seulement si le manager l'a choisi (ADR-0032).
+        out.pop("indicateurs_pdis", None)      # indicateurs de pilotage : supports des comités, pas du rapport client
         out["acquittement_inclus"] = bool(tenant.acquittement_rapport)
         if not tenant.acquittement_rapport:
             out.pop("acquittement")
