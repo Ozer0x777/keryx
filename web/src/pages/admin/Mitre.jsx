@@ -1,10 +1,14 @@
 import { t as tr } from '../../i18n.js'
+import { useLocalList } from '../../components/LocalList.jsx'
+
+const texteMitre = (m) => [m.rule_id, m.rule_group, m.technique, m.name, m.tactic, m.created_by].filter(Boolean).join(' ')
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../api.js'
 import { useConfirm } from '../../components/Confirm.jsx'
 
 export default function Mitre() {
   const [items, setItems] = useState(null)
+  const list = useLocalList(items, texteMitre, tr('Pages de la table MITRE'))
   const [error, setError] = useState('')
   const [msg, setMsg] = useState('')
   const [sugg, setSugg] = useState([])
@@ -72,18 +76,20 @@ export default function Mitre() {
         <label>{tr("Tactique")}<input name="tactic" placeholder={tr("Credential Access")} /></label>
         <button className="primary">{tr("Ajouter")}</button>
       </form>
+      {list.search}
       <div className="table-wrap"><table className="grid">
         <thead><tr><th scope="col">{tr("Règle / groupe")}</th><th scope="col">{tr("Technique")}</th><th scope="col">{tr("Nom")}</th><th scope="col">{tr("Tactique")}</th><th scope="col">{tr("Ajoutée par")}</th><th scope="col"><span className="sr-only">{tr("Actions")}</span></th></tr></thead>
         <tbody>
           {items === null && <tr><td colSpan="6" className="muted">{tr("Chargement…")}</td></tr>}
           {items?.length === 0 && <tr><td colSpan="6" className="muted">{tr("Aucune correspondance.")}</td></tr>}
-          {items?.map((m) => (
+          {list.rows?.map((m) => (
             <tr key={m.id}><td className="mono small">{m.rule_id ? tr('règle {id}', { id: m.rule_id }) : tr('groupe {id}', { id: m.rule_group })}</td>
               <td className="mono">{m.technique}</td><td>{m.name}</td><td>{m.tactic}</td><td className="small">{m.created_by}</td>
               <td><button type="button" className="small-btn danger" onClick={() => remove(m)}>{tr("Supprimer")}</button></td></tr>
           ))}
         </tbody>
       </table></div>
+      {list.pager}
       {dialog}
     </section>
   )
