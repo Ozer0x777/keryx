@@ -21,7 +21,7 @@ Quand une étiquette `vX.Y.Z` est poussée, le workflow `.github/workflows/publi
 
 ```bash
 cd deploy/docker
-KERYX_IMAGE=ghcr.io/ozer0x777/keryx KERYX_VERSION=0.8.3 ./install.sh
+KERYX_IMAGE=ghcr.io/ozer0x777/keryx KERYX_VERSION=0.8.4 ./install.sh
 ```
 
 `install.sh` récupère l'image au lieu de la construire, l'inscrit dans `.env`, et **vérifie toujours sa signature** :
@@ -33,12 +33,12 @@ l'installation l'affiche en avertissement.
 ## Vérifier une image à la main
 
 ```bash
-cosign verify ghcr.io/ozer0x777/keryx:0.8.3 \
+cosign verify ghcr.io/ozer0x777/keryx:0.8.4 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-github-workflow-trigger push \
   --certificate-identity-regexp '(?i)^https://github\.com/Ozer0x777/keryx/\.github/workflows/publication\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$'
 
-gh attestation verify oci://ghcr.io/ozer0x777/keryx:0.8.3 --repo Ozer0x777/keryx \
+gh attestation verify oci://ghcr.io/ozer0x777/keryx:0.8.4 --repo Ozer0x777/keryx \
   --signer-workflow Ozer0x777/keryx/.github/workflows/publication.yml          # provenance
 ```
 

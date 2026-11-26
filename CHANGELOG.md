@@ -4,6 +4,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+## [0.8.4] : 2026-11-26
+
 ### Ajouté
 - Liste des tickets paginée : 25, 50 ou 100 par page, page et taille de page dans l'URL (retour depuis une fiche,
   bouton Précédent du navigateur, lien partagé), retour à la page 1 quand un filtre change, barre de pages commune
