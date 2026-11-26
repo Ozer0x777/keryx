@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api, downloadBlob } from '../api.js'
 import { useAuth } from '../App.jsx'
+import { tlpAuMoins, tlpSous } from '../tlp.js'
 import { ActionStatus, useActionStatus } from '../components/ActionStatus.jsx'
 import { Severity, Status, Tlp } from '../components/Badges.jsx'
 import { useConfirm } from '../components/Confirm.jsx'
@@ -150,7 +151,7 @@ export default function Ticket() {
         form.append('description', description)
         form.append('collected_at', new Date().toISOString())
         form.append('method', isClient ? tr('Capture fournie par le client') : tr("Capture d'écran par l'analyste"))
-        form.append('sensitivity', t.tlp)
+        form.append('sensitivity', tlpAuMoins(t.tlp, t.tlp_plancher))
         form.append('embedded', 'true')
         return api(`/tickets/${enc}/attachments`, { method: 'POST', form })
       },
@@ -471,7 +472,7 @@ function Attachments({ t, enc, me, run, vt }) {
           <label>{tr("Description (obligatoire)")}<input name="description" minLength={3} required /></label>
           <div className="grid2">
             <label>{tr("Date et heure de collecte (UTC)")}<input type="datetime-local" name="collected_at" defaultValue={utcInputNow()} required /></label>
-            <label>{tr("Sensibilité")}<select name="sensitivity" defaultValue={t.tlp}>{TLPS.map((x) => <option key={x}>{x}</option>)}</select></label>
+            <label>{tr("Sensibilité")}<select name="sensitivity" defaultValue={tlpAuMoins(t.tlp, t.tlp_plancher)}>{TLPS.map((x) => <option key={x} disabled={tlpSous(x, t.tlp_plancher)}>{x}</option>)}</select></label>
           </div>
           <label>{tr("Méthode de collecte (obligatoire)")}<input name="method" minLength={3} placeholder={tr("ex. export du journal du pare-feu")} required /></label>
           {!isClient && <label className="check"><input type="checkbox" name="visible_client" value="true" /> {tr("Visible par le client")}</label>}
@@ -492,7 +493,7 @@ function Attachments({ t, enc, me, run, vt }) {
           <label>{tr("Méthode de collecte")}<input name="method" minLength={3} required /></label>
           <label>{tr("Empreinte SHA-256")}<input name="sha256" pattern="[0-9a-fA-F]{64}" className="mono" required /></label>
           <label>{tr("Lieu de conservation")}<input name="location" minLength={3} placeholder={tr("ex. coffre hors ligne n°2")} required /></label>
-          <label>{tr("Sensibilité")}<select name="sensitivity" defaultValue={t.tlp}>{TLPS.map((x) => <option key={x}>{x}</option>)}</select></label>
+          <label>{tr("Sensibilité")}<select name="sensitivity" defaultValue={tlpAuMoins(t.tlp, t.tlp_plancher)}>{TLPS.map((x) => <option key={x} disabled={tlpSous(x, t.tlp_plancher)}>{x}</option>)}</select></label>
           <div className="row gap end"><button type="button" onClick={() => setExt(null)}>{tr("Annuler")}</button><button className="primary">{tr("Déclarer")}</button></div>
           {status?.error && <ActionStatus state={status} />}
         </form>
@@ -708,7 +709,11 @@ function Comments({ t, enc, isClient, me, run, onImage, templates }) {
 }
 
 function Qualification({ t, enc, run, open }) {
+  const { me } = useAuth()
   const [v, setV] = useState({ verdict: t.verdict || '', dommages: t.dommages || '', importance: t.importance, impact: t.impact || '', risque: t.risque || '', tlp: t.tlp })
+  // TLP plancher du client (ADR-0033) : l'analyste ne descend pas en dessous ; le manager le peut, avec un motif.
+  const [motifTlp, setMotifTlp] = useState('')
+  const sousPlancher = v.tlp !== t.tlp && tlpSous(v.tlp, t.tlp_plancher)
   const verdictLocked = !['nouveau', 'en_evaluation'].includes(t.status)
   const [status, track] = useActionStatus()
   // Modifié = différent de ce que la fiche affiche (rechargée après un enregistrement).
@@ -717,6 +722,7 @@ function Qualification({ t, enc, run, open }) {
   useUnsaved('qualification', tr('qualification'), dirty)
   const save = () => {
     const json = { importance: v.importance, impact: v.impact, risque: v.risque, tlp: v.tlp }
+    if (sousPlancher) json.motif_tlp = motifTlp
     if (v.verdict && !verdictLocked) json.verdict = v.verdict
     if (v.dommages) json.dommages = v.dommages
     track(() => run(() => api(`/tickets/${enc}/qualification`, { method: 'POST', json }), tr('Qualification enregistrée.')))
@@ -760,7 +766,18 @@ function Qualification({ t, enc, run, open }) {
       <div className="row between gravity"><span className="muted">{tr("Gravité qualifiée")}</span><Severity value={t.gravite} /></div>
       <label>{tr("Impact constaté")}<textarea rows="2" value={v.impact} disabled={!open} onChange={(e) => setV({ ...v, impact: e.target.value })} /></label>
       <label>{tr("Risque induit")}<textarea rows="2" value={v.risque} disabled={!open} onChange={(e) => setV({ ...v, risque: e.target.value })} /></label>
-      <label>{tr("Marquage")}<select value={v.tlp} disabled={!open} onChange={(e) => setV({ ...v, tlp: e.target.value })}>{TLPS.map((x) => <option key={x}>{x}</option>)}</select></label>
+      <label>{tr("Marquage")}<select value={v.tlp} disabled={!open} aria-describedby={t.tlp_plancher ? `tlp-plancher-${t.ref}` : undefined}
+        onChange={(e) => setV({ ...v, tlp: e.target.value })}>
+        {TLPS.map((x) => <option key={x} disabled={me.role !== 'manager' && x !== t.tlp && tlpSous(x, t.tlp_plancher)}>{x}</option>)}
+      </select></label>
+      {t.tlp_plancher && <p className="field-hint" id={`tlp-plancher-${t.ref}`}>{me.role === 'manager'
+        ? tr('TLP plancher de ce client : {p}. Descendre en dessous demande un motif, inscrit au registre.', { p: t.tlp_plancher })
+        : tr('TLP plancher de ce client : {p}. On peut monter, pas descendre en dessous (politique fixée par le manager).', { p: t.tlp_plancher })}</p>}
+      {sousPlancher && me.role === 'manager' && (
+        <label>{tr('Motif du passage sous le TLP plancher (10 caractères au moins)')}
+          <textarea rows="2" value={motifTlp} required minLength={10} onChange={(e) => setMotifTlp(e.target.value)} />
+        </label>
+      )}
       {open && <button type="button" className="primary wide" onClick={save}>{tr("Enregistrer")}</button>}
       <ActionStatus state={status} />
     </Section>
