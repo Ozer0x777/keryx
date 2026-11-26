@@ -308,6 +308,8 @@ button.stat-filter.on { border-color: var(--accent); background: #F1F5FD; box-sh
 /* Ligne d'état de la liste : nombre de tickets à gauche, heure du relevé et bouton à droite */
 .list-bar { margin: 0 0 8px; min-height: 30px; }
 .list-count { margin: 0; font-size: 13px; color: var(--muted); }
+.pager { justify-content: center; align-items: center; margin: 12px 0 4px; }
+.pager select { min-height: 44px; }
 .refresh { margin-left: auto; }
 .bulkbar { display: flex; align-items: center; gap: 16px; padding: 10px 14px; margin-bottom: 12px; flex-wrap: wrap; }
 tr.overdue td:first-child + td, tr.overdue td.mono { }

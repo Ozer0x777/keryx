@@ -4,6 +4,11 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+### Ajouté
+- Liste des tickets paginée : 25, 50 ou 100 par page, page et taille de page dans l'URL (retour depuis une fiche,
+  bouton Précédent du navigateur, lien partagé), retour à la page 1 quand un filtre change, barre de pages commune
+  (`web/src/components/Pager.jsx`) ; auparavant, 200 tickets au plus étaient affichés.
+
 ### Sécurité
 - Kit Docker : `install.sh` vérifie toujours la signature de l'image publiée, avec cosign s'il est installé, sinon
   avec l'image officielle de cosign épinglée par empreinte ; auparavant, sans cosign, il signalait l'absence de

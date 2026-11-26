@@ -1,9 +1,10 @@
 // File de triage : l'état de la liste (filtres, tri, vue) vit dans l'URL (?status=…&sort=…), pour qu'il soit restauré
 // au retour d'un ticket, partageable et conservé au rechargement. Fonctions pures, testées par npm test.
-export const DEFAULTS = { status: '', severity: '', client: '', rex_en_attente: false, critical_unassigned: false, awaiting_client: false, incomplete: false, q: '', assignee: '', overdue: false, sort: 'created', order: 'desc' }
+export const DEFAULTS = { status: '', severity: '', client: '', rex_en_attente: false, critical_unassigned: false, awaiting_client: false, incomplete: false, q: '', assignee: '', overdue: false, sort: 'created', order: 'desc', page: '1', per_page: '50' }
 const BOOLEANS = ['rex_en_attente', 'overdue', 'critical_unassigned', 'awaiting_client', 'incomplete']
 export const SORTS = ['created', 'updated', 'detected', 'ref', 'status', 'occurrences', 'criticite', 'gravite']
 export const SEVERITIES = ['Critique', 'Élevée', 'Moyenne', 'Faible']   // ordre de tri métier, du plus grave au moins grave
+export const PER_PAGE = ['25', '50', '100']                              // tickets par page (l'API en accepte 500 au plus)
 export const OPEN_STATUSES = 'nouveau,en_evaluation,en_reponse'
 export const TO_QUALIFY = 'nouveau,en_evaluation'
 
@@ -19,7 +20,19 @@ export function filtersFromSearch(search) {
   if (!SORTS.includes(f.sort)) f.sort = DEFAULTS.sort
   if (f.order !== 'asc' && f.order !== 'desc') f.order = DEFAULTS.order
   if (f.severity && !SEVERITIES.includes(f.severity)) f.severity = ''
+  if (!PER_PAGE.includes(f.per_page)) f.per_page = DEFAULTS.per_page
+  if (!/^[1-9][0-9]{0,5}$/.test(f.page)) f.page = DEFAULTS.page
   return f
+}
+
+// Pagination de la liste : page demandée ramenée dans les bornes, première et dernière ligne affichées (comptées à
+// partir de 1) et décalage à demander à l'API. Sans ticket : une seule page, vide.
+export function pageInfo(total, page, perPage) {
+  const size = Math.max(1, Number(perPage) || Number(DEFAULTS.per_page))
+  const pages = Math.max(1, Math.ceil((Number(total) || 0) / size))
+  const current = Math.min(Math.max(1, Number(page) || 1), pages)
+  const offset = (current - 1) * size
+  return { page: current, pages, size, offset, from: total ? offset + 1 : 0, to: Math.min(offset + size, Number(total) || 0) }
 }
 
 // Écrit les filtres dans l'URL : seules les valeurs qui diffèrent du défaut y figurent (URL courte et stable).

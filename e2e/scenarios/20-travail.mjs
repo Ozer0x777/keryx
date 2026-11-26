@@ -53,7 +53,7 @@ export default async ({ stack, BASE, check, login }) => {
   await m.waitForSelector('tbody a')
   check(/Mis à jour à \d\d:\d\d UTC/.test(await m.locator('.refresh').innerText()), 'heure du dernier relevé affichée (UTC)')
   const lists = []
-  m.on('request', (r) => { if (/\/api\/v1\/tickets\?.*limit=200/.test(r.url())) lists.push(r.url()) })   // la liste, pas la synthèse
+  m.on('request', (r) => { if (/\/api\/v1\/tickets\?.*limit=\d+/.test(r.url())) lists.push(r.url()) })   // la liste, pas la synthèse
   await m.getByRole('button', { name: 'Actualiser' }).click()
   await until(async () => lists.length >= 1, 'relevé manuel')
   check(lists[0].includes('sort=criticite'), 'Actualiser relance la liste avec les filtres en cours')
