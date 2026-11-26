@@ -392,12 +392,12 @@ def test_silencieux_ne_lit_que_la_source_du_client(papp, db, world, tmp_path):
     api = FakeWazuhApi(d, reuse_pki=True).start()
     try:
         configure(papp, db, api, wazuh_indexer_url=idx.url, wazuh_indexer_user=IDX_USER, wazuh_indexer_password=IDX_PASSWORD,
-                  wazuh_indexer_source="manager-acme")
+                  wazuh_indexer_source="manager:manager-acme")
         a = login(papp, db, "analyst_acme")
         assert a.post("/api/v1/parc/ACME/refresh").status_code == 200
         assert by_id(a.get("/api/v1/parc").json())["003"]["silent"] is True
         body = [x for x in idx.searches() if "aggs" in x][0]
-        assert {"term": {"manager.name": "manager-acme"}} in body["query"]["bool"]["filter"][2]["bool"]["should"]
+        assert {"term": {"manager.name": "manager-acme"}} in body["query"]["bool"]["filter"]
     finally:
         api.stop()
         idx.stop()

@@ -40,6 +40,7 @@ export default function Review() {
               </tbody>
             </table>
           </div>
+          {list.empty}
           {list.pager}
         </div>
       </section>

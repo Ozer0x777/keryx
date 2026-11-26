@@ -37,12 +37,20 @@ function WazuhSettings({ client, v, set }) {
           <input className="mono" value={v.pattern} maxLength={128} spellCheck={false} placeholder="wazuh-alerts-*" onChange={(e) => set({ pattern: e.target.value })} />
         </label>
       </div>
-      <label>{tr("Source Wazuh dans l'indexeur : nom du manager ou du cluster de ce client")}
-        <input className="mono" value={v.source} maxLength={128} spellCheck={false} placeholder="wazuh-manager-acme"
-          aria-describedby={`${id}-source`} onChange={(e) => set({ source: e.target.value })} />
-      </label>
-      <p className="field-hint wz-hint" id={`${id}-source`}>{tr("Obligatoire si un autre client lit le même indexeur avec un motif d'index qui peut recouvrir celui-ci : seuls les événements dont manager.name ou cluster.name porte ce nom sont lus. Deux clusters laissés à leur nom par défaut, « wazuh », ne se distinguent pas : renommer l'un d'eux dans Wazuh, ou donner à chaque client un motif d'index distinct.")}</p>
       <p className="field-hint wz-hint" id={`${id}-url`}>{tr("Adresses refusées : boucle locale, lien local, services de métadonnées. Changer l'adresse efface le compte enregistré : il faut le ressaisir.")}</p>
+      <div className="grid2">
+        <label>{tr("Source Wazuh dans l'indexeur : type")}
+          <select value={v.sourceKind} aria-describedby={`${id}-source`} onChange={(e) => set({ sourceKind: e.target.value })}>
+            <option value="manager">{tr("Manager (champ manager.name)")}</option>
+            <option value="cluster">{tr("Cluster (champ cluster.name)")}</option>
+          </select>
+        </label>
+        <label>{tr("Source Wazuh : nom du manager ou du cluster de ce client")}
+          <input className="mono" value={v.sourceName} maxLength={128} spellCheck={false} placeholder="wazuh-manager-acme"
+            aria-describedby={`${id}-source`} onChange={(e) => set({ sourceName: e.target.value })} />
+        </label>
+      </div>
+      <p className="field-hint wz-hint" id={`${id}-source`}>{tr("Obligatoire dès qu'un autre client lit un indexeur Wazuh avec un motif d'index qui peut recouvrir celui-ci : seuls les événements dont le champ choisi porte ce nom sont lus. Ces clients doivent utiliser le même type de source, avec des noms différents. Deux clusters laissés à leur nom par défaut, « wazuh », ne se distinguent pas : renommer l'un d'eux dans Wazuh, ou donner à chaque client un motif d'index distinct.")}</p>
       <div className="grid2">
         <label>{tr("Compte en lecture seule : identifiant")}
           <input value={v.user} maxLength={128} autoComplete="off" spellCheck={false} disabled={v.dropCredentials}
@@ -120,7 +128,9 @@ function ClientEditor({ client, onSaved }) {
   const [grid, setGrid] = useState(client.severity_grid || null)
   const [sla, setSla] = useState(client.sla || {})
   const [wz, setWz] = useState({
-    dashboard: client.wazuh_dashboard_url || '', indexer: client.wazuh_indexer_url || '', pattern: client.wazuh_index_pattern || '', source: client.wazuh_indexer_source || '',
+    dashboard: client.wazuh_dashboard_url || '', indexer: client.wazuh_indexer_url || '', pattern: client.wazuh_index_pattern || '',
+    sourceKind: (client.wazuh_indexer_source || '').startsWith('cluster:') ? 'cluster' : 'manager',
+    sourceName: (client.wazuh_indexer_source || '').replace(/^(manager|cluster):/, ''),
     user: '', password: '', dropCredentials: false, verify: client.wazuh_tls_verify !== false, ca: client.wazuh_ca_pem || '',
     apiUrl: client.wazuh_api_url || '', apiGroup: client.wazuh_api_group || '', apiUser: '', apiPassword: '', apiDrop: false,
   })
@@ -143,7 +153,7 @@ function ClientEditor({ client, onSaved }) {
       max_attachment_mb: maxMb === '' ? null : Number(maxMb),
       severity_grid: grid, sla: Object.keys(cleanSla).length ? cleanSla : null,
       wazuh_dashboard_url: wz.dashboard.trim() || null, wazuh_indexer_url: wz.indexer.trim() || null,
-      wazuh_index_pattern: wz.pattern.trim() || null, wazuh_indexer_source: wz.source.trim() || null, wazuh_tls_verify: wz.verify, wazuh_ca_pem: wz.ca.trim() || null,
+      wazuh_index_pattern: wz.pattern.trim() || null, wazuh_indexer_source: wz.sourceName.trim() ? `${wz.sourceKind}:${wz.sourceName.trim()}` : null, wazuh_tls_verify: wz.verify, wazuh_ca_pem: wz.ca.trim() || null,
       wazuh_api_url: wz.apiUrl.trim() || null, wazuh_api_group: wz.apiGroup.trim() || null,
       ...credentials, ...apiCredentials } }))
     if (!ok) return

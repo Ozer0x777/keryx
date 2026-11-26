@@ -20,5 +20,7 @@ export function useLocalList(items, texte, label) {
     </div>
   )
   const pager = total > info.size && <Pager info={info} label={label} onPage={setPage} />
-  return { rows: items ? rows : null, search, pager }
+  // Recherche sans résultat : dit clairement, sous le tableau vide.
+  const empty = items && items.length > 0 && total === 0 && <p className="muted">{tr('Aucun résultat pour « {q} ».', { q: q.trim() })}</p>
+  return { rows: items ? rows : null, search, pager, empty }
 }

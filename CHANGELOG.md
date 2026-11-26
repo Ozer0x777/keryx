@@ -28,9 +28,21 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 - Cloisonnement d'un indexeur Wazuh partagé entre clients (ADR-0031) : deux clients sur le même indexeur avec des
   motifs d'index différents mais qui se recouvrent (`wazuh-alerts-*` et `wazuh-alerts-4.x-*`) étaient acceptés, et
   l'analyste de l'un pouvait voir dans la fiche d'un ticket les événements de l'agent de même numéro de l'autre.
-  Chaque client a désormais une source Wazuh (nom de son manager ou de son cluster), exigée et distincte dans ce
-  cas, appliquée à chaque recherche et revérifiée sur chaque événement reçu ; un réglage antérieur dans ce cas est
-  refusé jusqu'à ce qu'un Admin règle les sources. Relevé par une revue externe ; aucune fuite constatée.
+  Chaque client a désormais une source Wazuh typée (`manager:<nom>` ou `cluster:<nom>`), exigée, du même type et
+  distincte dès que des motifs d'index peuvent se recouvrir, quel que soit l'indexeur (les adresses ne sont pas
+  comparées : un même serveur s'écrit de bien des façons), appliquée à chaque recherche et revérifiée sur chaque
+  événement reçu ; la lecture est refusée tant que tous les clients concernés ne sont pas réglés, chacun pouvant
+  l'être séparément. Relevé par une revue externe, durci par une revue du code ; aucune fuite constatée.
+- Publication : une étiquette qui ne désigne pas un commit de `main`, ou qui n'a pas la forme `vX.Y.Z`, ne publie
+  rien (sinon une image construite depuis un commit non relu aurait été signée comme une version), et une règle du
+  dépôt interdit de déplacer ou de supprimer une étiquette `v*` ; Grype analyse
+  l'image publiée elle-même, par son empreinte, avant sa signature.
+- Kit Docker : `install.sh` vérifie l'empreinte exacte de l'image récupérée (et non son étiquette), avec une identité
+  de signature ancrée sur une étiquette `vX.Y.Z` poussée, puis fige l'image dans `.env` (`KERYX_VERSION=X.Y.Z@sha256:…`).
+  Vérification de la provenance limitée au dépôt et au workflow de publication (`docs/publication.md`).
+- Ingestion : les caractères de contrôle C1, les caractères qui inversent le sens d'écriture et les demi-codets
+  isolés (`\ud800`, qui faisait encore échouer l'ingestion) sont retirés des valeurs lues dans l'alerte ; les clés ne
+  sont plus modifiées (deux clés ne peuvent plus fusionner). L'alerte brute reste conservée telle quelle.
 
 ## [0.8.3] : 2026-11-26
 

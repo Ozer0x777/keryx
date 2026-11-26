@@ -54,9 +54,10 @@ def api_config(settings, box, tenant: Tenant, db: DbSession) -> wa.ApiConfig:
 def indexer_config(settings, box, tenant: Tenant) -> wz.IndexerConfig | None:
     if not wz.context_configured(tenant):
         return None
-    if (session := object_session(tenant)) is not None and wz.shared_without_source(session, tenant) is not None:
-        log.warning("Parc d'agents : indexeur partagé sans source Wazuh propre au client %s, dernier événement non lu",
-                    tenant.key)
+    session = object_session(tenant)
+    if session is None or wz.source_conflict(session, tenant) is not None:
+        log.warning("Parc d'agents : source Wazuh du client %s non distincte de celle d'un autre client, dernier "
+                    "événement non lu", tenant.key)
         return None     # la carte « Silencieux » reste masquée plutôt que de mêler les événements de deux clients
     return wz.IndexerConfig(endpoint=wz.parse_indexer_url(tenant.wazuh_indexer_url, settings.wazuh_allow_loopback),
                             username=box.decrypt(tenant.wazuh_indexer_user, f"wazuh_indexer_user:{tenant.id}"),

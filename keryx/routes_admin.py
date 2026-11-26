@@ -396,11 +396,11 @@ def register(app, ctx) -> None:
             # Indexeur partagé : les numéros d'agent ne sont uniques que par manager Wazuh. Deux clients sur le même
             # indexeur avec des motifs d'index qui peuvent se recouvrir liraient les événements l'un de l'autre : chacun
             # doit alors avoir sa source Wazuh (manager ou cluster), différente [PDIS IV.3.8.g ; ADR-0031].
-            other = wz.shared_without_source(db, t, settings.wazuh_allow_loopback)
+            other = wz.source_conflict(db, t, strict=False)
             if other is not None:
-                raise wz.ConfigError(f"Le client {other.key} lit déjà cet indexeur avec un motif d'index qui peut recouvrir "
-                                     "celui-ci : donner à chaque client sa source Wazuh (nom de son manager ou de son "
-                                     "cluster), différente pour chacun, ou des motifs d'index distincts.")
+                raise wz.ConfigError(f"Le client {other.key} lit un indexeur Wazuh avec un motif d'index qui peut recouvrir "
+                                     "celui-ci : donner à chaque client sa source Wazuh, du même type (manager ou cluster) "
+                                     "et de nom différent, ou des motifs d'index distincts.")
         dashboard = urlsplit(t.wazuh_dashboard_url).hostname if t.wazuh_dashboard_url else None
         return {"tableau_de_bord": dashboard, "api": wz.parse_indexer_url(t.wazuh_api_url, True).label if t.wazuh_api_url else None,
                 "groupe_api": t.wazuh_api_group, "identifiants_api": api_credentials,

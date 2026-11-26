@@ -43,19 +43,24 @@ class IngestResult:
 # Caractères de contrôle retirés de toute valeur lue dans l'alerte (sauf tabulation et fins de ligne) : PostgreSQL
 # refuse le caractère nul dans un texte, et une alerte qui le contient ferait échouer l'ingestion, donc perdre le
 # ticket (trouvé par fuzz/fuzz_alerte_wazuh.py). L'alerte brute conservée garde l'original, échappé par JSON.
-_CONTROLES = dict.fromkeys([*range(0, 9), 11, 12, *range(14, 32), 127])
+# Sont aussi retirés : les contrôles C1, les caractères qui inversent ou isolent le sens d'écriture (un titre pourrait
+# s'afficher autrement qu'il ne se lit, à la manière de « Trojan Source ») et les demi-codets isolés (`\ud800`, accepté
+# par JSON mais ni encodable en UTF-8 ni enregistrable).
+_CONTROLES = dict.fromkeys([*range(0, 9), 11, 12, *range(14, 32), *range(0x7F, 0xA0), *range(0x202A, 0x202F),
+                            *range(0x2066, 0x206A), *range(0xD800, 0xE000)])
 _UNE_LIGNE = {9: " ", 10: " ", 13: " "}
 _PROFONDEUR_MAX = 32
 
 
 def _sans_controle(v, profondeur: int = 0):
+    """Valeurs nettoyées ; les clés ne le sont pas (deux clés pourraient sinon fusionner, « src\x00ip » écrasant
+    « srcip ») : une clé abîmée ne correspond simplement à aucun champ lu par Keryx."""
     if isinstance(v, str):
         return v.translate(_CONTROLES)
     if profondeur >= _PROFONDEUR_MAX:
         return None  # au-delà, rien n'est lu par Keryx (l'original reste dans l'alerte brute)
     if isinstance(v, dict):
-        return {_sans_controle(k, profondeur + 1) if isinstance(k, str) else k: _sans_controle(x, profondeur + 1)
-                for k, x in v.items()}
+        return {k: _sans_controle(x, profondeur + 1) for k, x in v.items()}
     if isinstance(v, list):
         return [_sans_controle(x, profondeur + 1) for x in v]
     return v
@@ -175,7 +180,13 @@ def ingest_alert(db: DbSession, settings: Settings, tenant: Tenant, alert: dict,
     detected = parse_wazuh_timestamp(_str(alert.get("timestamp"), 40))
     now = utcnow()
     raw = json.dumps(original, ensure_ascii=False, sort_keys=True)
-    raw_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    try:
+        raw_bytes = raw.encode("utf-8")
+    except UnicodeEncodeError:
+        # Demi-codet isolé dans l'alerte : l'original est gardé échappé (\ud800), seule forme enregistrable.
+        raw = json.dumps(original, ensure_ascii=True, sort_keys=True)
+        raw_bytes = raw.encode("ascii")
+    raw_hash = hashlib.sha256(raw_bytes).hexdigest()
     wazuh_id = _str(alert.get("id"), 64) or None
 
     # Sérialise l'ingestion par client (PostgreSQL : verrou de ligne ; SQLite : sans effet, déjà sérialisé) :

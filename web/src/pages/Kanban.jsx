@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import { Severity, Tlp } from '../components/Badges.jsx'
@@ -12,7 +12,8 @@ const columnStatuses = (s) => (s === 'cloture' ? 'cloture,faux_positif' : s)
 const PER_COLUMN = 50     // cartes par colonne : les plus récentes ; les autres sont dans la liste paginée
 
 export default function Kanban() {
-  const [columns, setColumns] = useState(KANBAN_COLUMNS.map((status) => ({ status, cards: [], total: 0 })))
+  const [columns, setColumns] = useState(KANBAN_COLUMNS.map((status) => ({ status, cards: [], total: null })))
+  const request = useRef(0)
   const [mine, setMine] = useState(false)
   const [message, setMessage] = useState('')       // succès : zone live en tête de tableau
   const [loadError, setLoadError] = useState('')
@@ -22,9 +23,13 @@ export default function Kanban() {
 
   // Une requête par colonne : chaque colonne montre ses cartes les plus récentes et son vrai total, quel que soit
   // le nombre de tickets (auparavant, 500 tickets au plus pour tout le tableau).
-  const load = useCallback(() => Promise.all(KANBAN_COLUMNS.map((status) => api('/tickets', {
-    params: { status: columnStatuses(status), limit: PER_COLUMN, assignee: mine ? 'me' : undefined },
-  }).then((r) => ({ status, cards: r.items, total: r.total ?? r.items.length })))).then(setColumns), [mine])
+  const load = useCallback(() => {
+    const n = ++request.current       // « Mes tickets seulement » basculé vite : seule la dernière demande compte
+    return Promise.all(KANBAN_COLUMNS.map((status) => api('/tickets', {
+      params: { status: columnStatuses(status), limit: PER_COLUMN, assignee: mine ? 'me' : undefined },
+    }).then((r) => ({ status, cards: r.items, total: r.total ?? r.items.length }))))
+      .then((cols) => { if (n === request.current) setColumns(cols) })
+  }, [mine])
   useEffect(() => { setLoadError(''); load().catch((e) => setLoadError(e.message)) }, [load])
 
   const move = async (ticket, target) => {
@@ -72,7 +77,7 @@ export default function Kanban() {
             <header className="column-head">
               <span className="dot" aria-hidden="true" style={{ background: STATUS[col.status].color }} />
               <h2>{STATUS[col.status].label}</h2>
-              <span className="count">{col.total}</span>
+              <span className="count">{col.total ?? '…'}</span>
             </header>
             <p className="muted small">{STATUS[col.status].phase}</p>
             {col.cards.map((t) => (
@@ -98,7 +103,7 @@ export default function Kanban() {
                 {refused?.ref === t.ref && <p className="error action-status" role="alert">{refused.text}</p>}
               </article>
             ))}
-            {col.total > col.cards.length && (
+            {col.total !== null && col.total > col.cards.length && (
               <Link className="small more" to={`/tickets?${new URLSearchParams({ status: columnStatuses(col.status), ...(mine ? { assignee: 'me' } : {}) })}`}>
                 {tr('Voir les {n} autres dans la liste', { n: col.total - col.cards.length })}
               </Link>

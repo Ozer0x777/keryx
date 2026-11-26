@@ -125,3 +125,25 @@ def test_caracteres_de_controle_de_l_alerte(app, db, world, alert):
     assert "sshd: brute force" in t.title and "srv-web -01" in t.title
     raw = db.scalars(select(RawAlert).where(RawAlert.ticket_id == t.id)).one()
     assert "\x00" not in raw.payload and "\\u0000" in raw.payload   # original gardé, échappé par JSON
+
+
+def test_demi_codet_inversion_d_ecriture_et_cles(app, db, world, alert):
+    """Revue : un demi-codet isolé (\\ud800, accepté par JSON) faisait échouer l'ingestion ; les caractères qui inversent
+    le sens d'écriture passaient dans le titre ; une clé abîmée pouvait en écraser une autre en se nettoyant."""
+    a = alert(ALERT_SSH_BRUTEFORCE)
+    a["rule"]["description"] = "sshd: brute\u202eforce\ud800\x85"
+    a["agent"]["name"] = "srv\u2066-web-01"
+    a["full_log"] = "journal \ud800 brut"
+    a["data"]["src\x00ip"] = "6.6.6.6"
+    # JSON déjà échappé, comme l'envoie Wazuh (le client HTTP de test refuse d'encoder un demi-codet)
+    from fastapi.testclient import TestClient
+    import json
+    r = TestClient(app).post("/api/v1/ingest/wazuh", content=json.dumps(a, ensure_ascii=True),
+                             headers={"Authorization": f"Bearer {world['keys']['ACME']}", "Content-Type": "application/json"})
+    assert r.status_code == 201, r.text
+    t = db.scalars(select(Ticket).where(Ticket.ref == r.json()["ticket"])).one()
+    for c in ("\u202e", "\u2066", "\ud800", "\x85"):
+        assert c not in t.title and c not in t.body_html and c not in t.rule_description
+    assert "185.220.101.4" in t.body_html and "6.6.6.6" not in t.body_html   # srcip d'origine, pas la clé abîmée
+    raw = db.scalars(select(RawAlert).where(RawAlert.ticket_id == t.id)).one()
+    assert "\\ud800" in raw.payload and len(raw.sha256) == 64            # original gardé, échappé
