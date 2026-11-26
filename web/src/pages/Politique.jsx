@@ -17,10 +17,14 @@ function Client({ c, canaux, onSaved }) {
   const [versionRegles, setVersionRegles] = useState(c.version_regles || '')
   const [rapport, setRapport] = useState(Boolean(c.acquittement_rapport))
   const [ast, setAst] = useState(c.astreinte)
+  const [secours, setSecours] = useState(c.notif_secours.canal_id || '')
+  const [essai, setEssai] = useState(c.notif_secours)
+  const [essaiStatus, trackEssai, setEssaiStatus] = useActionStatus()
   const [bat, setBat] = useState({ active: c.battement.active, periode_min: c.battement.periode_min, delai_min: c.battement.delai_min })
   const [status, track, setStatus] = useActionStatus()
   const changed = plancher !== (c.tlp_plancher || '') || rapport !== Boolean(c.acquittement_rapport)
     || niveau !== c.niveau_classification_defaut || versionRegles !== (c.version_regles || '')
+    || secours !== (c.notif_secours.canal_id || '')
     || JSON.stringify(ast) !== JSON.stringify(c.astreinte)
     || bat.active !== c.battement.active || bat.periode_min !== c.battement.periode_min || bat.delai_min !== c.battement.delai_min
   const set = (patch) => setAst((a) => ({ ...a, ...patch }))
@@ -29,6 +33,7 @@ function Client({ c, canaux, onSaved }) {
     const json = {
       tlp_plancher: plancher || null, acquittement_rapport: rapport,
       niveau_classification_defaut: niveau, version_regles: versionRegles,
+      notif_secours_canal_id: secours || null,
       astreinte_active: ast.active, astreinte_criticites: ast.criticites, astreinte_delais: ast.delais,
       astreinte_canal_id: ast.canal_id || null, escalade_canal_id: ast.escalade_canal_id || null,
       battement_active: bat.active, battement_periode_min: bat.periode_min, battement_delai_min: bat.delai_min,
@@ -37,6 +42,7 @@ function Client({ c, canaux, onSaved }) {
     if (!r) return
     onSaved(r)
     setAst(r.astreinte)
+    setEssai(r.notif_secours)
     setBat({ active: r.battement.active, periode_min: r.battement.periode_min, delai_min: r.battement.delai_min })
     setStatus({ ok: r.tickets_releves.length
       ? tr('Enregistré : {n} ticket(s) ouvert(s) relevé(s) au plancher.', { n: r.tickets_releves.length })
@@ -65,6 +71,26 @@ function Client({ c, canaux, onSaved }) {
             <input value={versionRegles} maxLength={120} placeholder={tr('ex. wazuh-4.9.1 + règles locales 2026-11-20')} onChange={(e) => setVersionRegles(e.target.value)} /></label>
         </div>
         <p className="field-hint">{tr("Reportés sur chaque nouveau ticket (PDIS IV.2.1.w). Seul un manager abaisse ensuite le niveau d'un ticket.")}</p>
+
+        <h3>{tr('Notification du client')}</h3>
+        <label>{tr('Moyen secondaire de notification (si le courriel échoue)')}
+          <select value={secours} onChange={(e) => setSecours(e.target.value)} disabled={canaux.length === 0}>
+            <option value="">{tr('Aucun')}</option>
+            {canaux.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+          </select></label>
+        <p className={essai.essai_en_retard ? 'banner warn' : 'field-hint'}>
+          {essai.canal_id
+            ? (essai.teste_le ? tr('Dernier essai réussi : {d}.', { d: formatUtc(essai.teste_le) }) : tr('Jamais essayé.')) + ' ' + tr('Le référentiel demande un essai au moins tous les six mois (PDIS IV.2.3.b).')
+            : tr('Le référentiel demande deux moyens de notification (PDIS IV.2.3.b) : choisir un canal déclaré par l\u2019Admin, par exemple un webhook vers un service de SMS.')}
+        </p>
+        {essai.canal_id && secours === essai.canal_id && (
+          <div><button type="button" onClick={async () => {
+            const r = await trackEssai(() => api(`/politique/${encodeURIComponent(c.key)}/essai-secours`, { method: 'POST' }))
+            if (!r) return
+            setEssai(r.notif_secours)
+            setEssaiStatus(r.statut === 'envoye' ? { ok: tr('Essai envoyé.') } : { error: tr('Échec de l\u2019essai ({e}{code}).', { e: r.erreur, code: r.code ? `, ${r.code}` : '' }) })
+          }}>{tr('Essayer le moyen secondaire')}</button><ActionStatus state={essaiStatus} /></div>
+        )}
 
         <h3>{tr('Astreinte')}</h3>
         {canaux.length === 0

@@ -83,6 +83,12 @@ class Tenant(Base):
     # client, et version du jeu de règles de détection en service (reportée sur chaque ticket créé).
     niveau_classification_defaut: Mapped[str | None] = mapped_column(String(40), nullable=True)
     version_regles: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # Stratégie de notification (PDIS IV.2.3.b, d) : criticité minimale par contact (adresse -> criticité ; absent :
+    # toutes) réglée par l'Admin avec les contacts ; moyen secondaire (un canal déclaré par l'Admin, choisi par le
+    # manager), utilisé quand le courriel échoue, et date de son dernier essai réussi (au moins tous les six mois).
+    contacts_criticite: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    notif_secours_canal_id: Mapped[str | None] = mapped_column(ForeignKey("canaux_astreinte.id"), nullable=True)
+    notif_secours_teste_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Délais cibles par gravité, en heures : {"Critique": {"qualification": 1, "resolution": 8}, ...}
     sla: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Taille maximale d'une pièce, en Mio (1 à 20) ; vide = 20 Mio, plafond fixé par le plan [PRIS VI.2.4]

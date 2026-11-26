@@ -22,6 +22,9 @@ export default function Reports() {
     try { setR(await api('/reports/period', { params: { client: f.client, from: f.from, to: f.to } })) } catch (x) { setError(x.message); setR(null) }
   }
   useEffect(() => { if (f.client) generate() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const notifCsv = async () => {
+    try { downloadBlob(await api('/registre-notifications', { params: { client: f.client, from: f.from, to: f.to, format: 'csv' } }), `notifications-${f.client}-${f.from}_${f.to}.csv`) } catch (x) { setError(x.message) }
+  }
   const csv = async () => {
     try { downloadBlob(await api('/registre', { params: { client: f.client, from: f.from, to: f.to, format: 'csv' } }), `registre-${f.client}-${f.from}_${f.to}.csv`) } catch (x) { setError(x.message) }
   }
@@ -35,6 +38,7 @@ export default function Reports() {
         <div className="row gap">
           <button className="primary">{tr("Générer")}</button>
           <button type="button" onClick={csv}>{tr("Exporter le registre (CSV)")}</button>
+          <button type="button" onClick={notifCsv}>{tr("Exporter le registre des notifications (CSV)")}</button>
           <button type="button" onClick={() => window.print()} disabled={!r}>{tr("Imprimer / PDF")}</button>
         </div>
       </form>

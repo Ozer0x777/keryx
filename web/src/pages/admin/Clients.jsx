@@ -123,6 +123,8 @@ function WazuhApiSettings({ client, v, set }) {
 
 function ClientEditor({ client, onSaved }) {
   const [emails, setEmails] = useState((client.contact_emails || []).join(', '))
+  const [seuils, setSeuils] = useState(client.contacts_criticite || {})
+  const listeContacts = emails.split(/[,\s;]+/).filter((e) => e.includes('@'))
   const [retention, setRetention] = useState(client.retention_months ?? '')
   const [conserver, setConserver] = useState(client.conserver_contexte !== false)
   const [maxMb, setMaxMb] = useState(client.max_attachment_mb ?? '')
@@ -150,6 +152,7 @@ function ClientEditor({ client, onSaved }) {
       : { ...(wz.apiUser ? { wazuh_api_user: wz.apiUser } : {}), ...(wz.apiPassword ? { wazuh_api_password: wz.apiPassword } : {}) }
     const ok = await track(() => api(`/admin/clients/${client.key}`, { method: 'PATCH', json: {
       contact_emails: emails.split(/[,\s;]+/).filter(Boolean),
+      contacts_criticite: Object.fromEntries(listeContacts.filter((e) => seuils[e] && seuils[e] !== 'Faible').map((e) => [e, seuils[e]])),
       retention_months: retention === '' ? null : Number(retention),
       conserver_contexte: conserver,
       max_attachment_mb: maxMb === '' ? null : Number(maxMb),
@@ -165,6 +168,17 @@ function ClientEditor({ client, onSaved }) {
   return (
     <form className="subform" onSubmit={save}>
       <label>{tr("Contacts de notification (séparés par des virgules)")}<input value={emails} onChange={(e) => setEmails(e.target.value)} /></label>
+      {listeContacts.length > 0 && (
+        <fieldset>
+          <legend>{tr('Personnes à notifier selon la criticité du ticket (PDIS IV.2.3.d)')}</legend>
+          {listeContacts.map((e) => (
+            <label key={e}>{tr('{c} : à partir de', { c: e })}
+              <select value={seuils[e] || 'Faible'} onChange={(x) => setSeuils({ ...seuils, [e]: x.target.value })}>
+                {['Faible', 'Moyenne', 'Élevée', 'Critique'].map((k) => <option key={k} value={k}>{tr(k)}</option>)}
+              </select></label>
+          ))}
+        </fieldset>
+      )}
       <label className="check"><input type="checkbox" checked={conserver} onChange={(e) => setConserver(e.target.checked)} />{' '}
         {tr("Conserver le contexte des incidents (alertes brutes) pendant toute la prestation (PDIS IV.5.3.6)")}</label>
       <label>{tr("Rétention des alertes brutes, en mois (6 minimum, vide = durée par défaut de l'instance)")}<input type="number" min="6" max="120" value={retention} disabled={conserver} onChange={(e) => setRetention(e.target.value)} /></label>

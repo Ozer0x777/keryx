@@ -12,6 +12,10 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
   le manager, seul un manager l'abaisse sur un ticket), version de la règle déclenchée (celle de l'alerte, sinon la
   version du jeu de règles déclarée par le manager), collecteur (manager Wazuh). Dans la fiche, le rapport et le
   registre. Migration 0027.
+- Stratégie de notification (PDIS IV.2.3) : chaque contact du client peut ne recevoir qu'à partir d'une criticité ;
+  moyen secondaire (un canal déclaré par l'Admin, choisi par le manager) qui prend le relais quand le courriel échoue
+  ou manque, une fois par ticket, avec le seul numéro du ticket ; essai tracé du moyen secondaire et alerte s'il date
+  de plus de six mois ; registre des notifications par client, consultable et exportable en CSV. Migration 0028.
 
 ### Documentation
 - Portail par client (ADR-0027) accepté après lecture intégrale du référentiel PDIS v2.0 : décisions (synchronisation,
