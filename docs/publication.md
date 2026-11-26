@@ -24,8 +24,11 @@ cd deploy/docker
 KERYX_IMAGE=ghcr.io/ozer0x777/keryx KERYX_VERSION=0.8.3 ./install.sh
 ```
 
-`install.sh` récupère l'image au lieu de la construire, l'inscrit dans `.env`, et vérifie sa signature si `cosign`
-est installé ; une signature absente ou invalide arrête l'installation. Sans cosign, il le signale et continue.
+`install.sh` récupère l'image au lieu de la construire, l'inscrit dans `.env`, et **vérifie toujours sa signature** :
+avec `cosign` s'il est installé, sinon avec l'image officielle de cosign, épinglée par empreinte, lancée par Docker.
+Une signature absente ou invalide arrête l'installation. La seule exception est explicite,
+`KERYX_VERIFIER_SIGNATURE=non`, pour une image copiée dans un registre interne après vérification (voir ci-dessous) ;
+l'installation l'affiche en avertissement.
 
 ## Vérifier une image à la main
 
@@ -58,7 +61,8 @@ téléchargés sont ceux de la liste.
 ## Hors ligne, ou registre interne
 
 Dans un déploiement qui passe par un registre relais (zone de mise à jour, PDIS IV.3.11), vérifier la signature avant
-de copier l'image dans le registre interne, puis régler `KERYX_IMAGE` sur le nom interne. Copier par empreinte
+de copier l'image dans le registre interne, puis régler `KERYX_IMAGE` sur le nom interne et lancer `install.sh` avec
+`KERYX_VERIFIER_SIGNATURE=non` (la signature ne se vérifie que sur l'image d'origine). Copier par empreinte
 (`@sha256:…`), jamais par étiquette seule.
 
 Le paquet `ghcr.io/ozer0x777/keryx` est public : l'image se récupère sans compte.

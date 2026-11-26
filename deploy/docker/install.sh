@@ -224,24 +224,33 @@ URL="https://$DOMAINE$SUFFIXE"
 
 # ------------------------------------------------------------------------------------------------ image
 titre "Image de Keryx"
-# Image publiée (KERYX_IMAGE) : récupérée, et sa signature vérifiée si cosign est installé ; sinon construite ici.
+# Image publiée (KERYX_IMAGE) : récupérée, et sa signature TOUJOURS vérifiée (cosign installé, sinon son image
+# officielle épinglée par empreinte) ; sinon construite ici. Seule exception, explicite : KERYX_VERIFIER_SIGNATURE=non,
+# pour une image copiée dans un registre interne après avoir été vérifiée (docs/publication.md, registre relais).
 # Les deux variables exigées par docker-compose.yml n'existent pas encore à la première installation.
+COSIGN_IMAGE="gcr.io/projectsigstore/cosign:v2.4.1@sha256:b03690aa52bfe94054187142fba24dc54137650682810633901767d8a3e15b31"
+cosign_verify() {
+    if command -v cosign >/dev/null 2>&1; then cosign verify "$@"; else docker run --rm "$COSIGN_IMAGE" verify "$@"; fi
+}
 if [ "$NOUVEAU" = 1 ]; then PUBLIEE=$D_IMAGE; else PUBLIEE=$(env_lire KERYX_IMAGE); fi
 dc_init() { if [ "$NOUVEAU" = 1 ]; then env KERYX_SECRET_KEY=construction POSTGRES_PASSWORD=construction KERYX_IMAGE="$PUBLIEE" docker compose "$@"; else dc "$@"; fi; }
 if [ -n "$PUBLIEE" ]; then
     case "$PUBLIEE" in *[!A-Za-z0-9./_-]*) erreur "KERYX_IMAGE invalide : « $PUBLIEE »." ;; esac
     dc_init pull keryx
     IMAGE=$(dc_init config --images | grep -E '(^|/)keryx:' | head -n 1)
-    if command -v cosign >/dev/null 2>&1; then
-        DEPOT=$(printf '%s' "$PUBLIEE" | sed -n 's#^ghcr\.io/\([^/]*\)/\([^/]*\)$#\1/\2#p')
-        [ -n "$DEPOT" ] || erreur "vérification de signature prévue pour une image ghcr.io/<compte>/<dépôt> seulement : « $PUBLIEE »."
-        cosign verify "$IMAGE" --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-            --certificate-identity-regexp "(?i)^https://github.com/$DEPOT/\.github/workflows/publication\.yml@refs/tags/v" >/dev/null \
-            || erreur "signature de $IMAGE invalide ou absente : image refusée."
-        dire "   signature de $IMAGE vérifiée (publiée par le dépôt $DEPOT)."
-    else
-        dire "   cosign absent : signature NON vérifiée. Pour la vérifier : voir docs/publication.md."
-    fi
+    case "${KERYX_VERIFIER_SIGNATURE:-oui}" in
+        non)
+            dire "   ATTENTION : signature de $IMAGE NON vérifiée (KERYX_VERIFIER_SIGNATURE=non). À réserver à une image"
+            dire "   copiée dans un registre interne après vérification de sa signature (docs/publication.md)." ;;
+        oui)
+            DEPOT=$(printf '%s' "$PUBLIEE" | sed -n 's#^ghcr\.io/\([^/]*\)/\([^/]*\)$#\1/\2#p')
+            [ -n "$DEPOT" ] || erreur "la signature se vérifie sur une image ghcr.io/<compte>/<dépôt> : « $PUBLIEE ». Image d'un registre interne, déjà vérifiée avant copie : relancer avec KERYX_VERIFIER_SIGNATURE=non."
+            cosign_verify "$IMAGE" --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+                --certificate-identity-regexp "(?i)^https://github.com/$DEPOT/\.github/workflows/publication\.yml@refs/tags/v" >/dev/null \
+                || erreur "signature de $IMAGE invalide ou absente : image refusée."
+            dire "   signature de $IMAGE vérifiée (publiée par le dépôt $DEPOT)." ;;
+        *) erreur "KERYX_VERIFIER_SIGNATURE vaut « oui » (par défaut) ou « non »." ;;
+    esac
 else
     dc_init build keryx
     IMAGE=$(dc_init config --images | grep -E '(^|/)keryx:' | head -n 1)

@@ -4,6 +4,11 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+### Sécurité
+- Kit Docker : `install.sh` vérifie toujours la signature de l'image publiée, avec cosign s'il est installé, sinon
+  avec l'image officielle de cosign épinglée par empreinte ; auparavant, sans cosign, il signalait l'absence de
+  vérification et continuait. Exception explicite : `KERYX_VERIFIER_SIGNATURE=non`, pour un registre interne.
+
 ## [0.8.3] : 2026-11-26
 
 ### Ajouté
