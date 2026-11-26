@@ -1,3 +1,3 @@
 """Keryx — gestion des incidents de sécurité alimentée par Wazuh."""
 
-__version__ = "0.8.4"
+__version__ = "0.9.0"

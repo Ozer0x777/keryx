@@ -3,7 +3,7 @@
 *In English: planned work for the next twelve months, in priority order. No date is promised; security fixes always
 come first (`SECURITY.md`).*
 
-État au 26/11/2026, version 0.8.4. Les priorités viennent des retours d'usage, en premier lieu l'essai sur une
+État au 26/11/2026, version 0.9.0. Les priorités viennent des retours d'usage, en premier lieu l'essai sur une
 préproduction Wazuh réelle (188 alertes reçues sur 188, 63 tickets). Une idée nouvelle se propose en issue ; un
 choix technique passe par un ADR (`GOVERNANCE.md`).
 
@@ -14,7 +14,9 @@ Plusieurs fonctions n'ont été essayées que contre les faux serveurs des tests
 - parc d'agents Wazuh contre un vrai manager : champs de `/agents`, permissions RBAC du compte de lecture (ADR-0030) ;
 - contexte Wazuh contre un vrai indexeur et un vrai tableau de bord (ADR-0021) ;
 - recherche VirusTotal contre le vrai service (ADR-0022) ;
-- intégration sur un cluster Wazuh à plusieurs nœuds.
+- intégration sur un cluster Wazuh à plusieurs nœuds ;
+- astreinte contre de vrais services (serveur de messagerie, Mattermost, Teams) et battement de cœur contre un vrai
+  manager Wazuh (règle 119990, tâche planifiée, second bloc d'intégration ; ADR-0032).
 
 Chaque essai réel donne lieu à une correction ou à une note dans la documentation.
 
@@ -30,13 +32,11 @@ Chaque essai réel donne lieu à une correction ou à une note dans la documenta
 
 - Couverture des exigences PDIS chapitre IV : statut et preuve vérifiée pour chaque exigence
   (`docs/matrice-tracabilite.md` étendue).
-- Niveau Silver des OpenSSF Best Practices.
 
 ## 4. Robustesse et exploitation
 
 - Déconnexion initiée par Keycloak (aujourd'hui, une session fermée dans Keycloak reste valable dans Keryx jusqu'à
   son expiration, ADR-0017).
-- Notification, et pas seulement bandeau, quand un manager Wazuh se tait.
 - Validation de l'export IODEF contre le schéma officiel complet ; PDF des rapports produit côté serveur.
 
 ## 5. Portail par client (plus tard, optionnel)
