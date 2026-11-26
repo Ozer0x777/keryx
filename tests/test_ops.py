@@ -91,7 +91,16 @@ def test_import_stix_et_enrichissement_manuel(app, db, world, alert):
     assert t["technique"] == "Valid Accounts (v2)" and t["tactics"] == ["persistence"]
 
 
+def _purge_autorisee(db, key="ACME"):
+    """Les clients conservent leur contexte toute la prestation par défaut (PDIS IV.5.3.6) : la purge se choisit."""
+    from sqlalchemy import update
+    from keryx.models import Tenant
+    db.execute(update(Tenant).where(Tenant.key == key).values(conserver_contexte=False))
+    db.commit()
+
+
 def test_retention_ne_purge_que_les_tickets_clos_en_fin_de_duree(app, db, world, alert):
+    _purge_autorisee(db)
     ingest(app, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE))
     ingest(app, world["keys"]["ACME"], alert(ALERT_CRITICAL))
     a = login(app, db, "analyst_acme")
@@ -118,6 +127,7 @@ def test_retention_ne_purge_que_les_tickets_clos_en_fin_de_duree(app, db, world,
 
 
 def test_duree_de_retention_par_defaut_reglable_par_l_admin(app, db, world, alert, monkeypatch):
+    _purge_autorisee(db)
     adm = login(app, db, "admin")
     r = adm.get("/api/v1/admin/settings/retention").json()
     assert r["months"] == 6 and r["source"] == "defaut" and r["minimum"] == 6        # défaut : minimum PDIS
@@ -150,3 +160,27 @@ def test_duree_de_retention_par_defaut_reglable_par_l_admin(app, db, world, aler
         c = login(app, db, who)
         assert c.get("/api/v1/admin/settings/retention").status_code == 403
         assert c.put("/api/v1/admin/settings/retention", json={"months": 7}).status_code == 403
+
+
+def test_contexte_conserve_toute_la_prestation_par_defaut(app, db, world, alert):
+    """PDIS IV.5.3.6 : sans choix explicite de l'Admin, aucune alerte brute d'un client n'est purgée."""
+    from datetime import timedelta
+
+    from sqlalchemy import select, update
+
+    from keryx.ids import utcnow
+    from keryx.models import RawAlert, Ticket
+    ingest(app, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE))
+    vieux = utcnow() - timedelta(days=3000)
+    db.execute(update(Ticket).values(status="cloture", closed_at=vieux))
+    db.execute(update(RawAlert).values(received_at=vieux))
+    db.commit()
+    adm = login(app, db, "admin")
+    r = adm.post("/api/v1/admin/retention", json={"dry_run": False}).json()
+    assert r["total"] == 0 and next(i for i in r["items"] if i["client"] == "ACME")["conserve"] is True
+    db.expire_all()
+    assert db.scalars(select(RawAlert)).all()
+    assert adm.get("/api/v1/admin/clients").json()["items"][0]["conserver_contexte"] is True
+    assert adm.patch("/api/v1/admin/clients/ACME", json={"conserver_contexte": False}).status_code == 200
+    r = adm.post("/api/v1/admin/retention", json={"dry_run": True}).json()
+    assert r["total"] == 1, r

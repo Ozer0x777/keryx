@@ -1,4 +1,5 @@
 """Rétention des alertes brutes [PDIS IV.2.2.w : 6 mois minimum ; ISM Wazuh : 12 mois].
+Un client dont le contexte se conserve toute la prestation (PDIS IV.5.3.6, réglage par défaut) n'est jamais purgé.
 
 Seules les alertes brutes de tickets CLOS plus anciennes que la durée du client sont supprimées. Le ticket, son
 registre des actions et ses pièces (dont la destruction suit le cycle de vie tracé, PRIS VI.2.4) sont conservés.
@@ -33,6 +34,9 @@ def run(db: DbSession, settings: Settings, now: datetime, actor: str, dry_run: b
     report = []
     default, _ = default_months(db, settings)
     for tenant in db.scalars(select(Tenant).order_by(Tenant.key)).all():
+        if tenant.conserver_contexte:
+            report.append({"client": tenant.key, "months": None, "before": None, "alerts": 0, "conserve": True})
+            continue
         months = max(MIN_RETENTION_MONTHS, tenant.retention_months or default)
         cutoff = now - timedelta(days=30 * months)
         ids = select(Ticket.id).where(Ticket.tenant_id == tenant.id, Ticket.status.in_(TERMINAL_STATUSES),
@@ -43,5 +47,6 @@ def run(db: DbSession, settings: Settings, now: datetime, actor: str, dry_run: b
             db.execute(delete(RawAlert).where(*cond))
             audit.record(db, actor, "retention.purge", "tenant", tenant.key, tenant.id,
                          {"alertes_supprimees": count, "avant_le": cutoff.date().isoformat(), "mois": months})
-        report.append({"client": tenant.key, "months": months, "before": cutoff.date().isoformat(), "alerts": count})
+        report.append({"client": tenant.key, "months": months, "before": cutoff.date().isoformat(), "alerts": count,
+                       "conserve": False})
     return report

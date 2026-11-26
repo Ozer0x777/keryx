@@ -72,6 +72,10 @@ class Tenant(Base):
     contact_emails: Mapped[list] = mapped_column(JSON, default=list)
     # Rétention des alertes brutes en mois (None = valeur par défaut de la configuration) [PDIS IV.2.2.w]
     retention_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # PDIS IV.5.3.6 : les incidents, leur contexte (alertes brutes) et les notifications se gardent toute la durée de
+    # la prestation. Vrai par défaut : la purge des alertes brutes ne touche pas ce client. L'Admin peut le décocher
+    # (prestation hors référentiel, minimisation) ; la durée de rétention s'applique alors.
+    conserver_contexte: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
     # Délais cibles par gravité, en heures : {"Critique": {"qualification": 1, "resolution": 8}, ...}
     sla: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Taille maximale d'une pièce, en Mio (1 à 20) ; vide = 20 Mio, plafond fixé par le plan [PRIS VI.2.4]

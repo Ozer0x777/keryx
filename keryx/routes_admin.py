@@ -61,6 +61,7 @@ class ClientPatchIn(BaseModel):
     contact_emails: list[str] | None = Field(default=None, max_length=50)
     severity_grid: dict | None = None
     retention_months: int | None = Field(default=None, ge=6, le=120)  # PDIS IV.2.2.w : 6 mois minimum
+    conserver_contexte: bool | None = None                          # PDIS IV.5.3.6 : toute la prestation
     sla: dict | None = None
     max_attachment_mb: int | None = Field(default=None, ge=1, le=20)
     # Contexte Wazuh (ADR-0021). Champ absent = inchangé ; null ou vide = effacé. Les identifiants ne sont jamais relus.
@@ -283,7 +284,8 @@ def register(app, ctx) -> None:
     # ---------------------------------------------------------------- clients
     def client_view(t: Tenant, tickets: int = 0) -> dict:
         return {"key": t.key, "name": t.name, "contact_emails": t.contact_emails or [],
-                "severity_grid": t.severity_grid, "retention_months": t.retention_months, "sla": t.sla,
+                "severity_grid": t.severity_grid, "retention_months": t.retention_months,
+                "conserver_contexte": bool(t.conserver_contexte), "sla": t.sla,
                 "max_attachment_mb": t.max_attachment_mb,
                 # Contexte Wazuh : adresses et options visibles de l'Admin ; du compte de lecture, seul un indicateur.
                 "wazuh_dashboard_url": t.wazuh_dashboard_url, "wazuh_indexer_url": t.wazuh_indexer_url,
@@ -451,6 +453,9 @@ def register(app, ctx) -> None:
         if "retention_months" in sent:
             t.retention_months = body.retention_months
             changed.append("retention_months")
+        if body.conserver_contexte is not None and body.conserver_contexte != bool(t.conserver_contexte):
+            t.conserver_contexte = body.conserver_contexte
+            changed.append("conserver_contexte")
         if "max_attachment_mb" in sent:
             t.max_attachment_mb = body.max_attachment_mb
             changed.append("max_attachment_mb")

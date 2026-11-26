@@ -4,6 +4,11 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+### Modifié
+- Conservation (PDIS IV.5.3.6) : par défaut, le contexte des incidents d'un client (alertes brutes) se conserve
+  toute la durée de la prestation ; la purge ne s'applique plus qu'aux clients pour lesquels l'Admin la choisit
+  (case « Conserver le contexte des incidents » décochée). Migration 0026, vraie pour les clients existants.
+
 ### Documentation
 - Portail par client (ADR-0027) accepté après lecture intégrale du référentiel PDIS v2.0 : décisions (synchronisation,
   comptes clients, SQLite, tout-en-un par défaut, fichiers chiffrés, actions demandées au client, pare-feu applicatif
