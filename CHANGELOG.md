@@ -5,6 +5,10 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 ## [Non publié]
 
 ### Ajouté
+- Délai d'acquittement (ADR-0032, partie 1) : bouton « Je prends » ; chaque ticket retient la première action de
+  l'équipe (prise en charge, affectation, statut, qualification) ; délai depuis la détection Wazuh affiché dans la
+  fiche, et par criticité (moyenne, 90e centile) dans le pilotage ; dans le rapport remis au client seulement si le
+  manager le choisit dans « Politique des clients ».
 - Politique du client (ADR-0033) : le manager fixe un TLP plancher par client. Les tickets et les pièces du client
   naissent à ce niveau ; un analyste peut monter, jamais descendre en dessous ; un manager peut descendre un ticket
   en dessous avec un motif tracé. Relever le plancher relève les tickets ouverts ; le baisser ne baisse rien.

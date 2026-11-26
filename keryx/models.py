@@ -90,6 +90,9 @@ class Tenant(Base):
     # à ce niveau ; un analyste ne peut pas descendre en dessous, un manager le peut sur un ticket avec un motif.
     # Vide : pas de plancher, les tickets naissent en TLP:AMBER comme avant.
     tlp_plancher: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Délai d'acquittement dans le rapport périodique remis au client (ADR-0032), choix du manager ; toujours visible
+    # de l'équipe.
+    acquittement_rapport: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     # Compte en lecture seule de l'indexeur : chiffré AES-256-GCM comme le secret TOTP (ADR-0006), jamais renvoyé par l'API.
     wazuh_indexer_user: Mapped[str | None] = mapped_column(Text, nullable=True)
     wazuh_indexer_password: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -240,6 +243,10 @@ class Ticket(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     qualified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Acquittement (ADR-0032) : première action humaine de l'équipe (prise en charge, affectation, statut,
+    # qualification). Le délai d'acquittement va de la détection Wazuh à cet instant. Une consultation n'acquitte pas.
+    acquitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    acquitted_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Mode « crise » [PRIS VI.5.5.1] : registre des décisions, plan d'action, synthèse de crise
     crisis: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())

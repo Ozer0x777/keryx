@@ -1,6 +1,8 @@
 # ADR-0032 : Prévenir l'équipe, mesurer l'acquittement, vérifier la chaîne d'alerte de bout en bout
 
-- **Statut** : accepté (26/11/2026), à coder. Questions tranchées par le mainteneur le 26/11/2026 (voir « Réglages »).
+- **Statut** : accepté (26/11/2026). Questions tranchées par le mainteneur le 26/11/2026 (voir « Réglages »).
+  Partie 1 (délai d'acquittement, « Je prends », choix du rapport client) codée le 26/11/2026 ; parties 2
+  (canaux, astreinte, escalade) et 3 (battement de cœur) à coder.
 - **Contexte** : le pire scénario pour un SOC est une alerte critique que personne ne traite parce que personne n'a
   été prévenu, ou une chaîne d'alerte tombée en silence sans que personne ne s'en aperçoive. Aujourd'hui :
   - Keryx garde l'identifiant Wazuh, l'horodatage de détection et l'alerte brute de chaque ticket ;
@@ -57,6 +59,13 @@
   5. Chaque modification de ces réglages est inscrite au journal d'audit, avec son auteur.
 - **Exigences** : PDIS (traitement et suivi des incidents, délais) : sections à citer après lecture du texte, non
   vérifiées à ce stade. ISO/IEC 27035 (détection et signalement).
+- **Partie 1, telle que codée** : champs `acquitted_at` et `acquitted_by` du ticket (migration `0023`), posés par
+  la première action de l'équipe parmi `prise_en_charge`, `affectation`, `statut`, `qualification` (un client, un
+  commentaire, une pièce ou une consultation n'acquittent pas) ; route `POST /api/v1/tickets/{ref}/prise-en-charge` ;
+  délai d'acquittement par criticité initiale (moyenne et 90e centile, en minutes, tickets créés sur la période) dans
+  le pilotage, et dans le rapport périodique seulement si le manager a coché ce choix dans « Politique des clients »
+  (`acquittement_rapport`, désactivé par défaut, inscrit au journal d'audit). Tests : `tests/test_acquittement.py`,
+  `e2e/scenarios/99-acquittement.mjs`.
 - **Conséquences** : une table des canaux, des champs de suivi d'acquittement et d'escalade sur le ticket, une tâche
   de fond pour les escalades et la surveillance du battement (comme la relance des notifications), une règle et un
   exemple de tâche planifiée dans `integrations/wazuh/`, des tests avec un faux service de webhook.

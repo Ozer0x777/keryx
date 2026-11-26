@@ -183,6 +183,8 @@ class QualificationIn(BaseModel):
 
 
 MIN_REASON = 10   # longueur minimale du motif d'un faux positif
+# Actions de l'équipe qui acquittent un ticket (ADR-0032). Une consultation, un commentaire ou une pièce n'en sont pas.
+ACQUITTEMENT = frozenset({"prise_en_charge", "affectation", "statut", "qualification"})
 
 
 class StatusIn(BaseModel):
@@ -417,6 +419,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return valeur
 
     def event(db, t: Ticket, user: User, action: str, details: dict, visible_client: bool = False):
+        if action in ACQUITTEMENT and user.role in ("analyst", "manager") and t.acquitted_at is None:
+            t.acquitted_at, t.acquitted_by = utcnow(), user.username      # première action humaine (ADR-0032)
         db.add(TicketEvent(ticket_id=t.id, actor=user.username, action=action, details=details,
                            visible_client=visible_client))
         audit.record(db, user.username, f"ticket.{action}", "ticket", t.ref, t.tenant_id, details)
@@ -955,6 +959,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # veut dire que l'horloge du manager est en avance sur celle de Keryx.
             out["received_at"] = rfc3339(t.created_at)
             out["tlp_plancher"] = db.get(Tenant, t.tenant_id).tlp_plancher     # politique du client (ADR-0033)
+            # Acquittement (ADR-0032) : délai depuis la détection Wazuh jusqu'à la première action humaine.
+            out["acquitted_at"] = rfc3339(t.acquitted_at)
+            out["acquitted_by"] = t.acquitted_by
+            out["acquittement_s"] = (int((as_utc(t.acquitted_at) - as_utc(t.detected_at)).total_seconds())
+                                     if t.acquitted_at else None)
             out["reception_delay_s"] = int((as_utc(t.created_at) - as_utc(t.detected_at)).total_seconds())
             out["synthese"] = {"compromission_initiale": rfc3339(t.compromission_initiale),
                                "chronologie": t.chronologie, "mode_operatoire": t.mode_operatoire,
@@ -1063,6 +1072,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         commit(db)
         return {"ref": t.ref, "assignee": target.display_name if target else None,
                 "assignee_username": target.username if target else None}
+
+    @app.post("/api/v1/tickets/{ref}/prise-en-charge")
+    def take(ref: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        """« Je prends » (ADR-0032) : s'affecter le ticket ; première action humaine, il est acquitté."""
+        require_role(user, "analyst", "manager")
+        t = load_ticket(db, user, ref)
+        require_open(t)
+        if t.assignee_id != user.id:
+            avant = db.get(User, t.assignee_id).username if t.assignee_id else None
+            t.assignee_id, t.updated_at = user.id, utcnow()
+            event(db, t, user, "prise_en_charge", {"assignee": user.username, "avant": avant})
+            commit(db)
+        return {"ref": t.ref, "assignee": user.display_name, "assignee_username": user.username,
+                "acquitted_at": rfc3339(t.acquitted_at)}
 
     @app.get("/api/v1/tickets/{ref}/assignables")
     def assignables(ref: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):

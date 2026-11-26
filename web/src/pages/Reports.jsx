@@ -1,3 +1,4 @@
+import { AcquittementTable } from '../components/Acquittement.jsx'
 import { t as tr } from '../i18n.js'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -46,6 +47,11 @@ export default function Reports() {
           <dl className="kv"><dt>{tr("Incidents créés")}</dt><dd>{r.totals.created}</dd><dt>{tr("Incidents clos")}</dt><dd>{r.totals.closed}</dd>
             <dt>{tr("Ouverts à ce jour")}</dt><dd>{r.totals.open}</dd><dt>{tr("Échéances tenues")}</dt><dd>{r.sla.rate_percent == null ? '—' : tr('{p} % ({a} sur {b})', { p: r.sla.rate_percent, a: r.sla.resolution_within_target, b: r.sla.closed })}</dd>
             <dt>{tr("Délai moyen de résolution")}</dt><dd>{r.delays.resolution_hours_avg == null ? '—' : `${r.delays.resolution_hours_avg} h`}</dd></dl>
+          {r.acquittement && <>
+            <h2>{tr("Délai d'acquittement")}</h2>
+            <p className="muted small">{tr("De la détection à la première action de l'équipe, par criticité.")}</p>
+            <AcquittementTable data={r.acquittement} caption={tr("Délai d'acquittement par criticité")} />
+          </>}
           <h2>{tr("Incidents de la période")}</h2>
           <div className="table-wrap"><table className="grid">
             <thead><tr><th scope="col">{tr("Réf.")}</th><th scope="col">{tr("Titre")}</th><th scope="col">{tr("Détecté")}</th><th scope="col">{tr("Criticité")}</th><th scope="col">{tr("Gravité")}</th><th scope="col">{tr("Statut")}</th><th scope="col">{tr("MITRE")}</th></tr></thead>

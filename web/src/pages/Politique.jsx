@@ -9,10 +9,11 @@ import { TLPS } from '../labels.js'
 // tickets ouverts qui sont en dessous ; le baisser ne baisse aucun ticket.
 function Client({ c, onSaved }) {
   const [plancher, setPlancher] = useState(c.tlp_plancher || '')
+  const [rapport, setRapport] = useState(Boolean(c.acquittement_rapport))
   const [status, track, setStatus] = useActionStatus()
-  const changed = plancher !== (c.tlp_plancher || '')
+  const changed = plancher !== (c.tlp_plancher || '') || rapport !== Boolean(c.acquittement_rapport)
   const save = async () => {
-    const r = await track(() => api(`/politique/${encodeURIComponent(c.key)}`, { method: 'PUT', json: { tlp_plancher: plancher || null } }))
+    const r = await track(() => api(`/politique/${encodeURIComponent(c.key)}`, { method: 'PUT', json: { tlp_plancher: plancher || null, acquittement_rapport: rapport } }))
     if (!r) return
     onSaved(r)
     setStatus({ ok: r.tickets_releves.length
@@ -32,6 +33,8 @@ function Client({ c, onSaved }) {
           </label>
           <button type="button" className="primary" onClick={save} disabled={!changed}>{tr('Enregistrer')}</button>
         </div>
+        <label className="check"><input type="checkbox" checked={rapport} onChange={(e) => setRapport(e.target.checked)} />{" "}
+          {tr("Inclure le délai d'acquittement dans le rapport périodique remis au client")}</label>
         <p className="field-hint" id={`plancher-${c.key}`}>{tr("Les nouveaux tickets et pièces de ce client naissent à ce niveau. Un analyste peut monter, jamais descendre en dessous ; un manager peut descendre un ticket en dessous avec un motif. Relever le plancher relève les tickets ouverts qui sont en dessous ; le baisser ne baisse aucun ticket.")}</p>
         <ActionStatus state={status} />
       </div>
@@ -52,7 +55,7 @@ export default function Politique() {
       {error && <p className="error" role="alert">{error}</p>}
       {items === null && !error && <p className="loading">{tr('Chargement…')}</p>}
       {items?.map((c) => (
-        <Client key={c.key} c={c} onSaved={(r) => setItems((xs) => xs.map((x) => (x.key === r.key ? { ...x, tlp_plancher: r.tlp_plancher } : x)))} />
+        <Client key={c.key} c={c} onSaved={(r) => setItems((xs) => xs.map((x) => (x.key === r.key ? { ...x, tlp_plancher: r.tlp_plancher, acquittement_rapport: r.acquittement_rapport } : x)))} />
       ))}
     </>
   )
