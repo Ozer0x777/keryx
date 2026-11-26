@@ -1,3 +1,4 @@
+import IndicateursPdis from '../components/IndicateursPdis.jsx'
 import { AcquittementTable } from '../components/Acquittement.jsx'
 import { t as tr } from '../i18n.js'
 import { useEffect, useState } from 'react'
@@ -63,6 +64,7 @@ export default function Dashboard() {
             <section className="card section" aria-label={tr("Tickets par statut")}><h2>{tr("Tous les tickets par statut")}</h2>
               <BarList label={tr("Tickets par statut")} rows={Object.entries(STATUS).map(([k, v]) => ({ label: v.label, value: d.by_status[k] || 0 }))} /></section>
           </div>
+          <IndicateursPdis d={d.indicateurs_pdis} />
           <section className="card section" aria-label={tr("Charge par analyste")}>
             <h2>{tr("Charge par analyste")}</h2>
             <div className="table-wrap"><table className="grid">

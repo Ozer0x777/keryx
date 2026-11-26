@@ -31,6 +31,11 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
   existants (migration 0030).
 - Journal d'audit (PDIS IV.3.9.c) : entrée propre `auth.account_locked` au verrouillage d'un compte après des échecs
   d'authentification.
+- Indicateurs PDIS (IV.5.1.e, f, g) dans le pilotage : durées minimale, moyenne et maximale entre création et
+  clôture ; délai entre détection et notification du client par gravité ; par mois, tickets créés, clos, incidents
+  avérés, alertes reçues, ouverts cumulés par criticité et résolution moyenne ; qualification moyenne par typologie
+  (catégorie ETSI ISI) et gravité ; 20 règles les plus déclenchées ; comptes et authentifications du portail. Hors du
+  rapport remis au client.
 
 ### Documentation
 - Portail par client (ADR-0027) accepté après lecture intégrale du référentiel PDIS v2.0 : décisions (synchronisation,
