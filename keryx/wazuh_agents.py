@@ -7,7 +7,7 @@ passe par le même connecteur que le contexte Wazuh (wazuh_context._connect) : a
 du client, aucune redirection suivie, réponse bornée.
 
 Ce qui est écrit ici d'après la documentation de l'API Wazuh 4.x et vérifié contre le faux manager des tests
-(tests/fake_wazuh_api.py) seulement : à valider contre un vrai manager (noms de champs, permissions du compte).
+(tests/fake_wazuh_api.py), puis essayé contre un vrai manager Wazuh en préproduction.
 """
 from __future__ import annotations
 

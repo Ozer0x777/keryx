@@ -19,9 +19,13 @@ la qualification reste une affaire d'organisation.
 |---|---|
 | ![Fiche ticket](docs/captures/fiche-ticket.png) | ![Vue client](docs/captures/vue-client.png) |
 
-| Kanban | Pilotage | Administration |
-|---|---|---|
-| ![Kanban](docs/captures/kanban.png) | ![Pilotage](docs/captures/pilotage.png) | ![Administration](docs/captures/administration.png) |
+| Parc d'agents Wazuh (état, versions, disponibilité) | Kanban |
+|---|---|
+| ![Parc d'agents Wazuh](docs/captures/parc-agents.png) | ![Kanban](docs/captures/kanban.png) |
+
+| Pilotage | Administration d'un client (connexion à Wazuh) |
+|---|---|
+| ![Pilotage](docs/captures/pilotage.png) | ![Administration](docs/captures/administration.png) |
 
 Les captures viennent du banc d'essai : client, équipements et alertes sont fictifs.
 
@@ -80,7 +84,9 @@ Détail, file d'attente locale si Keryx est injoignable : [`integrations/wazuh/R
   d'expérience (obligatoire si la gravité est Élevée ou Critique).
 - Criticité initiale tirée du niveau Wazuh, gravité qualifiée selon une grille propre à chaque client, échéances.
 - MITRE ATT&CK : repris de Wazuh, sinon d'une table de correspondance, sinon complété à la main. Jamais deviné.
-- File de triage, Kanban, recherche, filtres enregistrés, affectation en masse, liens et fusion, modèles, mode crise.
+- File de triage paginée, Kanban, recherche, filtres enregistrés, affectation en masse, liens et fusion, modèles,
+  mode crise. Les listes longues (tickets, parc, historique d'un ticket, comptes) sont paginées : un SOC peut
+  accumuler des milliers de tickets et d'agents sans ralentir l'interface.
 
 **Prouver**
 - Pièces jointes avec registre de collecte, empreinte SHA-256, chaîne de possession, quarantaine antivirus.
@@ -95,13 +101,22 @@ Détail, file d'attente locale si Keryx est injoignable : [`integrations/wazuh/R
 - Mot de passe Argon2id et TOTP obligatoire, clés de sécurité WebAuthn, authentification unique OpenID Connect.
 
 **Enrichir** (facultatif)
-- Contexte Wazuh : lien vers l'alerte et lecture des événements voisins du même agent dans l'indexeur.
+- Contexte Wazuh : lien vers l'alerte et lecture des événements voisins du même agent dans l'indexeur. Un indexeur
+  partagé entre plusieurs clients exige une source Wazuh (manager ou cluster) propre à chacun (ADR-0031).
 - Parc d'agents Wazuh : état, version, disponibilité et historique des agents de chaque client, lus en lecture seule
   dans l'API du manager ; visible de l'équipe et du client.
 - Recherche d'une empreinte sur VirusTotal avec la clé de l'analyste. Seule l'empreinte sort, jamais un fichier.
   C'est un service externe hors UE : voir l'ADR-0022 avant de l'activer.
 
 Interface en français et en anglais. Aucun service externe n'est appelé par défaut : pas de CDN, pas d'API tierce.
+
+**Livrer sans surprise**
+- Image publiée signée (cosign, sans clé), avec attestation de provenance SLSA et SBOM ; `install.sh` vérifie
+  toujours la signature. Liste des empreintes des fichiers de chaque version, signée elle aussi (`docs/publication.md`).
+- Dépendances figées avec empreintes, actions GitHub et images de base épinglées par empreinte, audits pip-audit,
+  npm audit et Grype bloquants, veille hebdomadaire, fuzzing des entrées non fiables (`fuzz/README.md`).
+- Programme de sécurité des composants libres conforme à ISO/IEC 18974 (conformité déclarée, auto-certification
+  OpenChain) : [`docs/programme-securite-open-source.md`](docs/programme-securite-open-source.md).
 
 Table complète des fonctions et de leurs exigences : [`docs/fonctions-et-exigences.md`](docs/fonctions-et-exigences.md).
 
@@ -169,11 +184,14 @@ ruff check .               # analyse statique Python (ruff.toml)
 cd web && npm run lint     # analyse statique de l'interface (ESLint)
 ```
 
-431 tests avec des alertes Wazuh simulées : ingestion, cloisonnement par client, workflow, audit,
+598 tests avec des alertes Wazuh simulées, sous SQLite et, à chaque modification, sous PostgreSQL 16 : ingestion,
+cloisonnement par client, workflow, audit,
 régressions des revues, migrations, notifications (SMTP simulé, relances), pièces jointes (clamd simulé, EICAR),
 administration, confort de travail, pilotage, conformité, sauvegarde, script d'intégration Wazuh,
 contexte Wazuh (faux indexeur OpenSearch local, `tests/fake_indexer.py`),
-recherche d'empreinte sur VirusTotal (faux serveur local, `tests/fake_virustotal.py` : rien ne part vers le vrai service).
+recherche d'empreinte sur VirusTotal (faux serveur local, `tests/fake_virustotal.py` : rien ne part vers le vrai service),
+parc d'agents (faux manager, `tests/fake_wazuh_api.py`), pagination, workflows de la CI. Fuzzing Atheris de
+l'assainissement HTML et des alertes Wazuh : `fuzz/README.md`.
 
 Essais contre de vrais composants (facultatifs) : `KERYX_TEST_S3_REAL='endpoint|bucket|clé|secret|région'` (serveur S3), `KERYX_TEST_TSA_REAL='url|ca.pem'` (autorité d'horodatage), `E2E_KEYCLOAK=http://hôte:8180` (SSO). Dossier pour les tiers : `docs/homologation/`.
 
@@ -186,10 +204,10 @@ cd e2e && npm ci && node run.mjs        # CHROME_PATH et KERYX_PYTHON si besoin
 
 - Un seul processus Keryx : les limites de débit sont partagées en base sous PostgreSQL (en mémoire sous SQLite, ADR-0010), mais les relances de notifications et le relevé du parc tournent dans chaque processus. Haute disponibilité ni conçue ni testée.
 - Quarantaine : archive ZIP chiffrée (mot de passe « infected ») ; les pièces mises en quarantaine avant cette version restent stockées telles quelles (ADR-0019).
-- PostgreSQL 16 : la suite complète passe (402 tests réussis, 9 ignorés, sous PostgreSQL 16.2 le 24/11/2026, dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore ; `add-user --activation` a aussi été exercé sous PostgreSQL 16.16 par le déploiement Docker d'essai). Non testé : haute disponibilité, réplication, très gros volumes.
+- PostgreSQL 16 : la suite complète passe à chaque modification (CI), dont migrations aller-retour, ingestion concurrente, sauvegarde pg_dump / pg_restore. Non testé : haute disponibilité, réplication, très gros volumes.
 - Ingestion testée contre un vrai manager Wazuh de préproduction (188 alertes envoyées, 188 reçues, aucune perte), en plus du serveur simulé des tests. Le contexte de l'indexeur et le lien vers le tableau de bord n'ont pas été éprouvés (voir ci-dessous).
 - Déploiement Docker (ADR-0023) : essayé en mode local avec tous les profils ; le mode ACME, un vrai certificat fourni et les réglages du démon Docker (`userns-remap`, `bridge: none`, export des journaux) ne l'ont pas été. Ce n'est pas le cloisonnement en zones de PDIS IV.3.8.b, et Keryx ne sait pas encore séparer son portail client de sa console d'analyse (PDIS IV.3.13.b).
-- Parc d'agents Wazuh (ADR-0030) : jamais testé contre un vrai manager, seulement contre le faux manager des tests. À valider avant usage : noms des champs de `/agents`, permissions RBAC du compte de lecture, certificat de l'API.
+- Parc d'agents Wazuh (ADR-0030) : essayé contre un vrai manager Wazuh en préproduction, en plus du faux manager des tests. Non éprouvés en conditions réelles : un très grand parc et un manager partagé entre plusieurs clients.
 - Contexte Wazuh (ADR-0021) : jamais testé contre un vrai indexeur ni un vrai tableau de bord Wazuh, seulement contre le faux indexeur des tests. À valider avant usage : champ de date, type du champ `agent.id`, motif d'index, droits du compte de lecture, certificat, modèle d'URL.
 - Recherche VirusTotal (ADR-0022) : jamais testée contre le vrai VirusTotal, seulement contre le faux serveur des tests. À valider avant usage : forme des réponses et des erreurs, forme des clés, quotas, conditions d'utilisation de l'API (à vérifier par l'exploitant). Keryx n'envoie aucun fichier à VirusTotal.
 - Interface testée dans Chrome sans tête (parcours de chaque rôle) et contrôlée avec axe-core (WCAG 2.1 A/AA) ; pas d'audit RGAA complet ni de test d'intrusion.
