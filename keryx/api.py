@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session as DbSession
 from starlette.background import BackgroundTask
 
 from . import attachments as att
-from . import astreinte, audit, inbox, routes_admin, routes_astreinte, routes_oidc, routes_ops, routes_isi, routes_parc, routes_politique, routes_reports, routes_timestamp, routes_virustotal, routes_wazuh, routes_webauthn, routes_work, security
+from . import astreinte, audit, inbox, routes_admin, routes_astreinte, routes_oidc, routes_ops, routes_isi, routes_parc, routes_politique, routes_reports, routes_suivi_client, routes_timestamp, routes_virustotal, routes_wazuh, routes_webauthn, routes_work, security
 from . import wazuh_context
 from .oidc import load_providers
 from .bodylimit import BodyLimitMiddleware
@@ -958,6 +958,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "rule": {"id": t.rule_id, "level": t.rule_level, "description": t.rule_description, "groups": t.rule_groups,
                      "version": t.rule_version},
             "niveau_classification": t.niveau_classification, "collecteur": collecteur(db, t),
+            **routes_suivi_client.vue_suivi(db, t),
             "agent": {"id": t.agent_id, "name": t.agent_name, "ip": t.agent_ip},
             "mitre_detail": t.mitre, "classification": t.classification,
             "isi": t.isi if not is_client else None,
@@ -1070,6 +1071,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         t.updated_at = utcnow()
         if body.status in ("faux_positif", "cloture"):
             t.closed_at = t.updated_at
+            if t.demande_client == "cloture":
+                t.demande_client = None          # demande de clôture du client acceptée (PDIS IV.2.3.l)
         # Le client voit le changement de statut, jamais le motif : il est consigné à part, en interne.
         event(db, t, user, "statut", {"from": old, "to": body.status}, visible_client=True)
         if body.status == "faux_positif":
@@ -1532,6 +1535,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     routes_virustotal.register(app, ctx)
     routes_politique.register(app, ctx)
     routes_astreinte.register(app, ctx)
+    routes_suivi_client.register(app, ctx)
 
     # ---------------------------------------------------------------- interface web
     dist = settings.web_dist

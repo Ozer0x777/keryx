@@ -5,6 +5,7 @@ import { api, downloadBlob } from '../api.js'
 import { useAuth } from '../App.jsx'
 import { tlpAuMoins, tlpSous } from '../tlp.js'
 import { fmtMin } from '../components/Acquittement.jsx'
+import SuiviClient from '../components/SuiviClient.jsx'
 
 const NIVEAUX_CLASSIFICATION = ['Non protégé', 'Diffusion Restreinte']
 import { ActionStatus, useActionStatus } from '../components/ActionStatus.jsx'
@@ -295,6 +296,7 @@ export default function Ticket() {
             <Events t={t} />
           </TabPanel>
           <TabPanel id="communication" idBase="ticket" active={tab === 'communication'}>
+            <SuiviClient t={t} enc={enc} isClient={false} run={run} open={open} />
             <Comments t={t} enc={enc} isClient={isClient} me={me} run={run} onImage={uploadImage} templates={templates('commentaire')} />
           </TabPanel>
           <TabPanel id="rex" idBase="ticket" active={tab === 'rex'}>
@@ -308,6 +310,7 @@ export default function Ticket() {
         <div className="ticket-layout ticket-client">
           <div className="ticket-main">
             <Description t={t} enc={enc} canEdit={false} run={run} onImage={uploadImage} alertMerged={false} />
+            <SuiviClient t={t} enc={enc} isClient run={run} open={open} />
             <Attachments t={t} enc={enc} me={me} run={run} vt={vt} />
             <Events t={t} />
             <Comments t={t} enc={enc} isClient={isClient} me={me} run={run} onImage={uploadImage} templates={templates('commentaire')} />
