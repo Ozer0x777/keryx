@@ -93,6 +93,13 @@ class Tenant(Base):
     # Délai d'acquittement dans le rapport périodique remis au client (ADR-0032), choix du manager ; toujours visible
     # de l'équipe.
     acquittement_rapport: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    # Astreinte du client (ADR-0032), réglée par le manager : activation, criticités qui la préviennent, délai avant
+    # escalade par criticité (minutes), canaux choisis parmi ceux que l'Admin a déclarés. Désactivée par défaut.
+    astreinte_active: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    astreinte_criticites: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    astreinte_delais: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    astreinte_canal_id: Mapped[str | None] = mapped_column(ForeignKey("canaux_astreinte.id"), nullable=True)
+    escalade_canal_id: Mapped[str | None] = mapped_column(ForeignKey("canaux_astreinte.id"), nullable=True)
     # Compte en lecture seule de l'indexeur : chiffré AES-256-GCM comme le secret TOTP (ADR-0006), jamais renvoyé par l'API.
     wazuh_indexer_user: Mapped[str | None] = mapped_column(Text, nullable=True)
     wazuh_indexer_password: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -247,6 +254,9 @@ class Ticket(Base):
     # qualification). Le délai d'acquittement va de la détection Wazuh à cet instant. Une consultation n'acquitte pas.
     acquitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     acquitted_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Astreinte (ADR-0032) : heure à laquelle l'astreinte a été prévenue, puis l'escalade (une seule fois).
+    astreinte_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    escalade_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Mode « crise » [PRIS VI.5.5.1] : registre des décisions, plan d'action, synthèse de crise
     crisis: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
@@ -302,6 +312,25 @@ class Notification(Base):
     content: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(32))  # ex. non_envoye_smtp_absent (22 caractères)
     attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Astreinte et escalade de l'équipe (ADR-0032) : canal utilisé, motif, code de réponse du service appelé.
+    canal_id: Mapped[str | None] = mapped_column(ForeignKey("canaux_astreinte.id"), nullable=True)
+    motif: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class OnCallChannel(Base):
+    """Canal d'astreinte déclaré par l'Admin (ADR-0032) : webhook ou courriel de l'équipe. L'adresse (un webhook
+    contient souvent son jeton) et le secret de signature sont chiffrés au repos ; seul un libellé est affiché."""
+    __tablename__ = "canaux_astreinte"
+    id: Mapped[str] = _id()
+    name: Mapped[str] = mapped_column(String(80), unique=True)
+    kind: Mapped[str] = mapped_column(String(24))                 # webhook_json | webhook_mattermost | email
+    target_enc: Mapped[str] = mapped_column(Text)
+    target_label: Mapped[str] = mapped_column(String(300))
+    secret_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    include_title: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class MitreMapping(Base):

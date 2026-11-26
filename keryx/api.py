@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session as DbSession
 from starlette.background import BackgroundTask
 
 from . import attachments as att
-from . import audit, inbox, routes_admin, routes_oidc, routes_ops, routes_isi, routes_parc, routes_politique, routes_reports, routes_timestamp, routes_virustotal, routes_wazuh, routes_webauthn, routes_work, security
+from . import astreinte, audit, inbox, routes_admin, routes_astreinte, routes_oidc, routes_ops, routes_isi, routes_parc, routes_politique, routes_reports, routes_timestamp, routes_virustotal, routes_wazuh, routes_webauthn, routes_work, security
 from . import wazuh_context
 from .oidc import load_providers
 from .bodylimit import BodyLimitMiddleware
@@ -1460,6 +1460,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     log.exception("Relance des notifications en échec")
         threading.Thread(target=_retry_loop, name="notify-retry", daemon=True).start()
 
+    # ---------------------------------------------------------------- astreinte : escalade et relance (ADR-0032)
+    if settings.astreinte_tick_s > 0:
+        def _astreinte_loop() -> None:  # pragma: no cover - tâche de fond
+            while True:
+                time.sleep(settings.astreinte_tick_s)
+                try:
+                    astreinte.tick(SessionLocal, settings)
+                except Exception:
+                    log.exception("Astreinte : escalade et relance")
+        threading.Thread(target=_astreinte_loop, name="astreinte", daemon=True).start()
+
     # ---------------------------------------------------------------- relevé du parc d'agents Wazuh (ADR-0030)
     if settings.wazuh_agents_poll_s > 0:
         def _parc_loop() -> None:  # pragma: no cover - tâche de fond
@@ -1493,6 +1504,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     routes_parc.register(app, ctx)
     routes_virustotal.register(app, ctx)
     routes_politique.register(app, ctx)
+    routes_astreinte.register(app, ctx)
 
     # ---------------------------------------------------------------- interface web
     dist = settings.web_dist

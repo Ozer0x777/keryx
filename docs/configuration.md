@@ -19,6 +19,9 @@ Toutes les variables d'environnement lues par Keryx. Le kit Docker (`deploy/dock
 | `KERYX_RATE_LIMIT_BACKEND` | `memory` (par processus) ou `db` (partagée entre processus) | `db` si PostgreSQL |
 | `KERYX_RETENTION_MONTHS` | Rétention des alertes brutes des tickets clos (6 minimum) | 12 |
 | `KERYX_NOTIFY_RETRY_S` | Intervalle de relance des courriels en échec (0 = désactivée) | 300 |
+| `KERYX_ASTREINTE_TICK_S` | Période de la tâche d'astreinte : escalade des tickets non pris en charge, relance des envois en échec (0 = coupée) (ADR-0032) | 60 |
+| `KERYX_ASTREINTE_CA_FILE` | Autorité (PEM) des webhooks d'astreinte internes, à la place du magasin du système ; le fichier doit être monté dans le conteneur | aucun |
+| `KERYX_ASTREINTE_ALLOW_LOOPBACK` | Accepte un webhook en boucle locale : essais seulement | `false` |
 | `KERYX_SECRET_KEY` | Clé maîtresse 32 octets base64 (`keryx gen-key`) : obligatoire | aucun |
 | `KERYX_PUBLIC_URL` | URL utilisée dans les liens des notifications | `https://keryx.local` |
 | `KERYX_SMTP_HOST`, `_PORT`, `_TLS` (`starttls`/`ssl`), `_USER`, `_PASSWORD`, `_FROM` | Envoi des notifications | désactivé |

@@ -5,6 +5,11 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 ## [Non publié]
 
 ### Ajouté
+- Astreinte et escalade de l'équipe (ADR-0032, partie 2) : l'Admin déclare des canaux (webhook JSON générique signé,
+  Mattermost / Slack, courriel de l'équipe ; adresse et secret chiffrés, jamais réaffichés) ; le manager choisit, par
+  client, le canal d'astreinte, le canal d'escalade, les criticités et les délais. Un ticket ouvert prévient
+  l'astreinte ; sans prise en charge dans le délai, Keryx prévient une fois l'escalade. Envois inscrits au registre
+  avec le code de réponse, relancés en cas d'échec.
 - Délai d'acquittement (ADR-0032, partie 1) : bouton « Je prends » ; chaque ticket retient la première action de
   l'équipe (prise en charge, affectation, statut, qualification) ; délai depuis la détection Wazuh affiché dans la
   fiche, et par criticité (moyenne, 90e centile) dans le pilotage ; dans le rapport remis au client seulement si le
