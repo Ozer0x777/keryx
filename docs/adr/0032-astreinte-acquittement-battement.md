@@ -68,7 +68,8 @@
   `e2e/scenarios/99-acquittement.mjs`.
 - **Partie 2, telle que codée** :
   - table `canaux_astreinte` (migration `0024`) : l'Admin déclare un canal (webhook JSON générique, webhook
-    Mattermost / Slack, courriel de l'équipe) dans Administration > Canaux d'astreinte. L'adresse, qui contient
+    Mattermost / Slack, webhook Microsoft Teams par l'application Workflows avec une carte adaptative, les
+    connecteurs Office 365 étant retirés par Microsoft, ou courriel de l'équipe) dans Administration > Canaux d'astreinte. L'adresse, qui contient
     souvent le jeton du webhook, et le secret de signature sont chiffrés au repos (AES-256-GCM, contexte propre au
     canal) et ne sont jamais renvoyés : seul l'hôte est affiché. Bouton « Envoyer un essai » sans donnée de ticket ;
   - le manager règle, par client, dans « Politique des clients » : activation, canal d'astreinte, canal d'escalade

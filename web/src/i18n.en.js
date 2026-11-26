@@ -519,6 +519,7 @@ export default {
   "Secret de signature (facultatif)": "Signing secret (optional)",
   "Webhook JSON générique": "Generic JSON webhook",
   "Webhook Mattermost / Slack": "Mattermost / Slack webhook",
+  "Webhook Microsoft Teams (Workflows)": "Microsoft Teams webhook (Workflows)",
   "avec le titre": "with title",
   "désactivé": "disabled",
   "ex. astreinte-soc": "e.g. soc-oncall",

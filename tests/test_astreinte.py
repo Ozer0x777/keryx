@@ -249,3 +249,20 @@ def test_courriel_sans_smtp_ou_en_panne(app, db, world, alert, smtp, settings):
     assert smtp.sent[-1]["Subject"] == "[Keryx] Essai du canal « astreinte-mail »"
     settings.smtp_host = None
     assert adm.post(f"/api/v1/admin/canaux/{c['id']}/essai").json()["erreur"] == "smtp_absent"
+
+
+def test_format_teams(app, db, world, alert, hook):
+    adm = login(app, db, "admin")
+    c = _canal(adm, "teams-soc", f"{hook.url}/workflows/abc/triggers/manual/paths/invoke?sig=SIGNATURE", kind="webhook_teams")
+    assert c["target"].endswith("/…") and "SIGNATURE" not in c["target"]
+    m = login(app, db, "manager")
+    assert m.put("/api/v1/politique/ACME", json={"astreinte_active": True, "astreinte_canal_id": c["id"]}).status_code == 200
+    ref = ingest(app, world["keys"]["ACME"], alert(ALERT_CRITICAL)).json()["ticket"]
+    body = hook.json()
+    assert hook.requests[-1]["path"].endswith("?sig=SIGNATURE") and body["type"] == "message"
+    att = body["attachments"][0]
+    assert att["contentType"] == "application/vnd.microsoft.card.adaptive"
+    card = att["content"]
+    assert card["type"] == "AdaptiveCard" and card["body"][0]["text"] == "[Keryx] Astreinte" and ref in card["body"][1]["text"]
+    assert card["actions"] == [{"type": "Action.OpenUrl", "title": "Ouvrir dans Keryx", "url": f"https://keryx.local/tickets/{ref}"}]
+    assert "Correlated exfiltration" not in json.dumps(body)        # minimisation : pas de titre par défaut

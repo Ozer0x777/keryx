@@ -10,6 +10,7 @@ import { formatUtc } from '../../labels.js'
 export const KINDS = {
   webhook_json: tr('Webhook JSON générique'),
   webhook_mattermost: tr('Webhook Mattermost / Slack'),
+  webhook_teams: tr('Webhook Microsoft Teams (Workflows)'),
   email: tr("Courriel de l'équipe"),
 }
 

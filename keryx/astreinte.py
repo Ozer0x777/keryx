@@ -2,7 +2,8 @@
 
 Un ticket ouvert d'une criticité choisie par le manager prévient le canal d'astreinte du client ; sans action humaine
 de l'équipe au bout du délai réglé pour cette criticité, Keryx prévient une fois le canal d'escalade, puis s'arrête.
-Les canaux sont déclarés par l'Admin (webhook JSON générique, webhook Mattermost / Slack, courriel de l'équipe).
+Les canaux sont déclarés par l'Admin (webhook JSON générique, webhook Mattermost / Slack, webhook Microsoft Teams par
+l'application Workflows, courriel de l'équipe).
 
 Envoi borné, même règle de sortie que le connecteur Wazuh (ADR-0021) :
 - HTTPS uniquement, pas d'identifiants dans l'URL, aucune redirection suivie, aucun mandataire d'environnement ;
@@ -43,7 +44,7 @@ from .wazuh_context import address_refusal
 
 log = logging.getLogger("keryx.astreinte")
 
-KINDS = ("webhook_json", "webhook_mattermost", "email")
+KINDS = ("webhook_json", "webhook_mattermost", "webhook_teams", "email")
 CRITICITES = ("Critique", "Élevée", "Moyenne", "Faible")
 DELAIS_DEFAUT = {"Critique": 15, "Élevée": 30, "Moyenne": 60, "Faible": 120}
 OPEN = ("nouveau", "en_evaluation", "en_reponse")
@@ -138,9 +139,25 @@ def message(settings: Settings, motif: str, ticket: Ticket, tenant: Tenant, chan
     return {"subject": subject, "text": text, "data": data}
 
 
+def teams_card(msg: dict) -> dict:
+    """Carte adaptative attendue par un flux Microsoft Teams Workflows (« Publier dans un canal à la réception d'une
+    requête webhook ») ; les anciens connecteurs Office 365 sont retirés par Microsoft."""
+    title, _, rest = msg["text"].partition(" : ")
+    url = msg["data"].get("url")
+    card = {"$schema": "http://adaptivecards.io/schemas/adaptive-card.json", "type": "AdaptiveCard", "version": "1.4",
+            "body": [{"type": "TextBlock", "text": title, "weight": "Bolder", "size": "Medium", "wrap": True},
+                     {"type": "TextBlock", "text": rest.replace(f" {url}", "") if url else rest, "wrap": True}]}
+    if url:
+        card["actions"] = [{"type": "Action.OpenUrl", "title": "Ouvrir dans Keryx", "url": url}]
+    return {"type": "message", "attachments": [{"contentType": "application/vnd.microsoft.card.adaptive",
+                                                 "contentUrl": None, "content": card}]}
+
+
 def body_for(kind: str, msg: dict, now) -> bytes:
     if kind == "webhook_mattermost":
         payload = {"text": msg["text"]}       # Mattermost et Slack acceptent ce format de webhook entrant
+    elif kind == "webhook_teams":
+        payload = teams_card(msg)
     else:
         payload = {**msg["data"], "envoye_le": rfc3339(now)}
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")

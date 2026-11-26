@@ -6,7 +6,7 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ### Ajouté
 - Astreinte et escalade de l'équipe (ADR-0032, partie 2) : l'Admin déclare des canaux (webhook JSON générique signé,
-  Mattermost / Slack, courriel de l'équipe ; adresse et secret chiffrés, jamais réaffichés) ; le manager choisit, par
+  Mattermost / Slack, Microsoft Teams par Workflows, courriel de l'équipe ; adresse et secret chiffrés, jamais réaffichés) ; le manager choisit, par
   client, le canal d'astreinte, le canal d'escalade, les criticités et les délais. Un ticket ouvert prévient
   l'astreinte ; sans prise en charge dans le délai, Keryx prévient une fois l'escalade. Envois inscrits au registre
   avec le code de réponse, relancés en cas d'échec.
