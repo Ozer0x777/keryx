@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote, urlencode
 
-from sqlalchemy import delete, select
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.orm import Session as DbSession
 
 from . import wazuh_context as wz
@@ -419,6 +419,26 @@ def flags(a: WazuhAgent, manager_version: str | None, now: datetime, events_know
             "down24": a.status == "disconnected" and now - since >= DOWN_ALERT, "silent": silent}
 
 
+def history_window(db: DbSession, tenants: dict, start: datetime, end: datetime, agent_id: str | None = None) -> dict:
+    """Historique utile à une frise entre `start` et `end`, par (client, agent) : le dernier changement de chaque agent
+    à `start` ou avant (son état au début de la période), puis ceux de la période. L'historique est conservé sans
+    limite (ADR-0030) : il n'est jamais relu en entier. Seul l'historique du manager courant de chaque client compte."""
+    ev = WazuhAgentEvent
+    cond = [ev.tenant_id.in_(list(tenants))]
+    if agent_id is not None:
+        cond.append(ev.agent_id == agent_id)
+    dernier = (select(ev.tenant_id, ev.agent_id, ev.source, func.max(ev.at).label("at"))
+               .where(*cond, ev.at <= start).group_by(ev.tenant_id, ev.agent_id, ev.source).subquery())
+    avant = db.scalars(select(ev).join(dernier, and_(ev.tenant_id == dernier.c.tenant_id, ev.agent_id == dernier.c.agent_id,
+                                                     ev.source == dernier.c.source, ev.at == dernier.c.at)))
+    pendant = db.scalars(select(ev).where(*cond, ev.at > start, ev.at < end))
+    history: dict[tuple, list] = {}
+    for e in sorted([*avant, *pendant], key=lambda e: (as_utc(e.at), e.id)):
+        if e.source == (tenants[e.tenant_id].wazuh_api_url or ""):
+            history.setdefault((e.tenant_id, e.agent_id), []).append(e)
+    return history
+
+
 def summary(db: DbSession, tenants: dict, start: datetime, end: datetime) -> dict | None:
     """Parc des clients du périmètre pour le pilotage et le rapport périodique : état courant et disponibilité
     moyenne sur la période (temps actif sur temps observé, agent par agent). None si aucun agent n'est relevé."""
@@ -428,11 +448,7 @@ def summary(db: DbSession, tenants: dict, start: datetime, end: datetime) -> dic
     now = utcnow()
     end = min(end, now)
     keys = {t_id: t.key for t_id, t in tenants.items()}
-    history: dict[tuple, list] = {}
-    for e in db.scalars(select(WazuhAgentEvent).where(WazuhAgentEvent.tenant_id.in_(list(tenants)), WazuhAgentEvent.at < end)
-                        .order_by(WazuhAgentEvent.at)):
-        if e.source == (tenants[e.tenant_id].wazuh_api_url or ""):       # historique du manager courant seulement
-            history.setdefault((e.tenant_id, e.agent_id), []).append(e)
+    history = history_window(db, tenants, start, end)
     per_agent, counts = [], {s: 0 for s in STATUSES}
     down24 = outdated = 0
     for a in rows:

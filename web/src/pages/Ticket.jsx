@@ -250,7 +250,7 @@ export default function Ticket() {
                 id: x.id, label: tr(x.label),
                 badge: <>
                   {x.id === 'preuves' && t.attachments.length > 0 && <span className="count">{t.attachments.length}</span>}
-                  {x.id === 'communication' && t.comments.length > 0 && <span className="count">{t.comments.length}</span>}
+                  {x.id === 'communication' && t.comments.length > 0 && <span className="count">{t.comments.length + (t.comments_older || 0)}</span>}
                   {x.id === 'rex' && t.rex_required && <span className="pill warn">{tr('obligatoire')}</span>}
                   {x.zones.some((z) => unsaved.ids.includes(z)) && <span className="unsaved-dot"><span aria-hidden="true">●</span><span className="sr-only"> {tr('Modifications non enregistrées')}</span></span>}
                 </>,
@@ -589,12 +589,39 @@ function fmtDetail(v) {
   return String(v)
 }
 
+// Entrées plus anciennes d'un ticket (commentaires ou historique), chargées à la demande par paquets : la fiche ne
+// reçoit que les plus récentes. Un nouveau relevé de la fiche repart des plus récentes.
+function useOlder(ref, kind, items, older) {
+  const [extra, setExtra] = useState({ items: [], older: null })
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  useEffect(() => { setExtra({ items: [], older: null }); setError('') }, [items])
+  const all = [...extra.items, ...items]
+  const remaining = extra.older ?? older ?? 0
+  const more = async () => {
+    setBusy(true); setError('')
+    try {
+      const r = await api(`/tickets/${encodeURIComponent(ref)}/${kind}`, { params: { before: all[0].id } })
+      setExtra((x) => ({ items: [...r.items, ...x.items], older: r.older }))
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+  const button = remaining > 0 && (
+    <p className="row gap older">
+      <button type="button" className="small-btn" onClick={more} disabled={busy}>{tr('Afficher les plus anciens ({n} restants)', { n: remaining })}</button>
+      {error && <span className="error" role="alert">{error}</span>}
+    </p>
+  )
+  return { all, total: items.length + (older || 0), button }
+}
+
 function Events({ t }) {
+  const ev = useOlder(t.ref, 'events', t.events, t.events_older)
   return (
-    <Section id="actions" title={tr("Registre des actions")} summary={t.events.length || null}>
+    <Section id="actions" title={tr("Registre des actions")} summary={ev.total || null}>
+      {ev.button}
       <ol className="timeline">
-        {t.events.map((e, i) => (
-          <li key={i}>
+        {ev.all.map((e, i) => (
+          <li key={e.id || i}>
             <span className="mono small muted">{formatUtc(e.ts)}</span>
             <span className="strong">{e.actor}</span>
             <span>{e.action}{e.details && Object.keys(e.details).length > 0 && e.action !== 'description'
@@ -608,6 +635,7 @@ function Events({ t }) {
 
 function Comments({ t, enc, isClient, me, run, onImage, templates }) {
   // Brouillon de la zone de saisie : sessionStorage de l'onglet seulement (ADR-0024), restauré au retour sur la fiche.
+  const cm = useOlder(t.ref, 'comments', t.comments, t.comments_older)
   const key = draftKey(me.username, t.ref)
   const [html, setHtmlState] = useState(() => readDraft(key))
   const [restored, setRestored] = useState(() => !!readDraft(key))
@@ -647,10 +675,11 @@ function Comments({ t, enc, isClient, me, run, onImage, templates }) {
     if (r) setStatus({ ok: tr('Modèle enregistré à {h}', { h: utcClock() }) })
   }
   return (
-    <Section id="commentaires" title={isClient ? tr('Échanges avec le SOC') : tr('Commentaires')} summary={t.comments.length || null}>
-      {t.comments.length === 0 && <p className="muted">{tr("Aucun commentaire.")}</p>}
-      {t.comments.map((c, i) => (
-        <div key={i} className={`comment ${c.visible_client ? 'public' : 'internal'}`}>
+    <Section id="commentaires" title={isClient ? tr('Échanges avec le SOC') : tr('Commentaires')} summary={cm.total || null}>
+      {cm.total === 0 && <p className="muted">{tr("Aucun commentaire.")}</p>}
+      {cm.button}
+      {cm.all.map((c, i) => (
+        <div key={c.id || i} className={`comment ${c.visible_client ? 'public' : 'internal'}`}>
           <div className="comment-head">{c.visible_client ? (isClient ? '' : tr('VISIBLE CLIENT · ')) : tr('INTERNE · ')}{c.author} · {formatUtc(c.created_at)}</div>
           <Html html={c.body_html} />
         </div>

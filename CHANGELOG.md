@@ -13,6 +13,11 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
   courte pause de frappe.
 - Kanban chargé colonne par colonne : les 50 tickets les plus récents de chaque colonne, son vrai total et un lien
   vers la liste paginée pour les autres ; auparavant, 500 tickets au plus pour tout le tableau.
+- Fiche d'un ticket : les 50 commentaires et les 100 entrées d'historique les plus récents, les plus anciens à la
+  demande par paquets (curseur stable, même cloisonnement pour le client) ; le rapport imprimable reste complet. Un
+  ticket qui rattache des milliers d'alertes répétées n'est plus envoyé d'un bloc.
+- Parc d'agents : la frise d'un agent et la disponibilité du pilotage et du rapport ne lisent plus que la période
+  utile (dernier état avant la période et changements de la période), et non tout l'historique, conservé sans limite.
 
 ### Sécurité
 - Kit Docker : `install.sh` vérifie toujours la signature de l'image publiée, avec cosign s'il est installé, sinon
