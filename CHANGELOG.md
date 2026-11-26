@@ -4,6 +4,11 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+### Ajouté
+- Politique du client (ADR-0033) : le manager fixe un TLP plancher par client. Les tickets et les pièces du client
+  naissent à ce niveau ; un analyste peut monter, jamais descendre en dessous ; un manager peut descendre un ticket
+  en dessous avec un motif tracé. Relever le plancher relève les tickets ouverts ; le baisser ne baisse rien.
+
 ## [0.8.4] : 2026-11-26
 
 ### Ajouté

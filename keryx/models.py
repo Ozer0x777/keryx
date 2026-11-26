@@ -41,7 +41,18 @@ TERMINAL_STATUSES = ("faux_positif", "cloture", "retour_experience")
 
 SEVERITIES = ("Faible", "Moyenne", "Élevée", "Critique")
 VERDICTS = ("vrai_positif_avere", "vrai_positif_non_avere", "faux_positif")
-TLP = ("TLP:CLEAR", "TLP:GREEN", "TLP:AMBER", "TLP:AMBER+STRICT", "TLP:RED")  # FIRST TLP 2.0
+TLP = ("TLP:CLEAR", "TLP:GREEN", "TLP:AMBER", "TLP:AMBER+STRICT", "TLP:RED")  # FIRST TLP 2.0, du moins au plus restrictif
+TLP_DEFAUT = "TLP:AMBER"
+
+
+def tlp_rang(valeur: str | None) -> int:
+    """Rang d'un marquage TLP (plus grand = plus restrictif) ; -1 si inconnu ou absent."""
+    return TLP.index(valeur) if valeur in TLP else -1
+
+
+def tlp_initial(plancher: str | None) -> str:
+    """Marquage d'un nouveau ticket ou d'une nouvelle pièce d'un client : son plancher, sinon TLP:AMBER (ADR-0033)."""
+    return plancher if plancher in TLP else TLP_DEFAUT
 
 
 def _id() -> Mapped[str]:
@@ -75,6 +86,10 @@ class Tenant(Base):
     # (cluster.name). Obligatoire et propre à chaque client quand plusieurs clients lisent le même indexeur avec des
     # motifs d'index qui se recouvrent : les numéros d'agent ne sont uniques que par manager (ADR-0031).
     wazuh_indexer_source: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Politique du client (ADR-0033), réglée par le manager : TLP plancher. Les tickets et les pièces du client naissent
+    # à ce niveau ; un analyste ne peut pas descendre en dessous, un manager le peut sur un ticket avec un motif.
+    # Vide : pas de plancher, les tickets naissent en TLP:AMBER comme avant.
+    tlp_plancher: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # Compte en lecture seule de l'indexeur : chiffré AES-256-GCM comme le secret TOTP (ADR-0006), jamais renvoyé par l'API.
     wazuh_indexer_user: Mapped[str | None] = mapped_column(Text, nullable=True)
     wazuh_indexer_password: Mapped[str | None] = mapped_column(Text, nullable=True)

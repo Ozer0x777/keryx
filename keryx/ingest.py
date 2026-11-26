@@ -18,7 +18,7 @@ from . import audit
 from .config import Settings
 from .ids import as_utc, parse_wazuh_timestamp, utcnow
 from .mitre import enrich
-from .models import Notification, RawAlert, Tenant, Ticket, TicketEvent
+from .models import Notification, RawAlert, Tenant, Ticket, TicketEvent, tlp_initial
 from .notify import queue_new_ticket
 from .sanitize import clean_html, esc
 from .severity import criticite_initiale, importance_from_alert
@@ -236,7 +236,7 @@ def ingest_alert(db: DbSession, settings: Settings, tenant: Tenant, alert: dict,
     title = short_title(description, _str(agent.get("name"), 200))
     agent_ip = _str(agent.get("ip"), 64) or None
     ticket = Ticket(
-        tenant_id=tenant.id, seq=seq, ref=ref, title=title,
+        tenant_id=tenant.id, seq=seq, ref=ref, title=title, tlp=tlp_initial(tenant.tlp_plancher),
         body_html=build_body(alert, rule), status="nouveau",
         criticite_initiale=crit, importance=importance_from_alert(alert),
         rule_id=rule_id, rule_level=level, rule_description=description,

@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session as DbSession
 from starlette.background import BackgroundTask
 
 from . import attachments as att
-from . import audit, inbox, routes_admin, routes_oidc, routes_ops, routes_isi, routes_parc, routes_reports, routes_timestamp, routes_virustotal, routes_wazuh, routes_webauthn, routes_work, security
+from . import audit, inbox, routes_admin, routes_oidc, routes_ops, routes_isi, routes_parc, routes_politique, routes_reports, routes_timestamp, routes_virustotal, routes_wazuh, routes_webauthn, routes_work, security
 from . import wazuh_context
 from .oidc import load_providers
 from .bodylimit import BodyLimitMiddleware
@@ -45,7 +45,7 @@ from .ingest import AlertRejected, ingest_alert
 from .mitre import valid_technique
 from .models import (
     LIFECYCLE, SEVERITIES, STATUSES, TLP, VERDICTS, ApiKey, Attachment, AuditEntry, Comment, CustodyEvent, MitreTechnique, RateHit,
-    RawAlert, Session, WebAuthnCredential, Tenant, Ticket, TicketEvent, User,
+    RawAlert, Session, WebAuthnCredential, Tenant, Ticket, TicketEvent, User, tlp_initial, tlp_rang,
 )
 from .notify import retry_failed, send_pending
 from .s3store import StorageError
@@ -178,6 +178,7 @@ class QualificationIn(BaseModel):
     impact: str | None = Field(default=None, max_length=5000)
     risque: str | None = Field(default=None, max_length=5000)
     tlp: str | None = None
+    motif_tlp: str | None = Field(default=None, max_length=2000)   # TLP sous le plancher du client (manager, ADR-0033)
     from_proposal: bool = False   # dommages retenus depuis la proposition affichée (ADR-0028), tracé au registre
 
 
@@ -218,7 +219,7 @@ class ExternalEvidenceIn(BaseModel):
     description: str = Field(min_length=3, max_length=5000)
     collected_at: datetime
     method: str = Field(min_length=3, max_length=500)
-    sensitivity: str = "TLP:AMBER"
+    sensitivity: str | None = None      # vide : TLP plancher du client (ADR-0033)
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     location: str = Field(min_length=3, max_length=500)
     size: int = Field(default=0, ge=0, le=2**50)
@@ -402,6 +403,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     def client_ip(request: Request) -> str:
         return request.client.host if request.client else "inconnu"
+
+    def sensibilite(db, t: Ticket, valeur: str | None) -> str:
+        """Sensibilité d'une pièce : le TLP plancher du client si rien n'est choisi ; jamais en dessous (ADR-0033)."""
+        plancher = db.get(Tenant, t.tenant_id).tlp_plancher
+        if valeur is None or valeur == "":
+            return tlp_initial(plancher)
+        if valeur not in TLP:
+            raise HTTPException(422, f"Sensibilité attendue parmi : {', '.join(TLP)}.")
+        if tlp_rang(valeur) < tlp_rang(plancher):
+            raise HTTPException(422, f"La sensibilité d'une pièce de ce client ne descend pas sous {plancher} (politique "
+                                     "fixée par le manager).")
+        return valeur
 
     def event(db, t: Ticket, user: User, action: str, details: dict, visible_client: bool = False):
         db.add(TicketEvent(ticket_id=t.id, actor=user.username, action=action, details=details,
@@ -941,6 +954,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # Horloges (ADR-0028) : « détecté » vient du manager Wazuh, « reçu » de l'horloge de Keryx. Un délai négatif
             # veut dire que l'horloge du manager est en avance sur celle de Keryx.
             out["received_at"] = rfc3339(t.created_at)
+            out["tlp_plancher"] = db.get(Tenant, t.tenant_id).tlp_plancher     # politique du client (ADR-0033)
             out["reception_delay_s"] = int((as_utc(t.created_at) - as_utc(t.detected_at)).total_seconds())
             out["synthese"] = {"compromission_initiale": rfc3339(t.compromission_initiale),
                                "chronologie": t.chronologie, "mode_operatoire": t.mode_operatoire,
@@ -972,13 +986,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(422, f"Dommages attendus parmi : {', '.join(DOMMAGES)}.")
         if "tlp" in sent and body.tlp not in TLP:
             raise HTTPException(422, f"Marquage attendu parmi : {', '.join(TLP)}.")
+        tenant = db.get(Tenant, t.tenant_id)
+        sous_plancher = None
+        if "tlp" in sent and body.tlp != t.tlp and tlp_rang(body.tlp) < tlp_rang(tenant.tlp_plancher):
+            # TLP plancher du client (ADR-0033) : l'analyste peut monter, pas descendre en dessous ; le manager le peut
+            # sur ce ticket, avec un motif tracé.
+            if user.role != "manager":
+                raise HTTPException(422, f"Le TLP de ce client ne descend pas sous {tenant.tlp_plancher} (politique fixée "
+                                         "par le manager).")
+            motif = (body.motif_tlp or "").strip()
+            if len(motif) < MIN_REASON:
+                raise HTTPException(422, f"Passer sous le TLP plancher du client ({tenant.tlp_plancher}) demande un motif "
+                                         f"d'au moins {MIN_REASON} caractères.")
+            sous_plancher = {"de": t.tlp, "vers": body.tlp, "plancher": tenant.tlp_plancher, "motif": motif}
         if "verdict" in sent and body.verdict != t.verdict and t.status not in ("nouveau", "en_evaluation"):
             raise HTTPException(409, "Le verdict ne peut changer qu'en phase d'évaluation.")
         for f in ("verdict", "importance", "dommages", "impact", "risque", "tlp"):
             if f in sent:
                 setattr(t, f, getattr(body, f))
         if t.dommages:  # toujours recalculée sur l'état complet
-            tenant = db.get(Tenant, t.tenant_id)
             t.gravite = gravite(t.dommages, t.importance, tenant.severity_grid)
         t.rex_required = bool(t.verdict and t.verdict != "faux_positif"
                               and is_rex_required(t.gravite or t.criticite_initiale))
@@ -988,6 +1014,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if body.from_proposal and "dommages" in sent:
             details["source"] = "proposition"
         event(db, t, user, "qualification", details)
+        if sous_plancher:
+            event(db, t, user, "tlp_sous_plancher", sous_plancher)
         commit(db)
         return {"ref": t.ref, "verdict": t.verdict, "gravite": t.gravite, "rex_required": t.rex_required}
 
@@ -1215,7 +1243,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def upload_attachment(ref: str, request: Request, file: UploadFile = File(...),
                           description: str = Form(min_length=3, max_length=5000),
                           collected_at: datetime = Form(...), method: str = Form(min_length=3, max_length=500),
-                          sensitivity: str = Form("TLP:AMBER"), visible_client: bool = Form(False),
+                          sensitivity: str | None = Form(None), visible_client: bool = Form(False),
                           embedded: bool = Form(False),
                           user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         t = load_ticket(db, user, ref)
@@ -1225,8 +1253,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # Image insérée depuis l'éditeur : jamais visible au dépôt ; elle le devient à l'enregistrement d'un contenu
             # visible qui la référence (voir reveal_embedded_images). Le dépôt d'un client reste visible par le client.
             visible_client = False
-        if sensitivity not in TLP:
-            raise HTTPException(422, f"Sensibilité attendue parmi : {', '.join(TLP)}.")
+        sensitivity = sensibilite(db, t, sensitivity)
         declared = request.headers.get("content-length")
         if not (declared and declared.isdigit()):
             # Sans Content-Length (envoi chunked), le corps serait entièrement écrit sur disque avant tout contrôle.
@@ -1280,8 +1307,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         require_role(user, "analyst", "manager")
         t = load_ticket(db, user, ref)
         require_open(t)
-        if body.sensitivity not in TLP:
-            raise HTTPException(422, f"Sensibilité attendue parmi : {', '.join(TLP)}.")
+        body.sensitivity = sensibilite(db, t, body.sensitivity)
         body.collected_at = input_date(body.collected_at, "Date de collecte")
         a = Attachment(ticket_id=t.id, tenant_id=t.tenant_id, kind="preuve_externe",
                        filename=att.safe_filename(body.filename), storage_name=None, size=body.size,
@@ -1443,6 +1469,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     routes_wazuh.register(app, ctx)
     routes_parc.register(app, ctx)
     routes_virustotal.register(app, ctx)
+    routes_politique.register(app, ctx)
 
     # ---------------------------------------------------------------- interface web
     dist = settings.web_dist

@@ -30,7 +30,7 @@ export default function Layout() {
     ? [['/admin', t('Administration')]]
     : me.role === 'client'
       ? [['/tickets', t('Mes incidents')], ['/parc', t('Mon parc')]]
-      : [['/tickets', t('Tickets')], ['/kanban', t('Kanban')], ['/parc', t('Parc Wazuh')], ['/pilotage', t('Pilotage')], ['/rapports', t('Rapports')], ...(me.role === 'manager' ? [['/mitre', t('Table MITRE')], ['/audit', t("Journal d'audit")]] : [])]
+      : [['/tickets', t('Tickets')], ['/kanban', t('Kanban')], ['/parc', t('Parc Wazuh')], ['/pilotage', t('Pilotage')], ['/rapports', t('Rapports')], ...(me.role === 'manager' ? [['/politique', t('Politique des clients')], ['/mitre', t('Table MITRE')], ['/audit', t("Journal d'audit")]] : [])]
   return (
     <div className="shell">
       <a className="skip" href="#contenu">{t('Aller au contenu')}</a>
