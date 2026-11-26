@@ -27,7 +27,9 @@
   4. le tout-en-un reste le mode par défaut, avec la liste publiée des exigences PDIS qu'il ne couvre pas (III.3) ;
   5. fichiers analysés aux deux bouts, archives chiffrées « non analysables » et isolées, journal de passage
      (IV.3.13.a) ;
-  6. le client met à jour l'état des actions que l'équipe lui demande, pas le statut de l'incident (IV.2.3.l) ;
+  6. le client modifie l'état de ses tickets sur un cycle qui lui est propre (pris en compte, en cours chez lui,
+     traité de son côté, demande de clôture ou de réouverture) et l'état des actions demandées ; la qualification et
+     la clôture restent à l'équipe (IV.2.3.l, tel que la trame d'évaluation le vérifie) ;
   7. pare-feu applicatif Coraza avec l'OWASP CRS devant chaque portail (IV.3.13.g) ;
   8. indicateurs du portail rapatriés par la console (IV.5.1.e, g) ;
   9. IPsec agréé, filtrage qualifié et relais de messagerie restent à l'infrastructure (IV.3.8.e, IV.3.10, IV.3.12).

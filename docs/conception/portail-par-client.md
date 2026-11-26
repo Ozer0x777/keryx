@@ -109,7 +109,7 @@ auraient un écran par client.
 
 1. Fonction de projection client unique, utilisée par l'API actuelle (aucun changement visible).
 2. Liste des exigences PDIS non couvertes en mode tout-en-un (décision 4).
-3. Actions demandées au client, utilisables en tout-en-un (décision 6).
+3. État du ticket côté client et actions demandées au client, utilisables en tout-en-un (décision 6).
 4. Fichiers chiffrés ou non analysables, journal de passage à l'antivirus (décision 5), après lecture de [NT_ADMIN].
 5. Modes `console` et `portail`, routes filtrées par mode.
 6. Synchronisation console vers portail (tickets, commentaires, événements, notifications visibles), TLS mutuel,
@@ -151,11 +151,14 @@ Prises par délégation du mainteneur, après lecture intégrale du référentie
    passage par l'antivirus est journalisé avec l'horodate, le nom et l'empreinte SHA-256, dans les deux sens
    (IV.3.13.a). Le chapitre « Système d'échange » de la note [NT_ADMIN] auquel renvoie IV.3.13.a reste à lire avant
    l'étape 4 du découpage.
-6. **Ce que le client met à jour.** Le client ne change pas le statut d'un incident : la qualification et le
-   registre restent à l'équipe. Il peut, depuis le portail, mettre à jour l'état des actions que l'équipe lui demande
-   (« à faire », « faite », « impossible », avec un commentaire), signaler qu'un incident est traité de son côté,
-   commenter et déposer des informations de contexte (IV.2.3.l, IV.3.13.a). Les actions demandées au client sont un
-   ajout au modèle, visible aussi en mode tout-en-un.
+6. **Ce que le client met à jour.** La trame d'évaluation (IV.2.3.l) vérifie que le portail permet « le suivi et la
+   modification de l'état des tickets » et la vue des actions. Le client modifie donc l'état de ses tickets sur un
+   cycle qui lui est propre : « pris en compte », « en cours de traitement chez nous », « traité de notre côté »,
+   avec une demande de clôture ou de réouverture. Chaque changement est inscrit au registre des actions et signalé à
+   l'équipe ; la qualification, la gravité et la clôture du ticket restent à l'équipe, qui accepte ou refuse la
+   demande. Le client met aussi à jour l'état des actions que l'équipe lui demande (« à faire », « faite »,
+   « impossible », avec un commentaire), commente et dépose des informations de contexte. Ces ajouts au modèle
+   servent aussi en mode tout-en-un.
 7. **Pare-feu applicatif** devant chaque portail (IV.3.13.g) : Coraza avec l'OWASP Core Rule Set, en mode blocage,
    intégré au mandataire Caddy du kit « portail ». Les parcours e2e du rôle Client passent au travers, pour détecter
    les faux positifs avant la mise en service.
