@@ -2,7 +2,7 @@
 
 Revision ID: 0025
 Revises: 0024
-Create Date: 2026-11-27 01:00:00
+Create Date: 2026-11-26 19:00:00
 
 Désactivé pour chaque client existant. Un message du registre des notifications peut ne concerner aucun ticket
 (battement manquant ou rétabli) : sa référence au ticket devient facultative.

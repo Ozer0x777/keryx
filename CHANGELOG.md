@@ -4,6 +4,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+## [0.9.0] : 2026-11-26
+
 ### Modifié
 - Signature des versions avec cosign 3 (3.1.4) : nouveau format de preuve de Sigstore. `install.sh` vérifie avec
   cosign 3 (installé, sinon son image officielle épinglée) et ignore un cosign 2, qui ne trouve pas ces signatures ;

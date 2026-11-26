@@ -2,7 +2,7 @@
 
 - **Statut** : accepté (26/11/2026). Questions tranchées par le mainteneur le 26/11/2026 (voir « Réglages »).
   Parties 1 (délai d'acquittement, « Je prends », choix du rapport client), 2 (canaux, astreinte, escalade) et 3
-  (battement de cœur) codées les 26 et 27/11/2026. La partie 3 n'a pas été essayée sur un manager Wazuh réel.
+  (battement de cœur) codées le 26/11/2026. La partie 3 n'a pas été essayée sur un manager Wazuh réel.
 - **Contexte** : le pire scénario pour un SOC est une alerte critique que personne ne traite parce que personne n'a
   été prévenu, ou une chaîne d'alerte tombée en silence sans que personne ne s'en aperçoive. Aujourd'hui :
   - Keryx garde l'identifiant Wazuh, l'horodatage de détection et l'alerte brute de chaque ticket ;
