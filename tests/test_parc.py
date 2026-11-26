@@ -430,3 +430,31 @@ def test_pagination_filtre_et_recherche_cote_serveur(papp, db, world, wapi):
     assert s["matched"] == 10 and {x["name"] for x in s["agents"]} == {f"poste-0{i}" for i in range(10)}
     assert a.get("/api/v1/parc", params={"filtre": "inconnu"}).json()["matched"] == 60
     assert a.get("/api/v1/parc", params={"q": "x" * 101}).status_code == 422
+
+
+def test_historique_lu_par_periode_meme_frise_que_tout_l_historique(papp, db, world, wapi):
+    """L'historique est conservé sans limite (ADR-0030) mais n'est lu que pour la période : la frise et la
+    disponibilité obtenues sont exactement celles calculées sur tout l'historique."""
+    import datetime as dt
+    import random
+    from keryx import wazuh_agents as wa
+    configure(papp, db, wapi)
+    acme = db.scalars(select(Tenant).where(Tenant.key == "ACME")).one()
+    rng = random.Random(7)
+    now = utcnow()
+    at, state = now - dt.timedelta(days=90), "active"
+    while at < now:
+        state = rng.choice([s for s in ("active", "disconnected", "pending") if s != state])
+        db.add(WazuhAgentEvent(tenant_id=acme.id, agent_id="900", status=state, previous=None, at=at,
+                               source=acme.wazuh_api_url or ""))
+        at += dt.timedelta(hours=rng.randint(1, 60))
+    db.add(WazuhAgentEvent(tenant_id=acme.id, agent_id="900", status="active", previous=None, at=now - dt.timedelta(days=3),
+                           source="https://autre-manager:55000"))         # autre manager : jamais compté
+    db.commit()
+    tout = [e for e in db.scalars(select(WazuhAgentEvent).where(WazuhAgentEvent.agent_id == "900")
+                                  .order_by(WazuhAgentEvent.at)) if e.source == (acme.wazuh_api_url or "")]
+    for jours in (7, 30):
+        debut = now - dt.timedelta(days=jours)
+        borne = wa.history_window(db, {acme.id: acme}, debut, now, "900")[(acme.id, "900")]
+        assert len(borne) < len(tout)
+        assert wa.timeline(borne, debut, now) == wa.timeline(tout, debut, now)

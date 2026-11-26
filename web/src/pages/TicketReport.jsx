@@ -11,7 +11,7 @@ export default function TicketReport() {
   const { ref } = useParams()
   const [t, setT] = useState(null)
   const [error, setError] = useState('')
-  useEffect(() => { api(`/tickets/${encodeURIComponent(ref)}`).then(setT).catch((e) => setError(e.message)) }, [ref])
+  useEffect(() => { api(`/tickets/${encodeURIComponent(ref)}`, { params: { complet: true } }).then(setT).catch((e) => setError(e.message)) }, [ref])
   if (error) return <p className="error" role="alert">{error}</p>
   if (!t) return <p className="loading">{tr("Chargement…")}</p>
   const s = t.synthese || {}

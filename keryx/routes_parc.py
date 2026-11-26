@@ -236,10 +236,13 @@ def register(app, ctx) -> None:
         if a is None:
             raise HTTPException(404, "Agent inconnu.")
         now = utcnow()
-        events = db.scalars(select(WazuhAgentEvent).where(WazuhAgentEvent.tenant_id == tenant.id,
+        # Frises sur 30 jours au plus : le dernier état avant la période et les changements de la période, jamais tout
+        # l'historique (conservé sans limite). Les 30 derniers changements sont lus à part.
+        events = wa.history_window(db, {tenant.id: tenant}, now - timedelta(days=30), now, a.agent_id).get((tenant.id, a.agent_id), [])
+        recent = db.scalars(select(WazuhAgentEvent).where(WazuhAgentEvent.tenant_id == tenant.id,
                                                           WazuhAgentEvent.agent_id == a.agent_id,
                                                           WazuhAgentEvent.source == (tenant.wazuh_api_url or ""))
-                            .order_by(WazuhAgentEvent.at)).all()
+                            .order_by(WazuhAgentEvent.at.desc(), WazuhAgentEvent.id.desc()).limit(30)).all()
         week = wa.timeline(events, now - timedelta(days=7), now)
         month = wa.timeline(events, now - timedelta(days=30), now)
         span = 7 * 86400
@@ -248,7 +251,7 @@ def register(app, ctx) -> None:
         out.update({
             "availability_7d": wa.availability(week), "availability_30d": wa.availability(month),
             "timeline_7d": [{"status": s["status"], "share": round((s["end"] - s["start"]).total_seconds() / span, 4)} for s in week],
-            "changes": [{"at": rfc3339(e.at), "status": e.status, "previous": e.previous} for e in reversed(events[-30:])],
+            "changes": [{"at": rfc3339(e.at), "status": e.status, "previous": e.previous} for e in recent],
         })
         if team:
             out["tickets"] = [t for t, in db.execute(select(Ticket.ref).where(Ticket.tenant_id == tenant.id,

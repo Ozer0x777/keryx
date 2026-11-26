@@ -85,6 +85,7 @@ export default {
   "Alerte Wazuh": "Wazuh alert",
   "Antivirus": "Antivirus",
   "Au": "To",
+  "Afficher les plus anciens ({n} restants)": "Show older entries ({n} remaining)",
   "Aucun commentaire.": "No comments.",
   "Aucun incident sur la période.": "No incidents in the period.",
   "Aucun lien.": "No links.",

@@ -854,14 +854,67 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "scan_status": a.scan_status, "scan_detail": a.scan_detail, "lifecycle": a.lifecycle,
                 "visible_client": a.visible_client, "created_at": rfc3339(a.created_at)}
 
+    # Fiche d'un ticket : les commentaires et l'historique les plus récents, les plus anciens à la demande. Un ticket
+    # rattache chaque alerte répétée (événement « occurrence ») : son historique peut compter des milliers d'entrées.
+    FICHE_COMMENTS, FICHE_EVENTS = 50, 100
+
+    def latest(db: DbSession, model, t: Ticket, is_client: bool, limit: int | None, before: str | None = None):
+        """Entrées les plus récentes d'un ticket (commentaires ou événements), du plus ancien au plus récent, et nombre
+        d'entrées plus anciennes. `before` : identifiant de la plus ancienne déjà affichée (pagination par curseur,
+        stable quand de nouvelles entrées arrivent). Le client ne voit que ce qui lui est destiné."""
+        when = Comment.created_at if model is Comment else TicketEvent.ts
+        q = select(model).where(model.ticket_id == t.id)
+        if is_client:
+            q = q.where(model.visible_client.is_(True))
+        if before:
+            pivot = db.scalars(q.where(model.id == before[:64])).first()
+            if pivot is None:
+                raise HTTPException(404, "Entrée inconnue.")
+            pivot_at = pivot.created_at if model is Comment else pivot.ts
+            q = q.where(or_(when < pivot_at, and_(when == pivot_at, model.id < pivot.id)))
+        ordered = q.order_by(when.desc(), model.id.desc())
+        rows = list(reversed(db.scalars(ordered if limit is None else ordered.limit(limit)).all()))
+        older = 0
+        if rows and limit is not None and len(rows) == limit:
+            first = rows[0]
+            first_at = first.created_at if model is Comment else first.ts
+            older = db.scalar(select(func.count()).select_from(
+                q.where(or_(when < first_at, and_(when == first_at, model.id < first.id))).subquery()))
+        return rows, older
+
+    def comment_views(db: DbSession, comments: list) -> list[dict]:
+        ids = {c.author_id for c in comments}
+        authors = {u.id: u for u in db.scalars(select(User).where(User.id.in_(ids)))} if ids else {}
+        return [{"id": c.id, "author": authors[c.author_id].display_name if c.author_id in authors else "?",
+                 "body_html": c.body_html, "visible_client": c.visible_client, "created_at": rfc3339(c.created_at)}
+                for c in comments]
+
+    def event_views(events: list) -> list[dict]:
+        return [{"id": e.id, "ts": rfc3339(e.ts), "actor": e.actor, "action": e.action, "details": e.details} for e in events]
+
+    @app.get("/api/v1/tickets/{ref}/comments")
+    def older_comments(ref: str, before: str = Query(max_length=64), limit: int = FICHE_COMMENTS,
+                       user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        t = load_ticket(db, user, ref)
+        rows, older = latest(db, Comment, t, user.role == "client", max(1, min(limit, 200)), before)
+        return {"items": comment_views(db, rows), "older": older}
+
+    @app.get("/api/v1/tickets/{ref}/events")
+    def older_events(ref: str, before: str = Query(max_length=64), limit: int = FICHE_EVENTS,
+                     user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        t = load_ticket(db, user, ref)
+        rows, older = latest(db, TicketEvent, t, user.role == "client", max(1, min(limit, 200)), before)
+        return {"items": event_views(rows), "older": older}
+
     @app.get("/api/v1/tickets/{ref}")
-    def get_ticket(ref: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    def get_ticket(ref: str, complet: bool = False, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        """`complet` : tous les commentaires et tout l'historique (rapport d'incident imprimable)."""
         t = load_ticket(db, user, ref)
         is_client = user.role == "client"
-        comments = db.scalars(select(Comment).where(Comment.ticket_id == t.id).order_by(Comment.created_at)).all()
-        events = db.scalars(select(TicketEvent).where(TicketEvent.ticket_id == t.id).order_by(TicketEvent.ts)).all()
+        comments, comments_older = latest(db, Comment, t, is_client, None if complet else FICHE_COMMENTS)
+        events, events_older = latest(db, TicketEvent, t, is_client, None if complet else FICHE_EVENTS)
         atts = db.scalars(select(Attachment).where(Attachment.ticket_id == t.id).order_by(Attachment.created_at)).all()
-        author_ids = {c.author_id for c in comments} | ({t.assignee_id} if t.assignee_id else set())
+        author_ids = {t.assignee_id} if t.assignee_id else set()
         authors = {u.id: u for u in db.scalars(select(User).where(User.id.in_(author_ids)))} if author_ids else {}
         out = ticket_summary(t, {x.id: x for x in user.tenants}, authors, with_sla=not is_client)
         out.update({
@@ -875,15 +928,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "severity_hint": {d: gravite(d, t.importance, db.get(Tenant, t.tenant_id).severity_grid) for d in DOMMAGES}
             if not is_client else None,
             "proposition": proposition(db, t) if not is_client else None,
-            "comments": [
-                {"author": authors[c.author_id].display_name if c.author_id in authors else "?",
-                 "body_html": c.body_html, "visible_client": c.visible_client, "created_at": rfc3339(c.created_at)}
-                for c in comments if (c.visible_client or not is_client)
-            ],
-            "events": [
-                {"ts": rfc3339(e.ts), "actor": e.actor, "action": e.action, "details": e.details}
-                for e in events if (e.visible_client or not is_client)
-            ],
+            "comments": comment_views(db, comments), "comments_older": comments_older,
+            "events": event_views(events), "events_older": events_older,
             "attachments": [attachment_view(a) for a in atts if (a.visible_client or not is_client)],
         })
         if not is_client:
