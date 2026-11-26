@@ -29,6 +29,12 @@ updates:
     schedule: { interval: weekly }
     groups:
       actions: { patterns: ["*"] }
+    ignore:
+      # cosign-installer v4 installe cosign 3, qui change la signature (configuration de signature par défaut, nouveau
+      # format de preuve) : la publication et la vérification à l'installation (cosign 2.4.1) seraient touchées sans que
+      # la CI le voie avant une étiquette. Migration volontaire, dans une demande de fusion dédiée et vérifiée à blanc.
+      - dependency-name: "sigstore/cosign-installer"
+        update-types: ["version-update:semver-major"]
   # Images épinglées par empreinte dans le kit Docker (docker-compose.yml) et dans ses Dockerfile (Keycloak, Garage).
   - package-ecosystem: docker-compose
     directory: /deploy/docker
