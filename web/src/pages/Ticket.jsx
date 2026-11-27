@@ -24,7 +24,7 @@ import {
   draftKey, readDraft, UnsavedBadge, UnsavedProvider, UnsavedSummary, useLeaveGuard, useUnsaved,
   useUnsavedRegistry, writeDraft,
 } from '../components/Unsaved.jsx'
-import { isoToUtcInput, untilUtc, utcClock, utcInputNow, utcInputToIso } from '../dates.js'
+import { dureeLisible, isoToUtcInput, untilUtc, utcClock, utcInputNow, utcInputToIso } from '../dates.js'
 import { queuePath } from '../queue.js'
 import { confirmTransition, needsConfirm } from '../transitions.jsx'
 import {
@@ -62,6 +62,11 @@ const MAIN_NEXT = { nouveau: 'en_evaluation', en_evaluation: 'en_reponse', en_re
 // l'horloge du manager avance. Reçu longtemps après : file d'attente ou coupure entre Wazuh et Keryx.
 const CLOCK_AHEAD_S = 60
 const LATE_S = 15 * 60
+// Enveloppe facultative : un <div> quand une classe est donnée, sinon rien (les enfants restent à leur place).
+function PageWrap({ className, children }) {
+  return className ? <div className={className}>{children}</div> : <>{children}</>
+}
+
 function ClockNote({ delay }) {
   if (delay == null) return null
   const min = Math.round(Math.abs(delay) / 60)
@@ -69,7 +74,7 @@ function ClockNote({ delay }) {
     return <span className="pill warn" title={tr("Date de détection fournie par Wazuh, date de réception par Keryx : comparer les horloges (NTP).")}>
       {tr("Horloge du manager Wazuh en avance d'environ {n} min sur Keryx", { n: Math.max(min, 1) })}</span>
   }
-  if (delay > LATE_S) return <span className="pill">{tr('Reçu {n} min après la détection', { n: min })}</span>
+  if (delay > LATE_S) return <span className="pill">{tr('Reçu {d} après la détection', { d: dureeLisible(delay) })}</span>
   return null
 }
 
@@ -183,7 +188,9 @@ export default function Ticket() {
 
 
   return (
-    <>
+    // Client : la page entière tient dans une colonne centrée. Équipe : pas d'enveloppe, la barre collante de la fiche
+    // doit avoir pour conteneur la zone de contenu entière.
+    <PageWrap className={isClient ? 'ticket-page-client' : null}>
       <nav className="breadcrumb" aria-label={tr("Fil d'Ariane")}>
         {/* Retour à la file telle qu'on l'a quittée : filtres, tri et vue (voir queue.js). */}
         <Link to={queuePath()}>{isClient ? tr('Mes incidents') : tr('Tickets')}</Link> / {t.client} / <span className="mono">{t.ref}</span>
@@ -322,7 +329,7 @@ export default function Ticket() {
       )}
       </UnsavedProvider>
       </PhaseContext.Provider>
-    </>
+    </PageWrap>
   )
 }
 
@@ -498,7 +505,7 @@ function Attachments({ t, enc, me, run, vt }) {
   }
 
   return (
-    <Section id="preuves" title={isClient ? tr('Éléments déposés') : tr('Registre des preuves')} summary={<>{t.attachments.length || null}<UnsavedBadge show={(!!form && formDirty) || (!!ext && extDirty)} /></>} tools={<>
+    <Section id="preuves" filled={t.attachments.length > 0} title={isClient ? tr('Éléments déposés') : tr('Registre des preuves')} summary={<>{t.attachments.length || null}<UnsavedBadge show={(!!form && formDirty) || (!!ext && extDirty)} /></>} tools={<>
         {isTeam && <button type="button" onClick={() => { setExt(true); setForm(null) }}>{tr("Déclarer une preuve externe")}</button>}
         <button type="button" className="dark" onClick={() => { setForm(true); setExt(null) }}>{tr('Déposer un fichier ({n} Mo max)', { n: t.attachment_max_mb ?? 20 })}</button>
       </>}>
@@ -601,7 +608,7 @@ function Synthese({ t, enc, run, onImage, templates }) {
     )
   }
   return (
-    <Section id="synthese" title={tr("Synthèse de l'incident et retour d'expérience")} summary={<>{rexNote}<UnsavedBadge show={dirty} /></>}>
+    <Section id="synthese" filled={['compromission_initiale', 'chronologie', 'mode_operatoire', 'perimetre', 'rex_html'].some((k) => s[k])} title={tr("Synthèse de l'incident et retour d'expérience")} summary={<>{rexNote}<UnsavedBadge show={dirty} /></>}>
       <p className="muted small">{tr("PRIS VI.5.3.e · ISO 27035")}</p>
       <label>{tr("Date de compromission initiale (UTC)")}
         <input type="datetime-local" value={v.compromission_initiale} onChange={(e) => setV({ ...v, compromission_initiale: e.target.value })} />
@@ -660,7 +667,7 @@ function useOlder(ref, kind, items, older) {
 function Events({ t }) {
   const ev = useOlder(t.ref, 'events', t.events, t.events_older)
   return (
-    <Section id="actions" title={tr("Registre des actions")} summary={ev.total || null}>
+    <Section id="actions" filled={(ev.total || 0) > 0} title={tr("Registre des actions")} summary={ev.total || null}>
       {ev.button}
       <ol className="timeline">
         {ev.all.map((e, i) => (
@@ -718,7 +725,7 @@ function Comments({ t, enc, isClient, me, run, onImage, templates }) {
     if (r) setStatus({ ok: tr('Modèle enregistré à {h}', { h: utcClock() }) })
   }
   return (
-    <Section id="commentaires" title={isClient ? tr('Échanges avec le SOC') : tr('Commentaires')} summary={cm.total || null}>
+    <Section id="commentaires" filled={(cm.total || 0) > 0} title={isClient ? tr('Échanges avec le SOC') : tr('Commentaires')} summary={cm.total || null}>
       {cm.total === 0 && <p className="muted">{tr("Aucun commentaire.")}</p>}
       {cm.button}
       {cm.all.map((c, i) => (
@@ -837,7 +844,7 @@ function Mitre({ t, enc, run, open }) {
     return () => clearTimeout(h)
   }, [q])
   return (
-    <Section id="mitre" title={tr("MITRE ATT&CK")} summary={<>{t.mitre.length ? <span className="mono">{t.mitre.join(', ')}</span> : tr("À compléter.")}<UnsavedBadge show={mitreDirty} /></>}>
+    <Section id="mitre" filled={t.mitre.length > 0} title={tr("MITRE ATT&CK")} summary={<>{t.mitre.length ? <span className="mono">{t.mitre.join(', ')}</span> : tr("À compléter.")}<UnsavedBadge show={mitreDirty} /></>}>
       {t.mitre_detail.length === 0 && <p className="muted">{tr("À compléter.")}</p>}
       {t.mitre_detail.map((m) => (
         <div key={m.id} className="mitre">
@@ -922,7 +929,7 @@ function Links({ t, enc, run, open }) {
     if (r) setStatus({ ok: tr('Ticket fusionné dans {ref} à {h}', { ref: r.values.into.toUpperCase(), h: utcClock() }) })
   }
   return (
-    <Section id="liens" title={tr("Tickets liés")} summary={<>{items.length || null}<UnsavedBadge show={linkDirty} /></>}>
+    <Section id="liens" filled={items.length > 0} title={tr("Tickets liés")} summary={<>{items.length || null}<UnsavedBadge show={linkDirty} /></>}>
       {items.length === 0 && <p className="muted small">{tr("Aucun lien.")}</p>}
       <ul className="linklist">
         {items.map((l) => (

@@ -97,7 +97,7 @@ export default function Profile() {
         {keys.length > 0 && <ul className="found">{keys.map((k) => <li key={k.id}>{k.name} <span className="muted small">· {t('ajoutée le')} {formatUtc(k.created_at)}{k.last_used_at ? ` · ${t('utilisée le')} ${formatUtc(k.last_used_at)}` : ''}</span> <button type="button" className="small-btn danger" onClick={() => dropKey(k)}>{t('Retirer')}</button></li>)}</ul>}
         {webauthnSupported() ? (
           <form onSubmit={addKey} className="row gap wrap">
-            <label>{t('Nom de la clé')}<input name="name" required maxLength={80} placeholder={tr("YubiKey bureau")} /></label>
+            <label>{t('Nom de la clé')}<input name="name" required maxLength={80} placeholder={tr("ex. YubiKey bureau")} /></label>
             <label>{t('Mot de passe')}<input name="password" type="password" required autoComplete="current-password" /></label>
             <button>{t('Ajouter une clé')}</button>
           </form>

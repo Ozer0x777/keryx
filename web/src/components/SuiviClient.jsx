@@ -42,7 +42,7 @@ export default function SuiviClient({ t, enc, isClient, run, open }) {
   const [status, track] = useActionStatus()
   const envoyer = (json, ok) => track(() => run(() => api(`/tickets/${enc}/etat-client`, { method: 'POST', json: { ...json, commentaire } }), ok))
   return (
-    <Section id="suivi-client" title={isClient ? tr('Votre suivi') : tr('Suivi par le client')}
+    <Section id="suivi-client" filled={Boolean(s.etat || s.demande || (t.actions_client || []).length)} title={isClient ? tr('Votre suivi') : tr('Suivi par le client')}
       summary={s.demande ? <span className="pill warn">{tr('Demande de {d}', { d: DEMANDES[s.demande] })}</span> : (s.etat ? ETATS_CLIENT[s.etat] : null)}>
       <p>{s.etat ? tr('État côté client : {e}', { e: ETATS_CLIENT[s.etat] }) : tr('État côté client : non renseigné')}
         {s.maj_le && <span className="muted small"> · {formatUtc(s.maj_le)}</span>}</p>

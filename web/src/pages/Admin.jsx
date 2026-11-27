@@ -1,6 +1,6 @@
 import { t as tr } from '../i18n.js'
-import { useEffect, useState } from 'react'
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { api } from '../api.js'
 import { useAuth } from '../App.jsx'
 import Audit from './admin/Audit.jsx'
@@ -16,6 +16,10 @@ const TABS = [['comptes', tr('Comptes')], ['clients', tr('Clients')], ['cles', t
   ['revue', tr('Revue des comptes')], ['audit', tr("Journal d'audit")], ['systeme', tr('État du système')]]
 
 export default function Admin() {
+  // Onglet actif ramené en vue quand la ligne d'onglets défile (téléphone).
+  const tabsRef = useRef(null)
+  const { pathname } = useLocation()
+  useEffect(() => { tabsRef.current?.querySelector('.tab.on')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }) }, [pathname])
   const { me } = useAuth()
   const [sys, setSys] = useState(null)
   useEffect(() => { if (me.role === 'admin') api('/admin/system').then(setSys).catch(() => {}) }, [me.role])
@@ -38,7 +42,7 @@ export default function Admin() {
         </div>
       </header>
       {alerts.length > 0 && <div className="banner warn" role="alert"><strong>{tr("À traiter :")}</strong><ul>{alerts.map((a) => <li key={a}>{a}</li>)}</ul></div>}
-      <nav className="tabs" aria-label={tr("Sections d'administration")}>
+      <nav className="tabs" ref={tabsRef} aria-label={tr("Sections d'administration")}>
         {TABS.map(([to, label]) => <NavLink key={to} to={`/admin/${to}`} className={({ isActive }) => `tab${isActive ? ' on' : ''}`}>{label}</NavLink>)}
       </nav>
       <Routes>

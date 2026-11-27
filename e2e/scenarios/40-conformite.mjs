@@ -33,7 +33,7 @@ export default async ({ stack, BASE, check, login }) => {
   const a = await login('admin')
   await a.getByRole('link', { name: "Journal d'audit" }).click()
   await a.waitForSelector('text=Consulter le journal')
-  await a.fill('input[placeholder="ticket."]', 'ticket.'); await a.getByRole('button', { name: 'Filtrer' }).click()
+  await a.fill('input[placeholder="ex. ticket."]', 'ticket.'); await a.getByRole('button', { name: 'Filtrer' }).click()
   await a.waitForSelector('.pill >> text=masqué')
   check(await a.locator('text=exfiltration suspectée').count() === 0, 'contenu des tickets masqué pour l\'admin')
   await a.getByRole('button', { name: 'Générer' }).click()

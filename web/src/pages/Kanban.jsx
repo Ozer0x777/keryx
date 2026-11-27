@@ -80,20 +80,19 @@ export default function Kanban() {
               <span className="count">{col.total ?? '…'}</span>
             </header>
             <p className="muted small">{STATUS[col.status].phase}</p>
+            <div className="column-cards">
             {col.cards.map((t) => (
               <article key={t.ref} className="kcard" draggable onDragStart={() => setDragging(t)} onDragEnd={() => setDragging(null)}>
+                {/* Trois lignes fixes : référence et criticité, titre, client et assigné ; puis les marques utiles. */}
+                <div className="kcard-top"><span className="mono ref">{t.ref}</span><Severity value={t.gravite || t.criticite_initiale} /></div>
                 <Link to={`/tickets/${encodeURIComponent(t.ref)}`} className="kcard-title">{t.title}</Link>
-                <div className="row wrap gap">
-                  <Severity value={t.gravite || t.criticite_initiale} />
-                  <span className="mono chip">{t.mitre[0] || tr('MITRE ?')}</span>
+                <div className="kcard-meta"><span>{t.client}</span><span>{t.assignee || tr('non assigné')}</span></div>
+                <div className="kcard-tags">
                   <Tlp value={t.tlp} />
+                  {t.mitre[0] && <span className="mono chip">{t.mitre[0]}</span>}
                   {t.status === 'faux_positif' && <span className="pill">{tr("Faux positif")}</span>}
                   {t.rex_en_attente && <span className="pill warn">{tr("REX")}</span>}
                   {t.overdue && <span className="pill danger">{tr("En retard")}</span>}
-                </div>
-                <div className="row gap small muted">
-                  <span className="mono ref">{t.ref}</span><span>{t.client}</span>
-                  <span className="push">{t.assignee || tr('non assigné')}</span>
                 </div>
                 <label className="sr-only" htmlFor={`mv-${t.ref}`}>{tr('Changer le statut de {ref}', { ref: t.ref })}</label>
                 <select id={`mv-${t.ref}`} className="move" value="" onChange={(e) => move(t, e.target.value)}>
@@ -103,6 +102,7 @@ export default function Kanban() {
                 {refused?.ref === t.ref && <p className="error action-status" role="alert">{refused.text}</p>}
               </article>
             ))}
+            </div>
             {col.total !== null && col.total > col.cards.length && (
               <Link className="small more" to={`/tickets?${new URLSearchParams({ status: columnStatuses(col.status), ...(mine ? { assignee: 'me' } : {}) })}`}>
                 {tr('Voir les {n} autres dans la liste', { n: col.total - col.cards.length })}

@@ -21,3 +21,16 @@ export function untilUtc(iso, now = Date.now()) {
   const total = Math.floor(Math.abs(delta) / 60000)
   return { late: delta < 0, days: Math.floor(total / 1440), hours: Math.floor((total % 1440) / 60), minutes: total % 60 }
 }
+
+// Durée lisible à partir de secondes : « 45 s », « 12 min », « 2 h 14 min », « 6 j 19 h ». Arrondie, jamais négative.
+export function dureeLisible(seconds) {
+  if (seconds == null || Number.isNaN(seconds)) return '—'
+  const s = Math.max(0, Math.round(seconds))
+  if (s < 60) return `${s} s`
+  const min = Math.round(s / 60)
+  if (min < 60) return `${min} min`
+  const h = Math.floor(min / 60)
+  if (h < 48) return min % 60 ? `${h} h ${String(min % 60).padStart(2, '0')}` : `${h} h`
+  const j = Math.floor(h / 24)
+  return h % 24 ? `${j} j ${h % 24} h` : `${j} j`
+}

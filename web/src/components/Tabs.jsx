@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 
 // Onglets de la fiche ticket (motif WAI-ARIA « Tabs » : tablist, tab, tabpanel). Activation automatique : les flèches
 // déplacent le focus et changent d'onglet, Début et Fin vont aux extrémités, seul l'onglet actif est dans l'ordre de
@@ -6,6 +6,7 @@ import { useRef } from 'react'
 // en changeant d'onglet.
 export function TabBar({ tabs, active, onSelect, label, idBase }) {
   const list = useRef(null)
+  useEffect(() => { list.current?.querySelector('.tab.on')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }) }, [active])
   const move = (e) => {
     // L'onglet de départ est celui qui a le focus : l'URL, elle, ne suit qu'après le rendu (flèches enchaînées vite).
     const els = [...list.current.querySelectorAll('[role=tab]')]

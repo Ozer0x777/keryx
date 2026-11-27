@@ -47,7 +47,7 @@ export default function Dashboard() {
             <div className="card stat"><span className="muted">{tr("Échéances tenues")}</span><strong>{d.sla.rate_percent == null ? '—' : `${d.sla.rate_percent} %`}</strong><span className="muted small">{tr('{a} sur {b} clos', { a: d.sla.resolution_within_target, b: d.sla.closed })}</span></div>
           </section>
           <div className="grid2 dash">
-            <section className="card section" aria-label={tr("Évolution")}><h2>{tr("Créés et clos par jour")}</h2><TrendChart data={d.trend} /></section>
+            <section className="card section dash-wide" aria-label={tr("Évolution")}><h2>{tr("Créés et clos par jour")}</h2><TrendChart data={d.trend} /></section>
             <section className="card section" aria-label={tr("Délais")}>
               <h2>{tr("Délais moyens")}</h2>
               <dl className="kv"><dt>{tr("Qualification")}</dt><dd>{fmtH(d.delays.qualification_hours_avg)} <span className="muted small">({d.delays.qualified_count} ticket(s))</span></dd>

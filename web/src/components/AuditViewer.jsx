@@ -23,8 +23,8 @@ export default function AuditViewer() {
       <header className="section-head"><h2>{tr("Consulter le journal")}</h2></header>
       <form className="filters" onSubmit={(e) => { e.preventDefault(); query() }}>
         <label className="filter">{tr("Auteur")}<input value={f.actor} onChange={set('actor')} /></label>
-        <label className="filter">{tr("Action (début)")}<input value={f.action} onChange={set('action')} placeholder={tr("ticket.")} /></label>
-        <label className="filter">{tr("Client")}<input value={f.client} onChange={set('client')} placeholder={tr("ACME")} /></label>
+        <label className="filter">{tr("Action (début)")}<input value={f.action} onChange={set('action')} placeholder={tr("ex. ticket.")} /></label>
+        <label className="filter">{tr("Client")}<input value={f.client} onChange={set('client')} placeholder={tr("ex. ACME")} /></label>
         <label className="filter">{tr("Du")}<input type="date" value={f.from} onChange={set('from')} /></label>
         <label className="filter">{tr("Au")}<input type="date" value={f.to} onChange={set('to')} /></label>
         <button className="primary">{tr("Filtrer")}</button>

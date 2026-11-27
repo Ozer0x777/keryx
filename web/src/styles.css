@@ -33,6 +33,15 @@ a { color: var(--accent); }
 .end { justify-content: flex-end; }
 .push { margin-left: auto; }
 .grow { flex: 1; min-width: 0; }
+/* Dans une ligne de formulaire, un champ extensible passe à la ligne plutôt que d'être écrasé (téléphone). */
+form.row > label.grow, .row.wrap > label.grow { flex: 1 1 220px; }
+/* Menu d'actions (« Plus ») : <details> natif, liste sous le bouton. */
+details.menu { position: relative; display: inline-block; }
+details.menu > summary { list-style: none; cursor: pointer; }
+details.menu > summary::-webkit-details-marker { display: none; }
+details.menu[open] > .menu-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 190px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(16, 21, 28, .14); padding: 4px; display: flex; flex-direction: column; }
+details.menu .menu-list button { border: 0; background: none; text-align: left; padding: 8px 10px; border-radius: 6px; min-height: 40px; }
+details.menu .menu-list button:hover { background: var(--bg); }
 
 /* Boutons et champs */
 button {
@@ -72,6 +81,11 @@ textarea { resize: vertical; }
 .avatar { width: 34px; height: 34px; border-radius: 50%; background: #2A3648; color: #fff; display: grid; place-items: center; font-weight: 600; flex: none; }
 .who { flex: 1; min-width: 0; font-size: 12px; }
 .who .name { display: block; color: #fff; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Ordinateur : le bloc de navigation se fond dans la barre latérale ; le bouton « Menu » n'existe que sur téléphone. */
+.menu-toggle { display: none; }
+.nav-body { display: contents; }
+.sidebar .brand { order: 0; } .sidebar .nav-section { order: 1; } .sidebar .nav-link { order: 2; } .sidebar .bell { order: 3; }
+.sidebar .nav-profile { order: 4; } .sidebar-user { order: 5; } .nav-logout { order: 6; }
 .nav-logout { background: none; border-color: #2E3A4C; color: #C9D1DC; min-height: 32px; padding: 4px 10px; font-size: 12px; margin-top: 12px; }
 .content { padding: 24px 32px; min-width: 0; }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
@@ -100,6 +114,8 @@ textarea { resize: vertical; }
 .table-wrap { overflow-x: auto; }
 table.grid { width: 100%; border-collapse: collapse; background: var(--surface); }
 .grid th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; padding: 9px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+/* En-têtes longs (plusieurs mots) : sur deux lignes plutôt que coupés */
+.grid th { white-space: normal; min-width: 4.5em; vertical-align: bottom; }
 .grid td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
 .grid tbody tr:hover { background: #F8F9FB; }
 .grid a.ref { font-family: var(--mono); font-weight: 600; text-decoration: none; }
@@ -128,7 +144,17 @@ table.grid { width: 100%; border-collapse: collapse; background: var(--surface);
 .count { background: var(--surface); border-radius: 999px; padding: 0 8px; font-size: 12px; color: var(--muted); }
 .kcard { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin-bottom: 8px; cursor: grab; }
 .kcard-title { font-weight: 600; margin: 4px 0 8px; display: block; color: var(--text); text-decoration: none; }
-.kcard .move { margin-top: 8px; width: 100%; min-height: 32px; font-size: 12px; }
+.kcard .move { margin-top: 8px; width: 100%; min-height: 36px; font-size: 13px; }
+.kcard-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); }
+.kcard-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); }
+.kcard-meta span:last-child { text-align: right; }
+.kcard-tags { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 6px; }
+.kcard-tags:empty { display: none; }
+/* Ordinateur : chaque colonne tient dans l'écran et défile seule, son en-tête reste visible. */
+@media (min-width: 801px) {
+  .column { display: flex; flex-direction: column; max-height: calc(100vh - 190px); }
+  .column-cards { overflow-y: auto; min-height: 0; margin: 0 -4px; padding: 0 4px; }
+}
 
 /* Ticket */
 .breadcrumb { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
@@ -144,6 +170,9 @@ table.grid { width: 100%; border-collapse: collapse; background: var(--surface);
 /* Les colonnes peuvent rétrécir sous la largeur minimale de leur contenu : un tableau large (registre des preuves) défile
    alors dans son cadre au lieu d'élargir toute la fiche sur un écran étroit. */
 .ticket-main, .ticket-aside { min-width: 0; }
+/* Portail client : pas de colonne de droite ; une seule colonne centrée, de largeur confortable à lire. */
+.ticket-page-client { max-width: 880px; margin-inline: auto; }
+.ticket-layout.ticket-client { grid-template-columns: minmax(0, 1fr); }
 /* La colonne de pilotage défile avec la page : collante, sa partie basse était inatteignable dès qu'elle dépassait l'écran. */
 .ticket-aside label, .ticket-aside select, .ticket-aside textarea, .ticket-aside input:not([type=checkbox]):not([type=radio]) { width: 100%; }
 label.check input { flex: none; }
@@ -166,6 +195,8 @@ label.check input { flex: none; }
 .parc-source { display: flex; flex-wrap: wrap; gap: 6px 24px; align-items: center; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; }
 .parc-layout { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
 .parc-main { flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+/* Moins de 1 280 px : le détail de l'agent passe sous le tableau au lieu de le serrer. */
+@media (max-width: 1280px) { .parc-main { flex-basis: 100%; } .parc-detail { max-width: none; } }
 .parc-detail { flex: 1 1 320px; max-width: 420px; min-width: 0; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
 .parc-detail h2 { margin: 2px 0; font-size: 18px; }
 .parc-detail h3 { margin: 0 0 6px; }
@@ -261,13 +292,14 @@ label.check input { flex: none; }
   .login-side { padding: 28px; }
   .grid2 { grid-template-columns: 1fr; }
 }
-.kcard .row { gap: 4px 10px; flex-wrap: wrap; font-size: 12px; }
 .ref, .kcard .mono { white-space: nowrap; }
 
 table.grid td.mono, table.grid td.mono a { white-space: nowrap; }
 
 /* Administration */
-.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 14px; border-bottom: 1px solid var(--border); }
+/* Onglets sur une seule ligne : sur un écran étroit, la ligne défile de côté et l'onglet actif est ramené en vue. */
+.tabs { display: flex; flex-wrap: nowrap; gap: 4px; margin: 0 0 14px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: thin; }
+.tabs > * { flex: none; white-space: nowrap; }
 .tab { padding: 8px 14px; text-decoration: none; color: var(--muted); border-bottom: 3px solid transparent; font-weight: 500; }
 .tab.on { color: var(--text); border-bottom-color: var(--accent); }
 .fieldset { border: 1px solid var(--border); border-radius: var(--radius); margin: 0 0 10px; padding: 8px 12px; }
@@ -339,7 +371,13 @@ select.tpl { min-height: 28px; padding: 2px 6px; font-size: 12px; margin-left: 6
 .trend svg { display: block; max-width: 100%; }
 .trend text { font-family: var(--sans); font-variant-numeric: tabular-nums; }
 .trend .key { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 10px; vertical-align: middle; }
-.dash { align-items: start; margin-bottom: 14px; }
+.dash { align-items: stretch; margin-bottom: 14px; }
+.dash-wide { grid-column: 1 / -1; }
+/* Tuiles de synthèse : sur téléphone, deux par ligne ; une tuile restée seule prend toute la ligne. */
+@media (max-width: 600px) {
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats > .stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
 .btn-link { display: inline-block; padding: 7px 14px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); text-decoration: none; }
 @media (max-width: 900px) { .dash { grid-template-columns: 1fr; } }
 
@@ -380,7 +418,12 @@ form.row { align-items: flex-end; }
 .filters input[type=search] { min-width: 260px; width: 100%; }
 select.narrow-select { max-width: 260px; }
 /* Kanban : titre aligné à gauche entre le point et le compteur ; cinq colonnes visibles sans rognage */
-.kanban { grid-template-columns: repeat(5, minmax(190px, 1fr)); }
+.kanban { grid-template-columns: repeat(5, minmax(190px, 1fr)); max-width: 100%; }
+/* Téléphone : une colonne à la fois, qu'on fait glisser dans le tableau (la page, elle, ne défile pas de côté). */
+@media (max-width: 800px) {
+  .kanban { grid-template-columns: repeat(5, 85%); scroll-snap-type: x mandatory; overscroll-behavior-x: contain; }
+  .kanban .column { scroll-snap-align: start; }
+}
 .column-head { justify-content: flex-start; gap: 8px; }
 .column-head h2 { margin: 0; text-align: left; flex: 1; }
 .column-head .count { margin-left: auto; }
@@ -407,13 +450,18 @@ select.narrow-select { max-width: 260px; }
 
 /* Petits écrans : navigation compacte en bandeau au lieu d'un bloc de la hauteur de l'écran */
 @media (max-width: 800px) {
-  .sidebar { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 10px 12px; }
-  .sidebar .brand { margin: 0 8px 0 0; }
+  /* Barre compacte : logo, cloche, bouton « Menu » ; la navigation se déplie sous la barre. */
+  .sidebar { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; }
+  .sidebar .brand { padding: 0; margin-right: auto; font-size: 16px; }
+  .sidebar .bell { order: 1; }
+  .sidebar .bell-btn { width: auto; min-height: 44px; padding: 8px 10px; }
+  .menu-toggle { display: inline-flex; order: 2; min-height: 44px; padding: 8px 14px; background: none; border: 1px solid #2E3A4C; color: #E8ECF2; border-radius: 8px; font-weight: 600; }
+  .nav-body { display: none; order: 3; flex: 1 1 100%; flex-direction: column; gap: 2px; padding-top: 6px; border-top: 1px solid #222C3A; }
+  .sidebar.menu-open .nav-body { display: flex; }
   .sidebar .nav-section { display: none; }
-  .sidebar .nav-link { min-height: 34px; padding: 5px 10px; font-size: 13px; }
-  .sidebar .nav-link.active { box-shadow: none; }
-  .sidebar-user { margin-top: 0; border-top: 0; padding: 0; flex: 1 1 100%; justify-content: space-between; }
-  .nav-logout { width: auto; min-height: 32px; padding: 4px 12px; margin-top: 0; }
+  .sidebar .nav-link { min-height: 44px; }
+  .sidebar-user { margin-top: 8px; }
+  .nav-logout { width: auto; align-self: flex-start; min-height: 44px; padding: 8px 14px; margin-top: 8px; }
   .bell-panel { position: fixed; left: 12px; right: 12px; bottom: auto; top: 64px; width: auto; }
 }
 @media (max-width: 800px) {
@@ -520,3 +568,28 @@ form.row > .action-status.ok, .retention-actions > .action-status.ok { align-sel
   .vt-detail .kv dd { margin-bottom: 8px; }
 }
 .prewrap { white-space: pre-wrap; }
+
+/* Textes d'exemple des champs : plus clairs et en italique, pour ne pas être lus comme une valeur saisie. */
+input::placeholder, textarea::placeholder { color: #9AA3AF; opacity: 1; font-style: italic; }
+
+/* ---------- Revue de l'interface du 27/11/2026 ---------- */
+/* Un <fieldset> ne s'élargit plus à la largeur de son contenu (débordement du tableau d'escalade sur téléphone). */
+fieldset { min-width: 0; }
+/* Rapports imprimables : à l'écran, chaque tableau défile dans son cadre ; empreintes coupées plutôt que débordantes. */
+@media screen {
+  .report table.grid { display: block; max-width: 100%; overflow-x: auto; }
+  .report table.grid td.mono { white-space: normal; overflow-wrap: anywhere; }
+}
+/* Espacement régulier : un groupe de champs qui suit un texte d'aide, une ligne de formulaire ou une liste de valeurs. */
+.field-hint + label, .field-hint + .grid2, .field-hint + .row, .field-hint + fieldset { margin-top: 12px; }
+form.row + label, form.row + .row, form.row + .filters { margin-top: 12px; }
+.kv + h2, .kv + h3, .kv + h4 { margin-top: 16px; }
+form.row > button { flex: none; }
+form.row > button, form.row > .btn-link { white-space: nowrap; }
+/* Téléphone : cibles de 44 px (charte), sans changer l'apparence sur ordinateur. */
+@media (max-width: 800px) {
+  .th-btn { min-height: 44px; }
+  button.link, a.btn-link { min-height: 44px; display: inline-flex; align-items: center; }
+  .small-btn { min-height: 44px; padding: 6px 12px; font-size: 13px; }
+  form.row > label:not(.grow) { flex: 1 1 140px; }
+}

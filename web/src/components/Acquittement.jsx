@@ -1,7 +1,8 @@
 import { t as tr } from '../i18n.js'
+import { dureeLisible } from '../dates.js'
 
 // Délai d'acquittement (ADR-0032) : de la détection Wazuh à la première action humaine de l'équipe.
-export const fmtMin = (m) => (m == null ? '—' : m < 60 ? `${Math.round(m)} min` : m < 2880 ? `${Math.round(m / 6) / 10} h` : `${Math.round(m / 144) / 10} j`)
+export const fmtMin = (m) => (m == null ? '—' : dureeLisible(m * 60))
 
 export function AcquittementTable({ data, caption }) {
   return (
@@ -11,6 +12,10 @@ export function AcquittementTable({ data, caption }) {
       <tbody>{Object.entries(data).map(([crit, v]) => (
         <tr key={crit}><th scope="row">{tr(crit)}</th><td>{fmtMin(v.moyenne_min)}</td><td>{fmtMin(v.p90_min)}</td><td>{v.acquittes}</td><td>{v.non_acquittes}</td></tr>
       ))}</tbody>
-    </table></div>
+    </table>
+    {Object.values(data).some((v) => v.horloge_en_avance) && (
+      <p className="field-hint">{tr("{n} ticket(s) acquitté(s) avant leur heure de détection : l'horloge du manager Wazuh avance sur Keryx (à mettre à l'heure, NTP). Leur délai est compté 0.", { n: Object.values(data).reduce((a, v) => a + (v.horloge_en_avance || 0), 0) })}</p>
+    )}
+    </div>
   )
 }

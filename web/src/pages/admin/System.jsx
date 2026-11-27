@@ -54,7 +54,7 @@ export default function System() {
       <h3>{tr("Rétention des alertes brutes")}</h3>
       <p className="muted small">{tr("Seules les alertes brutes des tickets clos, plus anciennes que la durée du client, sont supprimées. Les tickets, le registre des actions et les pièces sont conservés. La durée d'un client se règle dans sa fiche ; sans valeur propre, la durée par défaut ci-dessous s'applique.")}</p>
       {rs && (
-        <form className="row gap" onSubmit={(e) => { e.preventDefault(); saveRs(Number(months)) }}>
+        <form className="row gap wrap" onSubmit={(e) => { e.preventDefault(); saveRs(Number(months)) }}>
           <label>{tr("Durée de rétention par défaut, en mois")}
             <input type="number" min={rs.minimum} max={rs.maximum} value={months} onChange={(e) => setMonths(e.target.value)} required />
           </label>

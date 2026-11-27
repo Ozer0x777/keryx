@@ -59,7 +59,7 @@ function Bloc({ t, enc, run, bloc, titre, aide, editable }) {
   }
   const set = (k, x) => setV({ ...v, [k]: x })
   return (
-    <Section id={`pris-${bloc}`} title={titre} summary={Object.keys(init).length ? tr('{n} champ(s) renseigné(s)', { n: Object.keys(init).length }) : null}>
+    <Section id={`pris-${bloc}`} filled={Object.keys(init).length > 0} title={titre} summary={Object.keys(init).length ? tr('{n} champ(s) renseigné(s)', { n: Object.keys(init).length }) : null}>
       {aide && <p className="field-hint">{aide}</p>}
       <div className="stack">
         {CHAMPS[bloc].map(([k, label, sorte, choix]) => {
@@ -93,7 +93,7 @@ function Equipe({ t, enc, run, editable }) {
   const save = () => track(() => run(() => api(`/tickets/${enc}/pris/rapport`, { method: 'PUT', json: { equipe, interlocuteurs: inter } }), tr('Enregistré.')))
   const ligne = (liste, setListe, i, k, x) => setListe(liste.map((y, j) => (j === i ? { ...y, [k]: x } : y)))
   return (
-    <Section id="pris-equipe" title={tr("Équipe de réponse et interlocuteurs (rapport d'analyse)")} summary={equipe.length ? tr('{n} membre(s)', { n: equipe.length }) : null}>
+    <Section id="pris-equipe" filled={equipe.length > 0 || inter.length > 0} title={tr("Équipe de réponse et interlocuteurs (rapport d'analyse)")} summary={equipe.length ? tr('{n} membre(s)', { n: equipe.length }) : null}>
       <h3>{tr('Équipe de réponse')}</h3>
       {equipe.map((m, i) => (
         <div key={i} className="row wrap gap">
@@ -131,7 +131,7 @@ export function Mesures({ t, enc, run, isClient, open }) {
   const liste = t.mesures || []
   if (isClient && liste.length === 0) return null
   return (
-    <Section id="mesures" title={tr("Mesures d'endiguement et procédures d'urgence")} summary={liste.filter((m) => m.etat === 'proposee').length ? <span className="pill warn">{tr('{n} à décider', { n: liste.filter((m) => m.etat === 'proposee').length })}</span> : (liste.length || null)}>
+    <Section id="mesures" filled={liste.length > 0} title={tr("Mesures d'endiguement et procédures d'urgence")} summary={liste.filter((m) => m.etat === 'proposee').length ? <span className="pill warn">{tr('{n} à décider', { n: liste.filter((m) => m.etat === 'proposee').length })}</span> : (liste.length || null)}>
       <p className="field-hint">{isClient
         ? tr("Le SOC vous propose ces mesures pour contenir l'incident. La décision vous revient : acceptez ou refusez chacune.")
         : tr("Proposées au commanditaire, qui décide (PRIS VI.5.4) ; à réévaluer au fil de l'incident.")}</p>
