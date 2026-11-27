@@ -7,13 +7,13 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react'
 export const OPEN_BY_STATUS = {
   nouveau: ['description', 'alerte', 'qualification', 'affectation'],
   en_evaluation: ['description', 'alerte', 'preuves', 'suivi-client', 'commentaires', 'qualification', 'mitre', 'affectation'],
-  en_reponse: ['description', 'preuves', 'actions', 'suivi-client', 'commentaires', 'qualification', 'mitre', 'isi', 'affectation', 'liens'],
+  en_reponse: ['description', 'preuves', 'actions', 'suivi-client', 'mesures', 'commentaires', 'qualification', 'mitre', 'isi', 'affectation', 'liens'],
   cloture: ['synthese', 'commentaires', 'isi', 'details'],
   faux_positif: ['description', 'commentaires', 'qualification', 'details'],
   retour_experience: ['synthese', 'actions', 'commentaires', 'details'],
 }
 // Portail client : peu de panneaux, l'essentiel est ouvert.
-export const OPEN_FOR_CLIENT = ['description', 'suivi-client', 'preuves', 'commentaires']
+export const OPEN_FOR_CLIENT = ['description', 'suivi-client', 'mesures', 'preuves', 'commentaires']
 
 export const PhaseContext = createContext({ status: '', open: null })
 

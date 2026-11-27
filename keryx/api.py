@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session as DbSession
 from starlette.background import BackgroundTask
 
 from . import attachments as att
-from . import astreinte, audit, inbox, routes_admin, routes_astreinte, routes_oidc, routes_ops, routes_isi, routes_parc, routes_politique, routes_reports, routes_suivi_client, routes_timestamp, routes_virustotal, routes_wazuh, routes_webauthn, routes_work, security
+from . import astreinte, audit, inbox, routes_admin, routes_astreinte, routes_oidc, routes_ops, routes_isi, routes_parc, pris, routes_politique, routes_reports, routes_suivi_client, routes_timestamp, routes_virustotal, routes_wazuh, routes_webauthn, routes_work, security
 from . import wazuh_context
 from .oidc import load_providers
 from .bodylimit import BodyLimitMiddleware
@@ -962,6 +962,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                      "version": t.rule_version},
             "niveau_classification": t.niveau_classification, "collecteur": collecteur(db, t),
             **routes_suivi_client.vue_suivi(db, t),
+            "mesures": pris.mesures(db, t),          # endiguement (PRIS VI.5.4) : le client les voit et les décide
             "agent": {"id": t.agent_id, "name": t.agent_name, "ip": t.agent_ip},
             "mitre_detail": t.mitre, "classification": t.classification,
             "isi": t.isi if not is_client else None,
@@ -983,6 +984,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # veut dire que l'horloge du manager est en avance sur celle de Keryx.
             out["received_at"] = rfc3339(t.created_at)
             out["tlp_plancher"] = db.get(Tenant, t.tenant_id).tlp_plancher     # politique du client (ADR-0033)
+            out["pris"] = t.pris or {}                 # réponse aux incidents (PRIS), pour l'équipe seulement
             # Acquittement (ADR-0032) : délai depuis la détection Wazuh jusqu'à la première action humaine.
             out["acquitted_at"] = rfc3339(t.acquitted_at)
             out["acquitted_by"] = t.acquitted_by
@@ -1553,6 +1555,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     routes_politique.register(app, ctx)
     routes_astreinte.register(app, ctx)
     routes_suivi_client.register(app, ctx)
+    pris.register(app, ctx)
 
     # ---------------------------------------------------------------- interface web
     dist = settings.web_dist

@@ -17,6 +17,8 @@ import Profile from './pages/Profile.jsx'
 import Reports from './pages/Reports.jsx'
 import Ticket from './pages/Ticket.jsx'
 import TicketReport from './pages/TicketReport.jsx'
+import RapportAnalyse from './pages/RapportAnalyse.jsx'
+import PointSituation from './pages/PointSituation.jsx'
 import Tickets from './pages/Tickets.jsx'
 
 const AuthContext = createContext(null)
@@ -86,6 +88,8 @@ export default function App() {
           <Route path="/parc" element={<Parc />} />
           <Route path="/tickets/:ref" element={<TicketRoute />} />
           <Route path="/tickets/:ref/rapport" element={<TicketReport />} />
+          <Route path="/tickets/:ref/rapport-analyse" element={<RapportAnalyse />} />
+          <Route path="/tickets/:ref/point-situation" element={<PointSituation />} />
           <Route path="/admin/*" element={<Admin />} />
           <Route path="/mitre" element={<MitrePage />} />
           <Route path="/politique" element={<Politique />} />

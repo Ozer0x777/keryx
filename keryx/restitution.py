@@ -111,6 +111,17 @@ def export_bytes(db: DbSession, settings: Settings, tenant: Tenant, actor: str) 
     return content, digest
 
 
+def proces_verbal(db: DbSession, tenant: Tenant) -> dict:
+    """Procès-verbal de destruction (PRIS VI.8.d) : identification précise de ce qui va être détruit, avant la
+    destruction ; la date et le mode sont ajoutés quand elle est faite."""
+    tickets = db.scalars(select(Ticket).where(Ticket.tenant_id == tenant.id).order_by(Ticket.seq)).all()
+    pieces = db.scalars(select(Attachment).where(Attachment.tenant_id == tenant.id)).all()
+    return {"client": tenant.key, "nom": tenant.name,
+            "tickets": [{"ref": t.ref, "titre": t.title, "detecte_le": rfc3339(t.detected_at)} for t in tickets],
+            "pieces": [{"id": a.id, "fichier": a.filename, "sha256": a.sha256, "ticket": next(
+                (t.ref for t in tickets if t.id == a.ticket_id), None), "stockee": bool(a.storage_name)} for a in pieces]}
+
+
 def destroy_client(db: DbSession, settings: Settings, tenant: Tenant, actor: str, dry_run: bool = True,
                    sans_export: bool = False) -> dict:
     """Détruit toutes les données du client (PDIS IV.5.2.f). Simulation par défaut ; exige un export préalable."""

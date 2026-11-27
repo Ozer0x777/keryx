@@ -6,7 +6,10 @@ import { formatUtc } from '../labels.js'
 import { useConfirm } from './Confirm.jsx'
 import { UnsavedBadge, useUnsaved } from './Unsaved.jsx'
 
-const KINDS = { decision: tr('Décisions'), action: tr("Plan d'action"), synthese: tr('Synthèse de crise') }
+// PRIS VI.5.5.1 : arbitrages, objectifs stratégiques déclinés en actions (objectifs opérationnels avec délai), synthèse
+// de la situation, critères de sortie de crise (VI.3.g), dérogations et leurs risques (d.iii).
+const KINDS = { decision: tr('Décisions (arbitrages)'), objectif: tr('Objectifs stratégiques'), action: tr("Plan d'action (objectifs opérationnels)"), synthese: tr('Synthèse de crise'), critere_sortie: tr('Critères de sortie de crise'), derogation: tr('Dérogations') }
+const COCHABLES = ['objectif', 'action', 'critere_sortie']
 
 // Registre de crise d'un ticket. [PRIS VI.5.5.1] Texte brut : jamais interprété comme du HTML.
 export default function Crisis({ t, enc, isManager, open, onChange }) {
@@ -44,7 +47,9 @@ export default function Crisis({ t, enc, isManager, open, onChange }) {
     const fd = new FormData(form)
     const due = fd.get('due_at')
     // Le formulaire n'est vidé qu'après succès : en cas de refus, la saisie reste à l'écran.
-    if (await call(() => api(`/tickets/${enc}/crisis/entries`, { method: 'POST', json: { kind, body: fd.get('body'), owner: fd.get('owner') || null, due_at: utcInputToIso(due) } }))) { form.reset(); setEntryDirty(false) }
+    const json = { kind, body: fd.get('body'), owner: fd.get('owner') || null, due_at: utcInputToIso(due),
+      parent_id: fd.get('parent_id') || null, decision_id: fd.get('decision_id') || null, entite: fd.get('entite') || null, risque: fd.get('risque') || null }
+    if (await call(() => api(`/tickets/${enc}/crisis/entries`, { method: 'POST', json }))) { form.reset(); setEntryDirty(false) }
   }
   if (!c) return error ? <p className="error" role="alert">{error}</p> : null
   if (!c.active) {
@@ -71,12 +76,23 @@ export default function Crisis({ t, enc, isManager, open, onChange }) {
           <ul className="crisis-list">
             {c.items.filter((e) => e.kind === k).map((e) => (
               <li key={e.id} className={e.done ? 'done' : ''}>
-                {k === 'action' && (
-                  <input type="checkbox" checked={e.done} aria-label={tr('Action faite : {x}', { x: e.body })}
+                {COCHABLES.includes(k) && (
+                  <input type="checkbox" checked={e.done} aria-label={k === 'critere_sortie' ? tr('Critère atteint : {x}', { x: e.body }) : tr('Action faite : {x}', { x: e.body })}
                     onChange={(ev) => call(() => api(`/tickets/${enc}/crisis/entries/${e.id}`, { method: 'PATCH', json: { done: ev.target.checked } }))} />
                 )}
                 <div><span className="crisis-text">{e.body}</span>
-                  <span className="muted small"> — {e.created_by}, {formatUtc(e.created_at)}{e.owner ? tr(' · responsable : {x}', { x: e.owner }) : ''}{e.due_at ? tr(' · échéance {when}', { when: formatUtc(e.due_at) }) : ''}</span></div>
+                  <span className="muted small"> — {e.created_by}, {formatUtc(e.created_at)}{e.owner ? tr(' · responsable : {x}', { x: e.owner }) : ''}{e.due_at ? tr(' · échéance {when}', { when: formatUtc(e.due_at) }) : ''}
+                    {e.entite ? tr(' · arbitrage : {x}', { x: e.entite }) : ''}
+                    {e.parent_id ? tr(' · objectif : {x}', { x: c.items.find((y) => y.id === e.parent_id)?.body || '?' }) : ''}
+                    {e.decision_id ? tr(' · décision : {x}', { x: c.items.find((y) => y.id === e.decision_id)?.body || '?' }) : ''}
+                    {e.valide_par ? tr(' · validé par {who} le {when}', { who: e.valide_par, when: formatUtc(e.valide_le) }) : ''}</span>
+                  {e.risque && <div className="small">{tr('Risque associé : {x}', { x: e.risque })}</div>}
+                  {open && ['objectif', 'action'].includes(k) && !e.valide_par && (
+                    <button type="button" className="small" onClick={async () => {
+                      const r = await ask({ title: tr('Validation par la cellule de crise stratégique'), fields: [{ name: 'valide_par', label: tr('Validé par'), minLength: 2, maxLength: 200 }],
+                        confirm: tr('Enregistrer la validation'), action: ({ valide_par }) => api(`/tickets/${enc}/crisis/entries/${e.id}`, { method: 'PATCH', json: { valide_par } }) })
+                      if (r) { setC(r.result); onChange?.() }
+                    }}>{tr('Valider')}</button>)}</div>
               </li>
             ))}
           </ul>
@@ -90,6 +106,15 @@ export default function Crisis({ t, enc, isManager, open, onChange }) {
             {kind === 'action' && <label>{tr("Responsable")}<input name="owner" maxLength={120} /></label>}
           </div>
           {kind === 'action' && <label>{tr("Échéance (UTC)")}<input type="datetime-local" name="due_at" /></label>}
+          {kind === 'action' && (
+            <div className="grid2">
+              <label>{tr('Objectif stratégique')}<select name="parent_id" defaultValue=""><option value="">{tr('Aucun')}</option>
+                {c.items.filter((y) => y.kind === 'objectif').map((y) => <option key={y.id} value={y.id}>{y.body.slice(0, 80)}</option>)}</select></label>
+              <label>{tr("Arbitrage qui l'a permise")}<select name="decision_id" defaultValue=""><option value="">{tr('Aucun')}</option>
+                {c.items.filter((y) => y.kind === 'decision').map((y) => <option key={y.id} value={y.id}>{y.body.slice(0, 80)}</option>)}</select></label>
+            </div>)}
+          {kind === 'decision' && <label>{tr("Entité responsable de l'arbitrage")}<input name="entite" maxLength={200} /></label>}
+          {kind === 'derogation' && <label>{tr('Risque associé')}<textarea name="risque" maxLength={5000} rows={2} /></label>}
           <label>{tr("Contenu")}<textarea name="body" required maxLength={5000} rows={3} /></label>
           <div className="row end"><button className="primary">{tr("Ajouter au registre")}</button></div>
         </form>
