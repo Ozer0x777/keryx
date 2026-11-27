@@ -12,6 +12,12 @@ import { formatUtc } from '../labels.js'
 const vide = <span className="muted">{tr('Non renseigné')}</span>
 const label = (bloc, k) => (CHAMPS[bloc].find((x) => x[0] === k) || [k, k])[1]
 
+// Occurrences d'alerte fusionnées dans le ticket : résumées (nombre, première, dernière), jamais listées une à une.
+export function Occurrences({ o }) {
+  if (!o || !o.nombre) return null
+  return <p className="muted">{tr("{n} occurrence(s) de l'alerte fusionnée(s) dans ce ticket, du {a} au {b}, non détaillée(s).", { n: o.nombre, a: formatUtc(o.premiere), b: formatUtc(o.derniere) })}</p>
+}
+
 function Texte({ v }) {
   return v ? <p className="prewrap">{v}</p> : <p>{vide}</p>
 }
@@ -100,8 +106,8 @@ export default function RapportAnalyse() {
             <tbody>{t.attachments.map((a) => <tr key={a.id}><td>{a.description || a.filename}</td><td className="mono small">{formatUtc(a.collected_at)}</td><td>{a.method}</td><td>{a.sensitivity}</td><td className="mono small">{a.sha256}</td></tr>)}</tbody></table>)}
         <h3>{tr('Registre des actions réalisées')}</h3>
         <table className="grid"><thead><tr><th scope="col">{tr('Date')}</th><th scope="col">{tr('Auteur')}</th><th scope="col">{tr('Action')}</th></tr></thead>
-          <tbody>{t.events.filter((e) => e.action !== 'occurrence').map((e, i) => <tr key={i}><td className="mono small">{formatUtc(e.ts)}</td><td>{e.actor}</td><td>{e.action}</td></tr>)}</tbody></table>
-        {t.events.some((e) => e.action === 'occurrence') && <p className="muted">{tr("{n} occurrence(s) de l'alerte fusionnée(s) dans ce ticket, non détaillée(s).", { n: t.events.filter((e) => e.action === 'occurrence').length })}</p>}
+          <tbody>{t.events.map((e, i) => <tr key={i}><td className="mono small">{formatUtc(e.ts)}</td><td>{e.actor}</td><td>{e.action}</td></tr>)}</tbody></table>
+        <Occurrences o={t.occurrences_resume} />
         {crise.items.length > 0 && <>
           <h3>{tr("Plan d'action de gestion de crise")}</h3>
           <ul>{crit('objectif').map((o) => (

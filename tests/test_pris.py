@@ -162,3 +162,16 @@ def test_point_de_situation_compte_les_occurrences(app, db, world, alert):
     p = login(app, db, "analyst_acme").get(f"/api/v1/tickets/{ref}/point-situation").json()
     assert p["occurrences"] >= 3 and not any(x["action"] == "occurrence" for x in p["actions"])
     assert p["actions_omises"] == 0
+
+
+def test_fiche_complete_resume_les_occurrences(app, db, world, alert):
+    """Revue : la fiche complète (rapports imprimables) résume les occurrences au lieu de les lister."""
+    ref = _ticket(app, world, alert)
+    for i in range(4):
+        ingest(app, world["keys"]["ACME"], alert(dict(ALERT_SSH_BRUTEFORCE, id=f"occ-{i}")))
+    for qui in ("analyst_acme", "client_acme"):
+        f = login(app, db, qui).get(f"/api/v1/tickets/{ref}", params={"complet": True}).json()
+        assert not any(e["action"] == "occurrence" for e in f["events"])
+        assert f["occurrences_resume"]["nombre"] >= (4 if qui == "analyst_acme" else 0) and isinstance(f["occurrences"], int)
+    f = login(app, db, "analyst_acme").get(f"/api/v1/tickets/{ref}").json()
+    assert "occurrences_resume" not in f          # la fiche courante garde sa pagination

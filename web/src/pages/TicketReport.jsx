@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom'
 import { api } from '../api.js'
 import { Severity } from '../components/Badges.jsx'
 import Html from '../components/Html.jsx'
+import { Occurrences } from './RapportAnalyse.jsx'
 import { formatUtc, STATUS, VERDICTS } from '../labels.js'
 
 // Rapport d'incident imprimable (Imprimer > Enregistrer au format PDF). [PRIS VI.5.3.d, e]
@@ -47,6 +48,7 @@ export default function TicketReport() {
         <h2>{tr("Registre des actions")}</h2>
         <table className="grid"><thead><tr><th scope="col">{tr("Date")}</th><th scope="col">{tr("Auteur")}</th><th scope="col">{tr("Action")}</th></tr></thead>
           <tbody>{t.events.map((e, i) => <tr key={i}><td className="mono small">{formatUtc(e.ts)}</td><td>{e.actor}</td><td>{e.action}</td></tr>)}</tbody></table>
+        <Occurrences o={t.occurrences_resume} />
         {t.attachments.length > 0 && <>
           <h2>{tr("Registre des preuves")}</h2>
           <table className="grid"><thead><tr><th scope="col">{tr("Fichier")}</th><th scope="col">{tr("SHA-256")}</th><th scope="col">{tr("Collecte")}</th><th scope="col">{tr("Méthode")}</th></tr></thead>

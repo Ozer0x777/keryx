@@ -896,7 +896,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # rattache chaque alerte répétée (événement « occurrence ») : son historique peut compter des milliers d'entrées.
     FICHE_COMMENTS, FICHE_EVENTS = 50, 100
 
-    def latest(db: DbSession, model, t: Ticket, is_client: bool, limit: int | None, before: str | None = None):
+    def latest(db: DbSession, model, t: Ticket, is_client: bool, limit: int | None, before: str | None = None,
+               sans_occurrences: bool = False):
         """Entrées les plus récentes d'un ticket (commentaires ou événements), du plus ancien au plus récent, et nombre
         d'entrées plus anciennes. `before` : identifiant de la plus ancienne déjà affichée (pagination par curseur,
         stable quand de nouvelles entrées arrivent). Le client ne voit que ce qui lui est destiné."""
@@ -904,6 +905,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         q = select(model).where(model.ticket_id == t.id)
         if is_client:
             q = q.where(model.visible_client.is_(True))
+        if sans_occurrences:
+            q = q.where(TicketEvent.action != "occurrence")
         if before:
             pivot = db.scalars(q.where(model.id == before[:64])).first()
             if pivot is None:
@@ -946,11 +949,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/v1/tickets/{ref}")
     def get_ticket(ref: str, complet: bool = False, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
-        """`complet` : tous les commentaires et tout l'historique (rapport d'incident imprimable)."""
+        """`complet` : tous les commentaires et tout le registre des actions (rapports imprimables). Les occurrences
+        d'alerte (une par alerte répétée, des milliers possibles) n'y sont pas détaillées : `occurrences_resume` en donne le
+        nombre, la première et la dernière."""
         t = load_ticket(db, user, ref)
         is_client = user.role == "client"
         comments, comments_older = latest(db, Comment, t, is_client, None if complet else FICHE_COMMENTS)
-        events, events_older = latest(db, TicketEvent, t, is_client, None if complet else FICHE_EVENTS)
+        events, events_older = latest(db, TicketEvent, t, is_client, None if complet else FICHE_EVENTS,
+                                      sans_occurrences=complet)
+        occurrences = None
+        if complet:
+            q = select(func.count(), func.min(TicketEvent.ts), func.max(TicketEvent.ts)).where(
+                TicketEvent.ticket_id == t.id, TicketEvent.action == "occurrence")
+            if is_client:
+                q = q.where(TicketEvent.visible_client.is_(True))
+            n, premiere, derniere = db.execute(q).one()
+            occurrences = {"nombre": n or 0, "premiere": rfc3339(premiere), "derniere": rfc3339(derniere)}
         atts = db.scalars(select(Attachment).where(Attachment.ticket_id == t.id).order_by(Attachment.created_at)).all()
         author_ids = {t.assignee_id} if t.assignee_id else set()
         authors = {u.id: u for u in db.scalars(select(User).where(User.id.in_(author_ids)))} if author_ids else {}
@@ -972,6 +986,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "proposition": proposition(db, t) if not is_client else None,
             "comments": comment_views(db, comments), "comments_older": comments_older,
             "events": event_views(events), "events_older": events_older,
+            **({"occurrences_resume": occurrences} if complet else {}),
             "attachments": [attachment_view(a) for a in atts if (a.visible_client or not is_client)],
         })
         if not is_client:

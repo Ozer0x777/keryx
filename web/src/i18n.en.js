@@ -488,7 +488,7 @@ export default {
   "Rechercher": "Search",
   "{n} action(s) plus ancienne(s) de la période non reprise(s) ici : voir le registre du ticket.": "{n} older action(s) of the period not shown here: see the ticket log.",
   "{o} occurrence(s) de l'alerte, {n} commentaire(s), {m} pièce(s) collectée(s), {c} entrée(s) de crise sur la période.": "{o} alert occurrence(s), {n} comment(s), {m} item(s) collected, {c} crisis entry(ies) over the period.",
-  "{n} occurrence(s) de l'alerte fusionnée(s) dans ce ticket, non détaillée(s).": "{n} alert occurrence(s) merged into this ticket, not detailed.",
+  "{n} occurrence(s) de l'alerte fusionnée(s) dans ce ticket, du {a} au {b}, non détaillée(s).": "{n} alert occurrence(s) merged into this ticket, from {a} to {b}, not detailed.",
   "Décision rapportée, prise par": "Decision reported, taken by",
   "Acceptée": "Accepted",
   "Refusée": "Refused",
