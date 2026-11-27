@@ -15,7 +15,7 @@ export default async ({ stack, BASE, check, login }) => {
   const lignes = m.locator('section[aria-label="Registre des actions"] ol.timeline > li')
   check(await eventually(async () => (await lignes.count()) === 100), 'fiche : les 100 entrées les plus récentes du registre')
   const plus = m.getByRole('button', { name: /Afficher les plus anciens \(\d+ restants\)/ })
-  check(await plus.isVisible(), 'fiche : bouton « Afficher les plus anciens » avec le nombre restant')
+  check(await eventually(async () => await plus.isVisible()), 'fiche : bouton « Afficher les plus anciens » avec le nombre restant')
   await plus.click()
   check(await eventually(async () => (await lignes.count()) > 100 && !(await plus.isVisible())), 'fiche : les plus anciennes chargées, plus de bouton')
   const rapport = await m.request.get(`${BASE}/api/v1/tickets/${ref}?complet=true`)
