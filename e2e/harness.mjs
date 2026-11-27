@@ -147,7 +147,12 @@ export async function unfold(page, title) {
   // La fiche ticket de l'équipe est en onglets (ADR-0026) : on active d'abord celui qui contient le panneau.
   const tab = await d.evaluate((e) => { const p = e.closest('[role=tabpanel]'); return p && p.hidden ? p.getAttribute('aria-labelledby') : null })
   if (tab) await page.locator(`#${tab}`).click()
-  if (!(await d.evaluate((e) => e.open))) await d.locator('> summary').click()
+  // Un panneau peut s'ouvrir de lui-même quand son contenu arrive : le clic du test le refermerait. On vérifie donc
+  // qu'il reste ouvert, et on recommence au besoin (quelques fois au plus).
+  for (let i = 0; i < 4; i++) {
+    if (await d.evaluate((e) => e.open)) { await page.waitForTimeout(150); if (await d.evaluate((e) => e.open)) return }
+    else await d.locator('> summary').click()
+  }
 }
 export async function unfoldAll(page) {
   // Contrôles qui portent sur toute la page : les panneaux de tous les onglets sont rendus visibles (un état du
