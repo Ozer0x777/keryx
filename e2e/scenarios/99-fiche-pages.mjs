@@ -20,5 +20,7 @@ export default async ({ stack, BASE, check, login }) => {
   check(await eventually(async () => (await lignes.count()) > 100 && !(await plus.isVisible())), 'fiche : les plus anciennes chargées, plus de bouton')
   const rapport = await m.request.get(`${BASE}/api/v1/tickets/${ref}?complet=true`)
   const r = await rapport.json()
-  check(r.events.length === await lignes.count() && r.events_older === 0, 'rapport : historique complet (même nombre que la fiche dépliée)')
+  // Les occurrences d'alerte ne sont pas listées une à une dans les rapports : elles sont résumées (nombre, dates).
+  check(!r.events.some((e) => e.action === 'occurrence') && r.events.length + r.occurrences_resume.nombre === await lignes.count() && r.events_older === 0,
+    'rapport : registre complet, occurrences résumées (total égal à la fiche dépliée)')
 }
