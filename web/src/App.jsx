@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import { api } from './api.js'
 import { t } from './i18n.js'
+import { setModeDates } from './labels.js'
 import Layout from './components/Layout.jsx'
 import { useConfirm } from './components/Confirm.jsx'
 import { clearDrafts, disableLeaveGuard, unsavedLabels } from './components/Unsaved.jsx'
@@ -76,6 +77,7 @@ export default function App() {
   }
 
   if (me === undefined) return <p className="loading">{t('Chargement…')}</p>
+  setModeDates(me?.role === 'client' ? 'local' : 'utc')   // heure locale pour le client, UTC pour l'équipe
   const home = me?.role === 'admin' ? '/admin' : '/tickets'
   return (
     <AuthContext.Provider value={{ me, refresh, logout }}>

@@ -5,6 +5,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 ## [Non publié]
 
 ### Ajouté
+- Portail client, lu par un client : liste avec filtres « En cours / Votre réponse attendue / Résolus / Tous »,
+  statut en mots de client (« Le SOC analyse », « Votre réponse attendue », « Réponse en cours », « Résolu »),
+  priorité et dernière mise à jour, marquage TLP dit une fois ; fiche avec « À faire de votre côté » (autoriser ou
+  refuser une mesure, signaler une action faite) en tête, frise d'avancement (sans les échéances internes),
+  « Ce qui se passe », échanges en conversation, détails techniques repliés en fin de page ; heures locales et texte
+  plus grand côté client. Côté équipe, panneau « Ce que lit le client » (titre et résumé pour le client). API :
+  `PUT /api/v1/tickets/{ref}/vue-client`, filtre `a_decider`. Migration 0034.
 - Lier des tickets et les retrouver (ADR-0034) : Keryx relève dans chaque alerte les adresses IP, noms d'hôte,
   comptes, domaines et empreintes ; la file et la nouvelle fenêtre « Lier un ticket… » cherchent par champ
   (`ip:`, `hote:`, `agent:`, `regle:`, `compte:`, `hash:`, `domaine:`, `ref:`) ou en texte libre, description et

@@ -36,7 +36,14 @@ export const isole = (status) => status === 'quarantaine' || status === 'non_ana
 export const LIFECYCLE = { get conserve() { return t('Conservé') }, get restitue() { return t('Restitué') }, get detruit() { return t('Détruit') } }
 export const MITRE_SOURCE = { get wazuh() { return t('Wazuh') }, get table() { return t('Table') }, get manuel() { return t('Manuel') }, get a_completer() { return t('à compléter') } }
 
+// Dates : l'équipe travaille en UTC (registres, échéances, preuves) ; le client lit l'heure de son navigateur (C09).
+let modeDates = 'utc'
+export const setModeDates = (m) => { modeDates = m === 'local' ? 'local' : 'utc' }
 export function formatUtc(iso) {
   if (!iso) return '—'
+  if (modeDates === 'local') {
+    const d = new Date(iso)
+    if (!Number.isNaN(d.getTime())) return d.toLocaleString(document.documentElement.lang || undefined, { dateStyle: 'medium', timeStyle: 'short' })
+  }
   return iso.replace('T', ' ').slice(0, 16) + ' UTC'
 }

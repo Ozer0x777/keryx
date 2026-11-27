@@ -44,8 +44,8 @@ from .iodef import validate as iodef_validate
 from .ingest import AlertRejected, ingest_alert
 from .mitre import valid_technique
 from .models import (
-    LIFECYCLE, SEVERITIES, STATUSES, TLP, VERDICTS, ApiKey, Attachment, AuditEntry, Comment, CustodyEvent, MitreTechnique, RateHit,
-    NIVEAUX_CLASSIFICATION, RawAlert, Session, WebAuthnCredential, Tenant, Ticket, TicketEvent, User, tlp_initial,
+    LIFECYCLE, SEVERITIES, STATUSES, TLP, VERDICTS, ActionClient, ApiKey, Attachment, AuditEntry, Comment, CustodyEvent, MitreTechnique, RateHit,
+    MesureEndiguement, NIVEAUX_CLASSIFICATION, RawAlert, Session, WebAuthnCredential, Tenant, Ticket, TicketEvent, User, tlp_initial,
     tlp_rang,
 )
 from .notify import retry_failed, send_pending
@@ -750,6 +750,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "last_seen_at": rfc3339(t.last_seen_at),
             # Contexte affiché sous le titre dans la file.
             "rule_id": t.rule_id, "agent_name": t.agent_name, "agent_ip": t.agent_ip,
+            "titre_client": t.titre_client, "updated_at": rfc3339(t.updated_at),
             "assignee": (users or {}).get(t.assignee_id).display_name if users and t.assignee_id in users else None,
             "rex_en_attente": rex_pending(t.status, t.rex_required), "crisis": t.crisis,
         }
@@ -760,6 +761,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         """Ticket ouvert, gravité qualifiée ou à défaut criticité initiale Critique, sans assigné."""
         return and_(Ticket.status.in_(OPEN_STATUSES), Ticket.assignee_id.is_(None),
                     func.coalesce(Ticket.gravite, Ticket.criticite_initiale) == "Critique")
+
+    def a_decider_cond():
+        """Réponse attendue du client : une mesure d'endiguement proposée à décider ou une action demandée à faire."""
+        return or_(Ticket.id.in_(select(MesureEndiguement.ticket_id).where(MesureEndiguement.etat == "proposee")),
+                   Ticket.id.in_(select(ActionClient.ticket_id).where(ActionClient.etat == "a_faire")))
 
     def awaiting_client_cond():
         """Ticket ouvert dont le dernier message visible du client vient de l'équipe : le client n'a pas répondu depuis.
@@ -783,7 +789,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/v1/tickets")
     def list_tickets(status: str | None = Query(default=None, max_length=200), client: str | None = None,
                      rex_en_attente: bool = False, awaiting_client: bool = False, incomplete: bool = False,
-                     critical_unassigned: bool = False,
+                     critical_unassigned: bool = False, a_decider: bool = False,
                      q: str | None = Query(default=None, max_length=200), assignee: str | None = None,
                      overdue: bool = False, crisis: bool = False, severity: str | None = Query(default=None, max_length=20),
                      sort: str = "created", order: str = "desc",
@@ -827,6 +833,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             query = query.where(Ticket.crisis.is_(True))
         if critical_unassigned:
             query = query.where(critical_unassigned_cond())
+        if a_decider:
+            query = query.where(a_decider_cond())
         if awaiting_client:
             query = query.where(awaiting_client_cond())
         if incomplete:
@@ -864,7 +872,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         users = {u.id: u for u in db.scalars(select(User).where(User.id.in_(assignee_ids)))} if assignee_ids else {}
         audit.record(db, user.username, "ticket.list", None, None, None, {"count": len(tickets)})
         commit(db)
-        return {"items": [ticket_summary(t, tenants, users, with_sla=user.role != "client") for t in tickets],
+        items = [ticket_summary(t, tenants, users, with_sla=user.role != "client") for t in tickets]
+        if user.role == "client" and tickets:
+            # Portail client : ce qui attend sa réponse, ticket par ticket (mesures à décider, actions à faire).
+            ids_page = [t.id for t in tickets]
+            attente = set(db.scalars(select(MesureEndiguement.ticket_id).where(
+                MesureEndiguement.ticket_id.in_(ids_page), MesureEndiguement.etat == "proposee")))
+            attente |= set(db.scalars(select(ActionClient.ticket_id).where(
+                ActionClient.ticket_id.in_(ids_page), ActionClient.etat == "a_faire")))
+            for t, it in zip(tickets, items, strict=True):
+                it["a_decider"] = t.id in attente
+        return {"items": items,
                 "limit": limit, "offset": offset,
                 "total": total}
 

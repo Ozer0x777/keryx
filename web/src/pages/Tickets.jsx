@@ -3,15 +3,16 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js'
 import { useAuth } from '../App.jsx'
 import { Severity, Status, Tlp } from '../components/Badges.jsx'
+import { StatutClient } from '../components/ClientVue.jsx'
 import { useConfirm } from '../components/Confirm.jsx'
 import Pager from '../components/Pager.jsx'
 import ShortcutsHelp from '../components/ShortcutsHelp.jsx'
 import { useShortcuts } from '../shortcuts.js'
 import { dureeLisible, utcClock } from '../dates.js'
 import { t as tr } from '../i18n.js'
-import { STATUS } from '../labels.js'
+import { formatUtc, STATUS } from '../labels.js'
 import {
-  cardActive, cardPatch, DEFAULTS, filtersFromSearch, filtersToSearch, OPEN_STATUSES, pageInfo, PER_PAGE, rememberQueue,
+  cardActive, cardPatch, DEFAULTS, RESOLVED_STATUSES, filtersFromSearch, filtersToSearch, OPEN_STATUSES, pageInfo, PER_PAGE, rememberQueue,
   SEVERITIES, TO_QUALIFY,
 } from '../queue.js'
 
@@ -36,8 +37,6 @@ const PRIORITIES = [
   { label: 'Dossiers incomplets', hint: 'gravité, assigné ou synthèse manquants', patch: { incomplete: true }, count: (c) => c.incomplete },
 ]
 
-// Date de détection sans le suffixe « UTC » (il est dans l'en-tête de colonne) : la colonne reste étroite.
-const utcShort = (iso) => (iso ? iso.replace('T', ' ').slice(0, 16) : '—')
 const ago = (iso) => (iso ? tr('il y a {d}', { d: dureeLisible((Date.now() - new Date(iso).getTime()) / 1000) }) : '')
 const DEFAULT_TLP = 'TLP:AMBER'          // marquage d'un client sans plancher
 
@@ -131,7 +130,7 @@ export default function Tickets() {
     if (!isClient && !new URLSearchParams(key).has('sort')) { f.sort = 'echeance'; f.order = 'asc' }   // tri par défaut de l'équipe
     return { ...f, rex_en_attente: f.rex_en_attente || undefined, overdue: f.overdue || undefined,
       critical_unassigned: f.critical_unassigned || undefined, awaiting_client: f.awaiting_client || undefined,
-      incomplete: f.incomplete || undefined, limit: Number(f.per_page), offset: (Number(f.page) - 1) * Number(f.per_page) }
+      incomplete: f.incomplete || undefined, a_decider: f.a_decider || undefined, limit: Number(f.per_page), offset: (Number(f.page) - 1) * Number(f.per_page) }
   }, [key, isClient])
 
   // Relevé de la liste (premier affichage, changement de filtre, bouton, minuterie). La liste affichée reste en place
@@ -256,14 +255,17 @@ export default function Tickets() {
     ...Object.entries(STATUS).map(([k, v]) => [k, v.label]),
   ]
   const multi = me.clients.length > 1
-  const cols = isClient ? 9 + (multi ? 1 : 0) : 10
+  const cols = isClient ? 5 : 10
+  // Marquage le plus courant des tickets affichés (C08) : dit une fois ; une ligne ne le montre que s'il en diffère. Le
+  // plancher du client (politique interne) n'est jamais exposé.
+  const tlpCourant = useMemo(() => { const n = {}; for (const x of items || []) n[x.tlp] = (n[x.tlp] || 0) + 1; return Object.entries(n).sort((a, b) => b[1] - a[1])[0]?.[0] || '' }, [items])
   return (
     <>
       <header className="page-head">
         <div>
           <h1>{isClient ? tr('Mes incidents') : tr('File des tickets')}</h1>
           <p className="muted">{isClient
-            ? tr('Vous voyez uniquement les tickets de votre organisation et les échanges qui vous sont destinés.')
+            ? tr('Les incidents de votre organisation suivis par le SOC.')
             : tr('Clients affectés : {clients}', { clients: me.clients.map((c) => c.name).join(', ') || tr('aucun') })}</p>
         </div>
         {!isClient && (
@@ -298,6 +300,15 @@ export default function Tickets() {
         </div>
       )}
 
+      {isClient && (
+        <div className="row wrap gap views" role="group" aria-label={tr('Afficher')}>
+          {[[tr('En cours'), { status: OPEN_STATUSES, a_decider: false }], [tr('Votre réponse attendue'), { status: '', a_decider: true }],
+            [tr('Résolus'), { status: RESOLVED_STATUSES, a_decider: false }], [tr('Tous'), { status: '', a_decider: false }]].map(([label, patch]) => {
+            const on = filters.status === patch.status && filters.a_decider === patch.a_decider
+            return <button type="button" key={label} className={`vchip${on ? ' on' : ''}`} aria-pressed={on} onClick={() => set(patch)}>{label}</button>
+          })}
+        </div>
+      )}
       <section className="filters" aria-label={tr('Filtres')}>
         <form className="filter grow" role="search" onSubmit={(e) => { e.preventDefault(); set({ q: draftQ.trim() }) }}>
           <label>{tr('Recherche')}
@@ -364,18 +375,16 @@ export default function Tickets() {
 
       <div className="table-wrap card">
         {aide && <ShortcutsHelp onClose={() => setAide(false)} keys={[['j', tr('Ticket suivant')], ['k', tr('Ticket précédent')], ['Entrée', tr('Ouvrir le ticket')], ['/', tr('Rechercher')], ['?', tr('Cette aide')]]} />}
-        <table className={`grid queue${compact ? ' compact' : ''}`}>
+        {isClient && items?.length > 0 && <p className="muted small marking-note">{tr('Marquage de vos incidents : {tlp}, sauf mention contraire sur la ligne.', { tlp: tlpCourant })}</p>}
+        <table className={`grid ${isClient ? 'queue-client' : 'queue'}${compact ? ' compact' : ''}`}>
           <thead>
             <tr>
               {isClient ? (<>
-                <SortHeader label={tr('Réf.')} col="ref" filters={filters} set={set} /><th scope="col">{tr('Titre')}</th>
-                {multi && <th scope="col">{tr('Client')}</th>}
-                <SortHeader label={tr('Criticité')} col="criticite" filters={filters} set={set} />
-                <SortHeader label={tr('Gravité')} col="gravite" filters={filters} set={set} />
-                <SortHeader label={tr('Statut')} col="status" filters={filters} set={set} />
-                <th scope="col">{tr('MITRE')}</th>
-                <SortHeader label={tr('Détecté (UTC)')} col="detected" filters={filters} set={set} /><th scope="col">{tr("TLP")}</th>
-                <SortHeader label={tr('Occur.')} col="occurrences" filters={filters} set={set} className="num" />
+                {/* Portail client (C02) : référence, incident en mots de client, statut, priorité, dernière mise à jour. */}
+                <SortHeader label={tr('Réf.')} col="ref" filters={filters} set={set} /><th scope="col">{tr('Incident')}</th>
+                <th scope="col">{tr('Statut')}</th>
+                <SortHeader label={tr('Priorité')} col="gravite" filters={filters} set={set} />
+                <SortHeader label={tr('Mis à jour')} col="updated" filters={filters} set={set} />
               </>) : (<>
                 {/* Équipe : contexte sous le titre, règle, criticité, gravité, occurrences, statut, échéance, assigné. */}
                 <th scope="col" className="pick"><input ref={selectAll} type="checkbox" aria-label={tr('Sélectionner tous les tickets affichés')} checked={allPicked} disabled={pageRefs.length === 0} onChange={toggleAll} /></th>
@@ -395,17 +404,13 @@ export default function Tickets() {
             {items?.length === 0 && <tr><td colSpan={cols} className="muted">{tr('Aucun ticket ne correspond.')} <button type="button" className="link" onClick={() => apply(base)}>{tr('Retirer tous les filtres')}</button></td></tr>}
             {items?.map((t) => (
               isClient ? (
-              <tr key={t.ref}>
+              <tr key={t.ref} className={t.a_decider ? 'a-decider' : ''}>
                 <td className="mono"><Link to={`/tickets/${encodeURIComponent(t.ref)}`}>{t.ref}</Link></td>
-                <td className="strong title-cell">{t.title}</td>
-                {multi && <td className="mono small" title={t.client}>{t.client_key}</td>}
-                <td><Severity value={t.criticite_initiale} /></td>
-                <td><Severity value={t.gravite} /></td>
-                <td><Status value={t.status} /></td>
-                <td><span className="mono">{t.mitre.join(', ') || '—'}</span></td>
-                <td className="mono small">{utcShort(t.detected_at)}</td>
-                <td><Tlp value={t.tlp} /></td>
-                <td className="num mono">{t.occurrences}</td>
+                <td className="title-cell"><span className="strong">{t.titre_client || t.title}</span>
+                  <span className="ctx">{[t.agent_name, multi ? t.client : null].filter(Boolean).join(' · ')}{t.tlp !== tlpCourant && <> <Tlp value={t.tlp} /></>}</span></td>
+                <td><StatutClient t={t} aDecider={t.a_decider} /></td>
+                <td><Severity value={t.gravite || t.criticite_initiale} /></td>
+                <td className="small">{formatUtc(t.updated_at)}</td>
               </tr>
               ) : (
               <tr key={t.ref} className={t.overdue ? 'overdue' : ''}>

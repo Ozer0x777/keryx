@@ -44,15 +44,42 @@ class ActionMajIn(BaseModel):
 
 def vue_suivi(db: DbSession, t: Ticket) -> dict:
     actions = db.scalars(select(ActionClient).where(ActionClient.ticket_id == t.id).order_by(ActionClient.cree_le)).all()
-    return {"suivi_client": {"etat": t.etat_client, "demande": t.demande_client, "maj_le": rfc3339(t.etat_client_at)},
+    return {"titre_client": t.titre_client, "resume_client": t.resume_client, "resume_client_le": rfc3339(t.resume_client_le),
+            "suivi_client": {"etat": t.etat_client, "demande": t.demande_client, "maj_le": rfc3339(t.etat_client_at)},
             "actions_client": [{"id": a.id, "libelle": a.libelle, "etat": a.etat, "commentaire": a.commentaire,
                                 "cree_par": a.cree_par, "cree_le": rfc3339(a.cree_le), "maj_par": a.maj_par,
                                 "maj_le": rfc3339(a.maj_le)} for a in actions]}
 
 
+class VueClientIn(BaseModel):
+    titre_client: str | None = Field(default=None, max_length=300)
+    resume_client: str | None = Field(default=None, max_length=10_000)
+
+
 def register(app, ctx) -> None:
     get_db, current_user, require_role, commit = ctx.get_db, ctx.current_user, ctx.require_role, ctx.commit
     load_ticket, event = ctx.load_ticket, ctx.event
+
+    @app.put("/api/v1/tickets/{ref}/vue-client")
+    def maj_vue_client(ref: str, body: VueClientIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        """Titre et résumé destinés au client, écrits par l'équipe (texte brut, jamais interprété comme du HTML). Un
+        champ absent n'est pas modifié ; une chaîne vide le retire. Inscrit au registre, visible du client."""
+        require_role(user, "analyst", "manager")
+        t = load_ticket(db, user, ref)
+        champs = []
+        if body.titre_client is not None:
+            t.titre_client = body.titre_client.strip() or None
+            champs.append("titre_client")
+        if body.resume_client is not None:
+            t.resume_client = body.resume_client.strip() or None
+            t.resume_client_le = utcnow() if t.resume_client else None
+            champs.append("resume_client")
+        if not champs:
+            raise HTTPException(422, "Indiquer un titre ou un résumé pour le client.")
+        t.updated_at = utcnow()
+        event(db, t, user, "vue_client", {"champs": champs}, visible_client=True)
+        commit(db)
+        return {"ref": t.ref, **{k: v for k, v in vue_suivi(db, t).items() if k in ("titre_client", "resume_client", "resume_client_le")}}
 
     def prevenir_equipe(db: DbSession, t: Ticket, user: User) -> None:
         """L'assigné, sinon toute l'équipe du client (comme pour une réponse du client)."""
