@@ -36,7 +36,7 @@ x-durci: &durci
 # Image de Keryx (services keryx et sauvegarde) : construite depuis le Dockerfile du dépôt, ou, si KERYX_IMAGE est
 # réglé dans .env (ex. ghcr.io/ozer0x777/keryx), image publiée et signée, récupérée par install.sh au lieu d'être construite.
 x-image-keryx: &image-keryx
-  image: ${KERYX_IMAGE:-keryx}:${KERYX_VERSION:-0.9.0}
+  image: ${KERYX_IMAGE:-keryx}:${KERYX_VERSION:-0.10.0}
   build:
     context: ../..
     dockerfile: Dockerfile

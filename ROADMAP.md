@@ -3,7 +3,7 @@
 *In English: planned work for the next twelve months, in priority order. No date is promised; security fixes always
 come first (`SECURITY.md`).*
 
-État au 26/11/2026, version 0.9.0. Les priorités viennent des retours d'usage, en premier lieu l'essai sur une
+État au 27/11/2026, version 0.10.0. Les priorités viennent des retours d'usage, en premier lieu l'essai sur une
 préproduction Wazuh réelle (188 alertes reçues sur 188, 63 tickets). Une idée nouvelle se propose en issue ; un
 choix technique passe par un ADR (`GOVERNANCE.md`).
 
@@ -30,9 +30,10 @@ Chaque essai réel donne lieu à une correction ou à une note dans la documenta
 
 ## 3. Conformité documentée
 
-- Couverture des exigences PDIS faite le 26/11/2026 (`docs/conformite/couverture-pdis.md`) : corriger les écarts du
-  logiciel dans l'ordre de sa dernière section (conservation du contexte, contenu du ticket, notifications, état
-  modifiable par le client, réversibilité, VirusTotal, journalisation, indicateurs).
+- Couverture des exigences PDIS (`docs/conformite/couverture-pdis.md`) : écarts du logiciel corrigés dans la 0.10.0 ;
+  restent les fichiers chiffrés ou non analysables, le portail par client, le pare-feu applicatif et les indicateurs
+  de capacité (section 5 et ADR-0027).
+- Couverture du référentiel PRIS v3.2 et de sa trame d'évaluation, sur le même modèle.
 
 ## 4. Robustesse et exploitation
 
