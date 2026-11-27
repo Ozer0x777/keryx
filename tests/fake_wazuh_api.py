@@ -105,6 +105,10 @@ class FakeWazuhApi:
                     return self._send(200, {"data": {"title": "Wazuh API REST", "api_version": outer.version}, "error": 0})
                 if url.path == "/agents":
                     q = {k: v[0] for k, v in parse_qs(url.query).items()}
+                    # Comme le vrai manager (Wazuh 4.14) : un « + » non encodé se lit comme un espace, tri refusé.
+                    if "sort" in q and q["sort"].lstrip("+-") not in ("id", "name", "dateAdd", "lastKeepAlive"):
+                        return self._send(400, {"title": "Bad Request", "detail": f"Not a valid sort field: {q['sort']!r}",
+                                                "error": 400})
                     items = list(outer.agents)
                     if q.get("group") and outer.mode != "leak":
                         items = [a for a in items if q["group"] in (a.get("group") or [])]
