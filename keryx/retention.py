@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from . import audit
 from .config import MIN_RETENTION_MONTHS, Settings
-from .models import TERMINAL_STATUSES, RawAlert, SystemSetting, Tenant, Ticket
+from .models import TERMINAL_STATUSES, Observable, RawAlert, SystemSetting, Tenant, Ticket
 
 SETTING_KEY = "retention_months"
 
@@ -45,6 +45,9 @@ def run(db: DbSession, settings: Settings, now: datetime, actor: str, dry_run: b
         count = db.scalar(select(func.count()).select_from(RawAlert).where(*cond)) or 0
         if count and not dry_run:
             db.execute(delete(RawAlert).where(*cond))
+            # Les éléments relevés dans ces alertes suivent la même durée.
+            db.execute(delete(Observable).where(Observable.tenant_id == tenant.id, Observable.ticket_id.in_(ids))
+                       .execution_options(synchronize_session=False))
             audit.record(db, actor, "retention.purge", "tenant", tenant.key, tenant.id,
                          {"alertes_supprimees": count, "avant_le": cutoff.date().isoformat(), "mois": months})
         report.append({"client": tenant.key, "months": months, "before": cutoff.date().isoformat(), "alerts": count,

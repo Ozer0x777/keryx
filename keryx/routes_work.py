@@ -6,12 +6,12 @@ ne contient jamais de détail de l'incident, ici seulement la référence et la 
 from __future__ import annotations
 
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session as DbSession
 
-from . import audit, sla
+from . import audit, observables, recherche, sla
 from .ids import rfc3339, utcnow
 from .inbox import push
 from .models import (INBOX_KINDS, LINK_KINDS, InboxItem, RawAlert, SavedFilter, Template, Ticket, TicketEvent,
@@ -22,6 +22,8 @@ from .sanitize import clean_html
 class LinkIn(BaseModel):
     ref: str = Field(max_length=32)
     kind: str
+    # Lien parent : « enfant_de » (ce ticket est un enfant de `ref`, par défaut) ou « parent_de » (il en est le parent).
+    sens: str | None = Field(default=None, max_length=16)
 
 
 class MergeIn(BaseModel):
@@ -101,11 +103,45 @@ def register(app, ctx) -> None:
             | ((TicketLink.ticket_id == other.id) & (TicketLink.other_id == t.id)))).first()
         if dup:
             raise HTTPException(409, "Ces tickets sont déjà liés.")
-        db.add(TicketLink(tenant_id=t.tenant_id, ticket_id=t.id, other_id=other.id, kind=body.kind,
+        if body.sens not in (None, "enfant_de", "parent_de"):
+            raise HTTPException(422, "Sens attendu : enfant_de ou parent_de.")
+        # Le lien est rangé « enfant → parent » : « parent_de » le range depuis l'autre ticket.
+        child, parent = (other, t) if body.kind == "parent" and body.sens == "parent_de" else (t, other)
+        db.add(TicketLink(tenant_id=t.tenant_id, ticket_id=child.id, other_id=parent.id, kind=body.kind,
                           created_by=user.username))
-        event(db, t, user, "lien", {"avec": other.ref, "type": body.kind})
+        event(db, t, user, "lien", {"avec": other.ref, "type": body.kind, **({"sens": body.sens} if body.sens else {})})
+        event(db, other, user, "lien", {"avec": t.ref, "type": body.kind})   # le lien est au registre des deux tickets
         commit(db)
         return {"items": link_views(db, t)}
+
+    @app.get("/api/v1/tickets/{ref}/links/search")
+    def links_search(ref: str, q: str = Query(min_length=1, max_length=200), user: User = Depends(current_user),
+                     db: DbSession = Depends(get_db)):
+        """Tickets du même client à lier : texte libre ou champ précis (keryx/recherche.py), avec l'endroit où la valeur a
+        été trouvée. Jamais un autre client : un lien ne relie que des tickets du même client."""
+        staff(user)
+        t = load_ticket(db, user, ref)
+        cond = recherche.condition(q, equipe=True)
+        if cond is None:
+            return {"items": []}
+        lies = {x["ref"] for x in link_views(db, t)}
+        rows = db.scalars(select(Ticket).where(Ticket.tenant_id == t.tenant_id, Ticket.id != t.id, cond)
+                          .order_by(Ticket.seq.desc()).limit(20)).all()
+        audit.record(db, user.username, "ticket.link_search", "ticket", t.ref, t.tenant_id, {"resultats": len(rows)})
+        commit(db)
+        return {"items": [{"ref": x.ref, "title": x.title, "status": x.status, "criticite_initiale": x.criticite_initiale,
+                           "gravite": x.gravite, "detected_at": rfc3339(x.detected_at), "deja_lie": x.ref in lies,
+                           "trouve": recherche.ou_trouve(db, x, q, equipe=True)} for x in rows]}
+
+    @app.get("/api/v1/tickets/{ref}/links/suggestions")
+    def links_suggestions(ref: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        """Tickets « peut-être liés » : ceux du même client qui partagent une valeur relevée (IP, compte, empreinte…),
+        hors tickets déjà liés. Pas d'entrée d'audit propre : chargé avec la fiche, déjà tracée (« ticket.read »)."""
+        staff(user)
+        t = load_ticket(db, user, ref)
+        refs_lies = [x["ref"] for x in link_views(db, t)]
+        lies = set(db.scalars(select(Ticket.id).where(Ticket.ref.in_(refs_lies)))) if refs_lies else set()
+        return {"items": recherche.suggestions(db, t, lies)}
 
     @app.delete("/api/v1/tickets/{ref}/links/{link_id}")
     def links_delete(ref: str, link_id: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
@@ -132,6 +168,7 @@ def register(app, ctx) -> None:
             raise HTTPException(422, "Fusion impossible : deux tickets distincts du même client sont nécessaires.")
         moved = db.execute(update(RawAlert).where(RawAlert.ticket_id == src.id).values(ticket_id=dst.id)).rowcount
         db.execute(update(Comment).where(Comment.ticket_id == src.id).values(ticket_id=dst.id))
+        observables.deplacer(db, src.id, dst.id)
         dst.occurrences += src.occurrences
         dst.updated_at = utcnow()
         src.verdict, src.status, src.updated_at = "faux_positif", "faux_positif", utcnow()

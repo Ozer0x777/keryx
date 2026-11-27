@@ -6,6 +6,7 @@ import { useAuth } from '../App.jsx'
 import { tlpAuMoins, tlpSous } from '../tlp.js'
 import { fmtMin } from '../components/Acquittement.jsx'
 import SuiviClient from '../components/SuiviClient.jsx'
+import LinkDialog from '../components/LinkDialog.jsx'
 import Pris, { Mesures } from '../components/Pris.jsx'
 
 const NIVEAUX_CLASSIFICATION = ['Non protégé', 'Diffusion Restreinte']
@@ -970,55 +971,79 @@ function Assignment({ t, enc, run, open }) {
   )
 }
 
-const LINK_LABEL = { parent: tr('Parent'), enfant: tr('Enfant'), lie: tr('Lié'), doublon: tr('Doublon de'), 'doublon_de_celui-ci': tr('Doublon de ce ticket') }
+// Liens vus de ce ticket, regroupés : le parent, les enfants, les tickets liés, les doublons (dans les deux sens).
+const LINK_GROUPS = [
+  ['parent', () => tr('Parent')], ['enfant', () => tr('Enfants')], ['lie', () => tr('Liés')],
+  ['doublon', () => tr('Doublon de')], ['doublon_de_celui-ci', () => tr('Doublons de ce ticket')],
+]
+const OBS = { ip: () => tr('la même adresse'), compte: () => tr('le même compte'), hash: () => tr('la même empreinte'),
+  domaine: () => tr('le même domaine'), hote: () => tr('le même hôte') }
 
 function Links({ t, enc, run, open }) {
   const [items, setItems] = useState([])
-  const [kind, setKind] = useState('lie')
-  const [ref, setRef] = useState('')
+  const [sugg, setSugg] = useState([])
+  const [dlg, setDlg] = useState(null)          // null, ou la recherche de départ de la fenêtre de lien
   const [err, setErr] = useState('')
-  const linkDirty = open && !!ref.trim()
-  useUnsaved('lien', tr('lien'), linkDirty)
-  const load = useCallback(() => api(`/tickets/${enc}/links`).then((r) => setItems(r.items)).catch(() => {}), [enc])
+  const load = useCallback(() => {
+    api(`/tickets/${enc}/links`).then((r) => setItems(r.items)).catch(() => {})
+    api(`/tickets/${enc}/links/suggestions`).then((r) => setSugg(r.items)).catch(() => setSugg([]))
+  }, [enc])
   useEffect(() => { load() }, [load, t.status])
-  const add = async (e) => {
-    e.preventDefault(); setErr('')
-    try { setItems((await api(`/tickets/${enc}/links`, { method: 'POST', json: { ref: ref.trim().toUpperCase(), kind } })).items); setRef('') } catch (x) { setErr(x.message) }
-  }
-  const drop = async (id) => { try { setItems((await api(`/tickets/${enc}/links/${id}`, { method: 'DELETE' })).items) } catch (x) { setErr(x.message) } }
+  const drop = async (id) => { try { setItems((await api(`/tickets/${enc}/links/${id}`, { method: 'DELETE' })).items); load() } catch (x) { setErr(x.message) } }
   const [ask, dialog] = useConfirm()
   const [status, setStatus] = useState(null)
-  const merge = async () => {
+  const merge = async (into = '') => {
     const r = await ask({
       title: tr('Fusionner {ref} dans un autre ticket et le clore comme doublon ?', { ref: t.ref }),
       body: <p>{tr("Les alertes brutes et les commentaires de {ref} sont rattachés au ticket conservé. {ref} est clos en faux positif (doublon) : l'opération ne s'annule pas.", { ref: t.ref })}</p>,
       fields: [
-        { name: 'into', label: tr('Référence du ticket à conserver'), placeholder: tr('ACME-1'), mono: true, maxLength: 32,
+        { name: 'into', label: tr('Référence du ticket à conserver'), placeholder: tr('ex. ACME-1'), mono: true, maxLength: 32, initial: into,
           validate: (v) => (v.toUpperCase() === t.ref.toUpperCase() ? tr('Indiquer un autre ticket que celui-ci.') : '') },
         { name: 'reason', label: tr('Motif de la fusion'), minLength: 3, maxLength: 500 },
       ],
       confirm: tr('Fusionner et clore'), danger: true,
-      action: ({ into, reason }) => run(() => api(`/tickets/${enc}/merge`, { method: 'POST', json: { into: into.toUpperCase(), reason } }), tr('Ticket fusionné.')),
+      action: ({ into: i, reason }) => run(() => api(`/tickets/${enc}/merge`, { method: 'POST', json: { into: i.toUpperCase(), reason } }), tr('Ticket fusionné.')),
     })
     if (r) setStatus({ ok: tr('Ticket fusionné dans {ref} à {h}', { ref: r.values.into.toUpperCase(), h: utcClock() }) })
   }
   return (
-    <Section id="liens" filled={items.length > 0} title={tr("Tickets liés")} summary={<>{items.length || null}<UnsavedBadge show={linkDirty} /></>}>
+    <Section id="liens" title={tr("Tickets liés")} filled={items.length > 0 || sugg.length > 0} summary={items.length || null}>
       {items.length === 0 && <p className="muted small">{tr("Aucun lien.")}</p>}
-      <ul className="linklist">
-        {items.map((l) => (
-          <li key={l.id}><span className="muted small">{LINK_LABEL[l.kind] || l.kind}</span>{' '}
-            <Link to={`/tickets/${encodeURIComponent(l.ref)}`} className="mono">{l.ref}</Link>
-            <button type="button" className="x" aria-label={tr('Supprimer le lien avec {ref}', { ref: l.ref })} onClick={() => drop(l.id)}>×</button></li>
+      <div className="linkgroups">
+        {LINK_GROUPS.filter(([k]) => items.some((l) => l.kind === k)).map(([k, label]) => (
+          <div key={k} className="linkgroup">
+            <h3>{label()}</h3>
+            <ul className="linklist">
+              {items.filter((l) => l.kind === k).map((l) => (
+                <li key={l.id}>
+                  <Link to={`/tickets/${encodeURIComponent(l.ref)}`} className="mono">{l.ref}</Link>
+                  <span className="lr-title">{l.title}</span>
+                  <span className="muted small">{STATUS[l.status]?.label || l.status}</span>
+                  <button type="button" className="x" aria-label={tr('Supprimer le lien avec {ref}', { ref: l.ref })} onClick={() => drop(l.id)}>×</button>
+                </li>
+              ))}
+            </ul>
+          </div>
         ))}
-      </ul>
+      </div>
+      {/* Suggestions : tickets du même client qui partagent une valeur relevée dans les alertes (IP, compte…). */}
+      {sugg.length > 0 && (
+        <div className="suggest">
+          {sugg.slice(0, 3).map((s) => (
+            <p key={`${s.kind}:${s.value}`}>
+              <strong>{tr('Peut-être lié')}</strong> : {tr('{n} autre(s) ticket(s) avec {quoi}', { n: s.total, quoi: (OBS[s.kind] || (() => s.kind))() })} <code>{s.value}</code>
+              {' '}({s.tickets.slice(0, 3).map((x) => x.ref).join(', ')}{s.total > 3 ? '…' : ''})
+              {open && <> <button type="button" className="link strong" onClick={() => setDlg(`${s.kind}:${s.value}`)}>{tr('Voir et lier')}</button></>}
+            </p>
+          ))}
+        </div>
+      )}
       {err && <p className="error" role="alert">{err}</p>}
-      <form onSubmit={add} className="row gap wrap">
-        <label className="grow">{tr("Référence")}<input value={ref} onChange={(e) => setRef(e.target.value)} placeholder={tr("ACME-2")} required /></label>
-        <label>{tr("Type")}<select value={kind} onChange={(e) => setKind(e.target.value)}><option value="lie">{tr("Lié")}</option><option value="parent">{tr("Parent")}</option><option value="doublon">{tr("Doublon")}</option></select></label>
-        <button>{tr("Lier")}</button>
-      </form>
-      {open && <button type="button" className="small-btn danger" onClick={merge}>{tr("Fusionner dans un autre ticket…")}</button>}
+      <div className="row gap wrap">
+        {open && <button type="button" onClick={() => setDlg('')}>{tr('Lier un ticket…')}</button>}
+        {open && <button type="button" className="small-btn danger" onClick={() => merge()}>{tr("Fusionner dans un autre ticket…")}</button>}
+      </div>
+      {dlg !== null && <LinkDialog t={t} enc={enc} initialQuery={dlg} onClose={() => setDlg(null)} onLinked={(its) => { setItems(its); load() }} onMerge={(into) => merge(into)} />}
       <ActionStatus state={status} />
       {dialog}
     </Section>

@@ -174,3 +174,15 @@ export async function until(fn, label = 'condition', ms = 8000) {
   while (Date.now() < end) { if (await fn()) return; await new Promise((r) => setTimeout(r, 150)) }
   throw new Error(`délai dépassé : ${label}`)
 }
+
+// Lie le ticket affiché à `cible` par la fenêtre « Lier un ticket… » (recherche par référence, type « Lié »).
+export async function lier(page, cible) {
+  await unfold(page, 'Tickets liés')
+  await page.getByRole('button', { name: 'Lier un ticket…' }).click()
+  const d = page.locator('dialog.link-dialog')
+  await d.locator('input[type=search]').fill(cible)
+  const ligne = d.locator('.link-results li').filter({ has: page.locator('.mono', { hasText: new RegExp(`^${cible}$`) }) })
+  await ligne.locator('input[type=radio]').check()
+  await d.getByRole('button', { name: `Lier à ${cible}` }).click()
+  await page.waitForSelector(`.linklist >> text=${cible}`)
+}

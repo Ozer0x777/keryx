@@ -1,4 +1,4 @@
-import { answerDialog, unfold, until } from '../harness.mjs'
+import { lier, answerDialog, unfold, until } from '../harness.mjs'
 
 // Fiche ticket : saisies non enregistrées (indicateur, garde-fou de sortie, brouillon de commentaire), motif du faux
 // positif, confirmations des étapes qui engagent le client (ADR-0024).
@@ -78,10 +78,7 @@ export default async ({ stack, BASE, check, login }) => {
 
   // Changement de ticket par un lien de la fiche (même composant de route) : la saisie d'un ticket ne passe pas sur l'autre
   const autre = (await send({ ...base, id: 'gf2', rule: { ...base.rule, id: '5761' }, agent: { id: '006', name: 'srv-garde-2', ip: '10.20.1.18' } })).ticket
-  await unfold(m, 'Tickets liés')
-  await m.fill('section[aria-label="Tickets liés"] input[placeholder="ACME-2"]', autre)
-  await m.getByRole('button', { name: 'Lier', exact: true }).click()
-  await m.waitForSelector(`.linklist >> text=${autre}`)
+  await lier(m, autre)
   await unfold(m, 'Commentaires')
   await m.locator('section[aria-label="Commentaires"] .rich-content').last().click()
   await m.keyboard.type('Réservé au premier ticket.')

@@ -4,6 +4,15 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+### Ajouté
+- Lier des tickets et les retrouver (ADR-0034) : Keryx relève dans chaque alerte les adresses IP, noms d'hôte,
+  comptes, domaines et empreintes ; la file et la nouvelle fenêtre « Lier un ticket… » cherchent par champ
+  (`ip:`, `hote:`, `agent:`, `regle:`, `compte:`, `hash:`, `domaine:`, `ref:`) ou en texte libre, description et
+  alerte brute comprises (l'alerte brute pour l'équipe seulement), et disent où la valeur a été trouvée. La fenêtre
+  explique les types de lien et le sens d'un lien parent, écrit la conséquence avant de valider et propose la fusion
+  pour un doublon ; les liens sont regroupés par type sur la fiche ; « Peut-être lié » suggère les tickets du même
+  client qui partagent une valeur. Migration 0033 (avec reprise des alertes déjà conservées).
+
 ### Modifié
 - File des tickets de l'équipe : triée par échéance par défaut, échéance restante en couleur (dépassée en rouge),
   ligne de contexte sous le titre (agent, adresse, client), règle, criticité, gravité et occurrences avec la
