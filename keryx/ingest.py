@@ -14,7 +14,7 @@ from datetime import timedelta
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session as DbSession
 
-from . import astreinte, audit
+from . import astreinte, audit, observables
 from .config import Settings
 from .ids import as_utc, parse_wazuh_timestamp, utcnow
 from .mitre import enrich
@@ -232,6 +232,7 @@ def ingest_alert(db: DbSession, settings: Settings, tenant: Tenant, alert: dict,
         # Plafond de stockage : au-delà, seule l'empreinte de l'alerte est conservée.
         payload = raw if kept < MAX_RAW_PER_TICKET else json.dumps({"non_conserve": "plafond atteint", "sha256": raw_hash})
         db.add(RawAlert(ticket_id=existing.id, tenant_id=tenant.id, wazuh_id=wazuh_id, sha256=raw_hash, payload=payload))
+        observables.enregistrer(db, existing.id, tenant.id, alert)   # même au-delà du plafond d'alertes conservées
         db.add(TicketEvent(ticket_id=existing.id, actor=actor, action="occurrence",
                            details={"occurrences": existing.occurrences, "wazuh_id": wazuh_id}))
         audit.record(db, actor, "ticket.merge_alert", "ticket", existing.ref, tenant.id,
@@ -259,6 +260,7 @@ def ingest_alert(db: DbSession, settings: Settings, tenant: Tenant, alert: dict,
     db.add(ticket)
     db.flush()
     db.add(RawAlert(ticket_id=ticket.id, tenant_id=tenant.id, wazuh_id=wazuh_id, sha256=raw_hash, payload=raw))
+    observables.enregistrer(db, ticket.id, tenant.id, alert)
     db.add(TicketEvent(ticket_id=ticket.id, actor=actor, action="creation", visible_client=True,
                        details={"rule_id": rule_id, "rule_level": level, "criticite_initiale": crit, "criticite_source": crit_source,
                                 "mitre_source": mitre_source}))

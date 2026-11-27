@@ -27,7 +27,7 @@ from .config import Settings
 from .ids import rfc3339, utcnow
 from .models import (
     ActionClient, ApiKey, Attachment, AuditEntry, Comment, CrisisEntry, CustodyEvent, HashLookup, InboxItem,
-    MesureEndiguement, Notification, RawAlert, Template, Tenant, Ticket, TicketEvent, TicketLink, Timestamp, User, UserTenant,
+    MesureEndiguement, Notification, Observable, RawAlert, Template, Tenant, Ticket, TicketEvent, TicketLink, Timestamp, User, UserTenant,
     WazuhAgent, WazuhAgentEvent,
 )
 
@@ -68,6 +68,7 @@ def export_client(db: DbSession, settings: Settings, tenant: Tenant, out) -> dic
         "liens.json": _rows(db, TicketLink, TicketLink.tenant_id == tenant.id),
         "crise.json": _rows(db, CrisisEntry, CrisisEntry.tenant_id == tenant.id),
         "mesures-endiguement.json": _rows(db, MesureEndiguement, MesureEndiguement.tenant_id == tenant.id),
+        "elements-releves.json": _rows(db, Observable, Observable.tenant_id == tenant.id),
         "actions-client.json": _rows(db, ActionClient, ActionClient.tenant_id == tenant.id),
         "recherches-empreintes.json": _rows(db, HashLookup, HashLookup.tenant_id == tenant.id),
         "notifications.json": _rows(db, Notification, Notification.tenant_id == tenant.id),
@@ -143,6 +144,7 @@ def destroy_client(db: DbSession, settings: Settings, tenant: Tenant, actor: str
         ("recherches_empreintes", HashLookup, HashLookup.tenant_id == tenant.id),
         ("pieces", Attachment, Attachment.tenant_id == tenant.id),
         ("alertes_brutes", RawAlert, RawAlert.tenant_id == tenant.id),
+        ("elements_releves", Observable, Observable.tenant_id == tenant.id),
         ("commentaires", Comment, Comment.ticket_id.in_(ids)),
         ("evenements", TicketEvent, TicketEvent.ticket_id.in_(ids)),
         ("actions_client", ActionClient, ActionClient.tenant_id == tenant.id),

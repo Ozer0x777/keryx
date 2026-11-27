@@ -520,6 +520,19 @@ LINK_KINDS = ("parent", "lie", "doublon")
 INBOX_KINDS = ("assignation", "mention", "echeance", "reponse_client")
 
 
+class Observable(Base):
+    """Élément relevé dans une alerte du ticket (IP, hôte, compte, empreinte, domaine) : recherche par valeur et tickets
+    « peut-être liés ». Cloisonné par client comme le ticket. [voir keryx/observables.py]"""
+    __tablename__ = "observables"
+    __table_args__ = (UniqueConstraint("ticket_id", "kind", "value"), Index("ix_observable_valeur", "tenant_id", "kind", "value"))
+    id: Mapped[str] = _id()
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    ticket_id: Mapped[str] = mapped_column(ForeignKey("tickets.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    value: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class TicketLink(Base):
     """Lien entre deux tickets du même client (parent, lié, doublon). [ISO/IEC 27035 : regroupement d'incidents]"""
     __tablename__ = "ticket_links"

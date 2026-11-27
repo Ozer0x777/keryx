@@ -284,7 +284,9 @@ export default function Tickets() {
       <section className="filters" aria-label={tr('Filtres')}>
         <form className="filter grow" role="search" onSubmit={(e) => { e.preventDefault(); set({ q: draftQ.trim() }) }}>
           <label>{tr('Recherche')}
-            <input type="search" value={draftQ} onChange={(e) => setDraftQ(e.target.value)} placeholder={tr('Titre, règle, agent, IP, commentaire…')} />
+            <input type="search" value={draftQ} onChange={(e) => setDraftQ(e.target.value)}
+              placeholder={isClient ? tr('Titre, règle, agent, IP, commentaire…') : tr('ex. ACME-12, ip:185.220.101.4, compte:admin, ou un mot')}
+              title={isClient ? undefined : tr('Par champ : ip:, hote:, agent:, regle:, compte:, hash:, domaine:, ref: ; ou texte libre (titre, description, alerte brute, commentaires).')} />
           </label>
         </form>
         <label className="filter">{tr('Statut')}

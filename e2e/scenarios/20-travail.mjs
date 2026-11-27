@@ -1,4 +1,4 @@
-import { answerDialog, unfold, until } from '../harness.mjs'
+import { lier, answerDialog, unfold, until } from '../harness.mjs'
 
 export default async ({ stack, BASE, check, login }) => {
   const send = (alert) => fetch(`${BASE}/api/v1/ingest/wazuh`, { method: 'POST', headers: { Authorization: `Bearer ${stack.seeds.apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify(alert) }).then((r) => r.json())
@@ -74,9 +74,7 @@ export default async ({ stack, BASE, check, login }) => {
   check(await m.locator('.ticket-steps button.primary').count() === 1, 'un seul bouton primaire parmi les étapes de la barre fixe')
   check(await m.evaluate(() => getComputedStyle(document.querySelector('.ticket-aside')).position) !== 'sticky', 'colonne de pilotage non collante')
   // lien entre tickets depuis la fiche
-  await unfold(m, 'Tickets liés')
-  await m.fill('input[placeholder="ACME-2"]', 'ACME-2'); await m.getByRole('button', { name: 'Lier', exact: true }).click()
-  await m.waitForSelector('.linklist >> text=ACME-2')
+  await lier(m, 'ACME-2')
   check(true, 'lien créé depuis la fiche')
   // éditeur riche : l'état actif d'un bouton suit la mise en forme (classe et aria-pressed)
   await unfold(m, 'Commentaires')

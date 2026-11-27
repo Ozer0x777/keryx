@@ -33,7 +33,7 @@ from starlette.background import BackgroundTask
 
 from . import attachments as att
 from . import astreinte, audit, inbox, routes_admin, routes_astreinte, routes_oidc, routes_ops, routes_isi, routes_parc, pris, routes_politique, routes_reports, routes_suivi_client, routes_timestamp, routes_virustotal, routes_wazuh, routes_webauthn, routes_work, security
-from . import wazuh_context
+from . import recherche, wazuh_context
 from .oidc import load_providers
 from .bodylimit import BodyLimitMiddleware
 from .config import Settings
@@ -839,15 +839,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             aid = db.scalar(select(User.id).where(User.username == assignee[:120]))
             query = query.where(Ticket.assignee_id == aid) if aid else query.where(false())
         if q and q.strip():
-            like = "%" + q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-            fields = [Ticket.ref, Ticket.title, Ticket.rule_description, Ticket.rule_id, Ticket.agent_name, Ticket.agent_ip]
-            conds = [f.ilike(like, escape="\\") for f in fields]
-            # Les commentaires internes ne comptent que pour les agents du SOC (jamais pour le client).
-            cq = select(Comment.ticket_id).where(Comment.body_html.ilike(like, escape="\\"))
-            if user.role == "client":
-                cq = cq.where(Comment.visible_client.is_(True))
-            conds.append(Ticket.id.in_(cq))
-            query = query.where(or_(*conds))
+            # Texte libre ou champ précis (ip:, hote:, agent:, regle:, compte:, hash:, domaine:, ref:) ; alertes brutes et
+            # commentaires internes pour l'équipe seulement (keryx/recherche.py).
+            cond = recherche.condition(q, equipe=user.role != "client")
+            if cond is not None:
+                query = query.where(cond)
         if sort == "echeance" or (overdue and user.role != "client"):
             # Échéances calculées par client (cibles propres à chacun) : tri et filtre faits ici, puis la page.
             rows = []
