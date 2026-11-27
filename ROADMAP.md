@@ -56,3 +56,17 @@ changement visible. Le mode tout-en-un reste le produit principal.
 
 Audit d'accessibilité RGAA et test d'intrusion par un tiers (`docs/homologation/`) : à faire faire quand un
 utilisateur ou un financement le permet.
+
+## Propositions (non planifiées)
+
+Idées relevées à l'usage, à discuter avant toute décision : elles ne sont pas inscrites au plan.
+
+- **Envoi des alertes par lots depuis le manager.** Le manager Wazuh lance le script d'intégration une fois par
+  alerte (environ 0,26 s chacune en préproduction, une connexion TLS par alerte), soit quelque 14 000 alertes par
+  heure au plus ; une rafale plus rapide est livrée en retard (30 minutes mesurées, rapport du 27/11/2026). Piste :
+  un relais sur le manager qui regroupe les alertes et les envoie par lots à une route d'ingestion acceptant
+  plusieurs alertes, en gardant le dédoublonnage et l'alerte brute de chacune.
+- **Signaler une alerte manquante.** Le manager ne transmet pas une alerte de plus de 64 Kio, sans aucune trace
+  (observé en préproduction) ; rien ne le montre dans Keryx. Piste : repérer les trous dans la suite des alertes
+  reçues d'un manager (identifiants ou compteurs Wazuh, à vérifier selon la version), ou recevoir du manager le
+  nombre d'alertes produites pour le comparer au nombre reçu ; afficher l'écart dans « État du système ».

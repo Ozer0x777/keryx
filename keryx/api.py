@@ -1011,9 +1011,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                                "perimetre": t.perimetre, "rex_html": t.rex_html}
             # Contexte Wazuh (ADR-0021) : lien vers l'alerte et lecture de l'indexeur, pour l'équipe seulement. La clé
             # est absente pour le client, et absente pour tous tant que rien n'est réglé pour ce client.
-            wazuh = wazuh_context.ticket_view(db, t, db.get(Tenant, t.tenant_id))
+            tenant_t = db.get(Tenant, t.tenant_id)
+            wazuh = wazuh_context.ticket_view(db, t, tenant_t)
             if wazuh:
                 out["wazuh"] = wazuh
+            # Identifiant Wazuh de l'alerte d'origine et état du lien, montrés dans les détails de l'alerte : sans
+            # réglage, l'équipe voit où le lien se règle au lieu de ne rien voir.
+            alert_id, _, _ = wazuh_context.origin_alert(db, t)
+            out["wazuh_alerte"] = {"id": alert_id, "lien_regle": bool(tenant_t.wazuh_dashboard_url)}
             # Recherches VirusTotal déjà faites sur ce ticket (ADR-0022) : pour l'équipe seulement. La clé est absente
             # pour le client, et absente pour tous quand la fonction est coupée sur l'instance.
             if settings.virustotal_enabled:

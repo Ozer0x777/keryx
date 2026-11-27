@@ -810,3 +810,13 @@ def test_reglage_anterieur_se_repare_client_par_client(wapp, db, world, ticket, 
     assert fetch(a).status_code == 409                       # DELTA n'a pas encore de source : rien n'est lu
     assert adm.patch("/api/v1/admin/clients/DELTA", json={"wazuh_indexer_source": "manager:wazuh-manager-02"}).status_code == 200
     assert fetch(a).status_code == 200
+
+
+def test_identifiant_et_etat_du_lien_dans_les_details(app, db, world, alert):
+    """Préproduction 27/11/2026 : l'équipe voit l'identifiant de l'alerte, et si le lien vers Wazuh n'est pas réglé ;
+    le client ne voit ni l'un ni l'autre."""
+    from .conftest import ALERT_SSH_BRUTEFORCE, ingest, login
+    ref = ingest(app, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE)).json()["ticket"]
+    f = login(app, db, "analyst_acme").get(f"/api/v1/tickets/{ref}").json()
+    assert f["wazuh_alerte"]["id"] and f["wazuh_alerte"]["lien_regle"] is False
+    assert "wazuh_alerte" not in login(app, db, "client_acme").get(f"/api/v1/tickets/{ref}").json()

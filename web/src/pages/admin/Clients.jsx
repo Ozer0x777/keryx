@@ -27,6 +27,7 @@ function WazuhSettings({ client, v, set }) {
         <input className="mono" value={v.dashboard} maxLength={500} spellCheck={false} aria-describedby={`${id}-vars`}
           placeholder="https://wazuh.exemple/app/…{alert_id}…" onChange={(e) => set({ dashboard: e.target.value })} />
       </label>
+      <p className="field-hint wz-hint">{tr("Pour l'obtenir : dans le tableau de bord Wazuh, rechercher une alerte par son identifiant (id:…) sur une courte période, copier l'adresse de la page, puis y remplacer l'identifiant par {alert_id} et les deux dates par {from} et {to}.")}</p>
       <p className="field-hint wz-hint" id={`${id}-vars`}>{tr("Variables remplacées par Keryx : {alert_id} (identifiant Wazuh de l'alerte), {agent_id}, {rule_id}, {timestamp}, {from} et {to} (cinq minutes avant et après l'alerte, UTC), {index_pattern}. L'index réel et l'identifiant interne du document ne sont pas connus de Keryx.")}</p>
       <div className="grid2">
         <label>{tr("Adresse de l'indexeur Wazuh (HTTPS)")}

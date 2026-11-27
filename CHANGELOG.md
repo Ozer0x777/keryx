@@ -4,6 +4,12 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+### Modifié
+- Fiche ticket (équipe) : l'identifiant Wazuh de l'alerte d'origine et le lien « Ouvrir dans Wazuh » figurent dans
+  les détails de l'alerte (bloc « Alerte Wazuh » ou « Autres données de l'alerte Wazuh »), en plus du lien en tête
+  de fiche ; tant que le lien n'est pas réglé, la fiche dit où le régler. L'écran de l'Admin explique comment obtenir
+  le modèle d'URL depuis le tableau de bord Wazuh.
+
 ### Corrigé
 - Parc d'agents Wazuh : le relevé échouait contre un vrai manager (erreur 400 sur la liste des agents). Le « + » du
   tri `sort=+id` n'était pas encodé dans l'URL et se lisait comme un espace. Trouvé sur la préproduction (Wazuh
