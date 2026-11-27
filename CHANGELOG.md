@@ -14,8 +14,9 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
   en discrétion élevée (un même incident couvre souvent plusieurs tickets).
 - Mesures d'endiguement : plus de décision ni d'application sur un ticket clos (l'équipe peut encore lever une
   mesure en place) ; la décision du client prévient l'assigné, sinon l'équipe du client.
-- Point de situation et rapport d'analyse : les occurrences d'alerte répétées sont comptées et non listées ; le point
-  de situation borne le nombre d'actions détaillées.
+- Point de situation, rapport d'analyse et rapport d'incident : les occurrences d'alerte répétées sont résumées
+  (nombre, première, dernière) au lieu d'être listées ; le serveur ne les envoie plus une à une dans la fiche
+  complète (`occurrences_resume`), et le point de situation borne le nombre d'actions détaillées.
 - Posture : longueur maximale des champs « Effectifs » et « Validée le » alignée sur celle du serveur.
 
 ## [0.11.0] : 2026-11-27
