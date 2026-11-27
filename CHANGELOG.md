@@ -4,6 +4,14 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+## [0.10.0] : 2026-11-27
+
+**À lire avant la mise à jour** : deux comportements par défaut changent. Le contexte des incidents (alertes brutes)
+de chaque client est désormais conservé toute la prestation : la purge ne s'applique plus qu'aux clients pour
+lesquels l'Admin la choisit (Administration > Clients). La recherche VirusTotal est refusée tant que le manager n'a
+pas enregistré l'accord du client (« Politique des clients »). Migrations 0026 à 0030, appliquées par l'image au
+démarrage.
+
 ### Modifié
 - Conservation (PDIS IV.5.3.6) : par défaut, le contexte des incidents d'un client (alertes brutes) se conserve
   toute la durée de la prestation ; la purge ne s'applique plus qu'aux clients pour lesquels l'Admin la choisit

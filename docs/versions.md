@@ -25,12 +25,13 @@ identifiant CVE s'il existe (voir `SECURITY.md`).
 
 | Version | Correctifs de sécurité |
 |---|---|
-| 0.9.0 (dernière publiée) et `main` | oui |
-| 0.8.4 | non : mettre à jour vers 0.9.0 (migrations de base 0022 à 0025 appliquées par l'image au démarrage) |
-| 0.8.3 | non : mettre à jour vers 0.9.0 (cloisonnement d'un indexeur Wazuh partagé, correctifs de sécurité, voir `CHANGELOG.md`) |
-| 0.8.2 | non : mettre à jour vers 0.9.0 (correctif de l'ingestion d'une alerte contenant un caractère nul, voir `CHANGELOG.md`) |
-| 0.8.1 | non : publication incomplète (image seule), mettre à jour vers 0.9.0 |
-| 0.8.0 | non : mettre à jour vers 0.9.0 (image touchée par des failles élevées de Debian, voir `CHANGELOG.md`) |
+| 0.10.0 (dernière publiée) et `main` | oui |
+| 0.9.0 | non : mettre à jour vers 0.10.0 (écarts PDIS corrigés, migrations 0026 à 0030 ; lire l'avertissement de la section [0.10.0] du `CHANGELOG.md`) |
+| 0.8.4 | non : mettre à jour vers 0.10.0 (migrations de base 0022 à 0030 appliquées par l'image au démarrage) |
+| 0.8.3 | non : mettre à jour vers 0.10.0 (cloisonnement d'un indexeur Wazuh partagé, correctifs de sécurité, voir `CHANGELOG.md`) |
+| 0.8.2 | non : mettre à jour vers 0.10.0 (correctif de l'ingestion d'une alerte contenant un caractère nul, voir `CHANGELOG.md`) |
+| 0.8.1 | non : publication incomplète (image seule), mettre à jour vers 0.10.0 |
+| 0.8.0 | non : mettre à jour vers 0.10.0 (image touchée par des failles élevées de Debian, voir `CHANGELOG.md`) |
 | numéros antérieurs (jamais publiés) | non |
 
 Aucune durée de maintenance n'est promise pour une version ancienne : un correctif de sécurité sort dans une
