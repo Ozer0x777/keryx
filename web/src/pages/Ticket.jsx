@@ -6,7 +6,10 @@ import { useAuth } from '../App.jsx'
 import { tlpAuMoins, tlpSous } from '../tlp.js'
 import { fmtMin } from '../components/Acquittement.jsx'
 import SuiviClient from '../components/SuiviClient.jsx'
+import Html from '../components/Html.jsx'
 import LinkDialog from '../components/LinkDialog.jsx'
+import ShortcutsHelp from '../components/ShortcutsHelp.jsx'
+import { useShortcuts } from '../shortcuts.js'
 import Pris, { Mesures } from '../components/Pris.jsx'
 
 const NIVEAUX_CLASSIFICATION = ['Non protégé', 'Diffusion Restreinte']
@@ -31,10 +34,7 @@ import { confirmTransition, needsConfirm } from '../transitions.jsx'
 import {
   DOMMAGES, formatUtc, IMPORTANCES, LIFECYCLE, MITRE_SOURCE, SCAN, STATUS, TLPS, TRANSITIONS, VERDICTS, isole } from '../labels.js'
 
-// Le HTML affiché ici (description, commentaires, synthèse) est assaini côté serveur (nh3, liste blanche).
-function Html({ html }) {
-  return <div className="rich-content" dangerouslySetInnerHTML={{ __html: html || '' }} />
-}
+// Le HTML affiché (description, commentaires, synthèse) est assaini côté serveur : composant partagé components/Html.jsx.
 
 // Texte visible d'un HTML assaini. Analyse inerte : le document produit n'exécute ni ne charge rien.
 const textOf = (html) => (new DOMParser().parseFromString(html || '', 'text/html').body.textContent || '').replace(/\s+/g, ' ')
@@ -190,6 +190,27 @@ export default function Ticket() {
     }, 60)
   }, [selectTab])
 
+  // Barre collante : le titre n'y apparaît qu'une fois l'en-tête de la fiche sorti de l'écran (pas de doublon, A03).
+  const [headVisible, setHeadVisible] = useState(true)
+  useEffect(() => {
+    const head = document.querySelector('.ticket-head')
+    if (!head || typeof IntersectionObserver === 'undefined') return undefined
+    const obs = new IntersectionObserver(([e]) => setHeadVisible(e.isIntersecting), { threshold: 0 })
+    obs.observe(head)
+    return () => obs.disconnect()
+  }, [t?.ref])
+  // Raccourcis de la fiche (équipe, S13) : a pour prendre le ticket, c pour commenter, ? pour l'aide.
+  const [aide, setAide] = useState(false)
+  const raccourcis = useMemo(() => ({
+    a: () => { if (t && ['nouveau', 'en_evaluation', 'en_reponse'].includes(t.status) && t.assignee_username !== me.username) run(() => api(`/tickets/${enc}/prise-en-charge`, { method: 'POST' }), tr('Ticket pris en charge.')) },
+    c: () => {
+      goTo('communication', 'Commentaires')
+      setTimeout(() => document.querySelector('section[aria-label="Commentaires"] .rich-content[contenteditable=true]')?.focus(), 120)
+    },
+    '?': () => setAide(true),
+  }), [t, me.username, enc, goTo]) // eslint-disable-line react-hooks/exhaustive-deps
+  useShortcuts(raccourcis, isTeam && !!t)
+
   // Saisies non enregistrées : indicateur de l'en-tête et garde-fou de sortie (ADR-0024).
   const unsaved = useUnsavedRegistry()
   useLeaveGuard(unsaved.labels, ask)
@@ -311,6 +332,7 @@ export default function Ticket() {
           </dl>
         )}
       </header>
+      {aide && <ShortcutsHelp onClose={() => setAide(false)} keys={[['a', tr('Prendre le ticket')], ['c', tr('Écrire un commentaire')], ['?', tr('Cette aide')]]} />}
       {/* Zone live conservée pour les lecteurs d'écran ; le retour visible est au bouton de chaque section. */}
       <p className="sr-only" role="status" aria-live="polite">{notice}</p>
       {dialog}
@@ -323,7 +345,7 @@ export default function Ticket() {
         <>
           {/* Barre fixe : identité du ticket, étapes du cycle de vie, retour d'action et onglets restent à l'écran
               quand on fait défiler la page (ADR-0026). */}
-          <div className="ticket-sticky">
+          <div className={`ticket-sticky${headVisible ? ' head-visible' : ''}`}>
             <div className="ticket-bar-top">
               <div className="ticket-bar-id"><span className="mono strong">{t.ref}</span><span className="title muted">{t.title}</span></div>
               <div className="head-status"><UnsavedSummary labels={unsaved.labels} /><ActionStatus state={headStatus} /></div>
@@ -451,7 +473,7 @@ function Description({ t, enc, canEdit, run, onImage, alertMerged }) {
           </div>
           {status?.error && <ActionStatus state={status} />}
         </>
-      ) : <Html html={t.body_html} />}
+      ) : <Html html={t.body_html} highlight />}
       {!editing && status?.ok && <p className="saved-note"><ActionStatus state={status} /></p>}
       {alertMerged && (
         // La description reprend déjà la règle, sa description et l'agent : seules les autres données de l'alerte sont ajoutées.
@@ -736,18 +758,58 @@ function useOlder(ref, kind, items, older) {
   return { all, total: items.length + (older || 0), button }
 }
 
+// Texte brut d'un commentaire (HTML assaini par le serveur) pour le fil d'activité : jamais réinjecté comme HTML.
+const texteDe = (html) => { const d = document.createElement('div'); d.innerHTML = html || ''; return (d.textContent || '').replace(/\s+/g, ' ').trim() }
+
+// Registre des actions, avec un fil d'activité unifié au choix (S09) : « Actions » (le registre tel quel), « Tout »
+// (actions et commentaires dans un seul fil daté, les occurrences d'alerte successives regroupées en une ligne),
+// « Commentaires ».
 function Events({ t }) {
   const ev = useOlder(t.ref, 'events', t.events, t.events_older)
+  const [vue, setVue] = useState('actions')
+  const lignes = useMemo(() => {
+    const actions = ev.all.map((e) => ({ kind: 'action', ts: e.ts, e }))
+    const comments = (t.comments || []).map((c) => ({ kind: 'comment', ts: c.created_at, c }))
+    if (vue === 'actions') return actions
+    if (vue === 'commentaires') return comments
+    const fil = [...actions, ...comments].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0))
+    const out = []
+    for (const x of fil) {
+      const prev = out[out.length - 1]
+      if (x.kind === 'action' && x.e.action === 'occurrence' && prev?.kind === 'occurrences') { prev.n += 1; prev.last = x.ts }
+      else if (x.kind === 'action' && x.e.action === 'occurrence') out.push({ kind: 'occurrences', ts: x.ts, last: x.ts, n: 1 })
+      else out.push(x)
+    }
+    return out
+  }, [ev.all, t.comments, vue])
   return (
     <Section id="actions" filled={(ev.total || 0) > 0} title={tr("Registre des actions")} summary={ev.total || null}>
-      {ev.button}
+      <div className="row gap wrap activity-filter" role="group" aria-label={tr('Afficher')}>
+        {[['actions', tr('Actions')], ['tout', tr('Tout')], ['commentaires', tr('Commentaires')]].map(([k, l]) => (
+          <button key={k} type="button" className={`vchip${vue === k ? ' on' : ''}`} aria-pressed={vue === k} onClick={() => setVue(k)}>{l}</button>
+        ))}
+      </div>
+      {vue !== 'commentaires' && ev.button}
       <ol className="timeline">
-        {ev.all.map((e, i) => (
-          <li key={e.id || i}>
-            <span className="mono small muted">{formatUtc(e.ts)}</span>
-            <span className="strong">{e.actor}</span>
-            <span>{e.action}{e.details && Object.keys(e.details).length > 0 && e.action !== 'description'
-              ? ` — ${Object.entries(e.details).map(([k, v]) => `${k} : ${fmtDetail(v)}`).join(' · ')}` : ''}</span>
+        {lignes.map((x, i) => x.kind === 'action' ? (
+          <li key={x.e.id || i}>
+            <span className="mono small muted">{formatUtc(x.e.ts)}</span>
+            <span className="strong">{x.e.actor}</span>
+            <span>{x.e.action}{x.e.details && Object.keys(x.e.details).length > 0 && x.e.action !== 'description'
+              ? ` — ${Object.entries(x.e.details).map(([k, v]) => `${k} : ${fmtDetail(v)}`).join(' · ')}` : ''}</span>
+          </li>
+        ) : x.kind === 'occurrences' ? (
+          <li key={`occ-${x.ts}`} className="muted">
+            <span className="mono small">{formatUtc(x.ts)}</span>
+            <span className="strong">Wazuh</span>
+            <span>{tr("{n} occurrence(s) de l'alerte", { n: x.n })}{x.n > 1 ? ` · ${tr('jusqu\'à {when}', { when: formatUtc(x.last) })}` : ''}</span>
+          </li>
+        ) : (
+          <li key={`c-${x.c.id}`} className="activity-comment">
+            <span className="mono small muted">{formatUtc(x.c.created_at)}</span>
+            <span className="strong">{x.c.author}</span>
+            <span><span className="muted">{x.c.visible_client ? tr('a commenté · visible du client') : tr('a commenté · interne')}</span>
+              <span className="comment-snippet">{texteDe(x.c.body_html).slice(0, 280)}</span></span>
           </li>
         ))}
       </ol>
