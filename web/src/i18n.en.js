@@ -494,7 +494,7 @@ export default {
   "ex. Brute Force": "e.g. Brute Force",
   "ex. Credential Access": "e.g. Credential Access",
   "Plus": "More",
-  "Autres actions pour {u}": "More actions for {u}",
+  "d'actions pour {u}": "actions for {u}",
   "Réinitialiser la double authentification": "Reset two-factor authentication",
   "Réactiver le compte": "Reactivate account",
   "Reçu {d} après la détection": "Received {d} after detection",
