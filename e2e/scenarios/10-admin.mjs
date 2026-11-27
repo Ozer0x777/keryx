@@ -24,7 +24,8 @@ export default async ({ browser, stack, BASE, check, login }) => {
   const row = p.locator('tr', { hasText: 'nouvel.analyste' })
   check(await row.locator('text=À activer').count() === 1, 'compte marqué « À activer »')
   // mot de passe d'un compte : champs masqués, confirmation, erreur en ligne, Échap rend le focus
-  const pwd = row.getByRole('button', { name: 'Mot de passe' })
+  await row.locator('details.menu > summary').click()
+  const pwd = row.getByRole('button', { name: 'Nouveau mot de passe' })
   await pwd.click()
   const d = await answerDialog(p, { password: 'un-autre-mot-de-passe', confirm: 'pas-le-meme' }, { stays: true })
   check(await d.locator('input[type=password]').count() === 2 && await d.locator('input:not([type=password])').count() === 0, 'mot de passe : deux champs masqués (saisie et confirmation)')
@@ -72,7 +73,7 @@ export default async ({ browser, stack, BASE, check, login }) => {
   check(await p.locator('text=Antivirus').count() > 0, 'état du système affiché')
   // audit
   await p.getByRole('link', { name: "Journal d'audit" }).click()
-  await p.fill('input[placeholder="ticket."]', 'user.update'); await p.getByRole('button', { name: 'Filtrer' }).click()
+  await p.fill('input[placeholder="ex. ticket."]', 'user.update'); await p.getByRole('button', { name: 'Filtrer' }).click()
   await p.waitForSelector('td >> text=user.update')
   const trace = await p.locator('tr', { hasText: 'user.update' }).first().innerText()
   check(trace.includes('"role":["analyst","manager"]') && trace.includes('"clients":["ACME","NOVA"]') && trace.includes('Nouvel Analyste (N2)'), "édition du compte tracée dans le journal d'audit (ancien et nouveau rôle, clients, nom)")

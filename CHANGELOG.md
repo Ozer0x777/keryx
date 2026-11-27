@@ -5,6 +5,18 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 ## [Non publié]
 
 ### Modifié
+- Interface, après une revue de toutes les pages (tous les rôles, ordinateur et téléphone) :
+  - téléphone : navigation repliée derrière un bouton « Menu », onglets sur une ligne qui défile, cibles de 44 px,
+    plus aucune page qui défile de côté (Kanban, rapports, point de situation, Politique des clients) ;
+  - Kanban : colonnes à la hauteur de l'écran qui défilent seules, cartes en trois lignes (référence et criticité,
+    titre, client et assigné), une colonne à la fois sur téléphone ;
+  - fiche ticket : un panneau de contenu (preuves, actions, commentaires, liens, VirusTotal, suivi client, mesures,
+    MITRE, ISI, synthèse) s'ouvre s'il a du contenu et reste replié s'il est vide ; délai de réception lisible
+    (« 6 j 19 h ») ; côté client, une colonne centrée ;
+  - pilotage : graphique sur toute la largeur, blocs par paires ; délais lisibles ; un délai d'acquittement négatif
+    (horloge du manager Wazuh en avance) compte 0 et une note l'explique ;
+  - parc : le détail de l'agent passe sous le tableau sous 1 280 px ; administration : formulaires qui ne s'écrasent
+    plus, actions rares d'un compte dans un menu « Plus » ; textes d'exemple marqués « ex. » ; espacements réguliers.
 - Fiche ticket (équipe) : l'identifiant Wazuh de l'alerte d'origine et le lien « Ouvrir dans Wazuh » figurent dans
   les détails de l'alerte (bloc « Alerte Wazuh » ou « Autres données de l'alerte Wazuh »), en plus du lien en tête
   de fiche ; tant que le lien n'est pas réglé, la fiche dit où le régler. L'écran de l'Admin explique comment obtenir

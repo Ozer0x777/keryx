@@ -236,12 +236,19 @@ export default function Users() {
                 <td className="mono small">{u.clients.join(', ') || '—'}</td>
                 <td className="mono small">{formatUtc(u.last_login_at)}</td>
                 <td>{!u.active ? <span className="pill">{tr("Désactivé")}</span> : !u.enrolled ? <span className="pill warn">{tr("À activer")}</span> : u.locked ? <span className="pill danger">{tr("Verrouillé")}</span> : <span className="pill ok">{tr("Actif")}</span>}{u.sso && <span className="pill" title={tr("Identité fédérée liée (SSO)")} style={{ marginLeft: 6 }}>{tr("SSO")}</span>}</td>
-                <td><div className="row gap wrap">
+                <td><div className="row gap nowrap">
                   <button type="button" className="small-btn" aria-label={tr('Modifier le compte {u}', { u: u.username })} onClick={() => setEditing(u)}>{tr("Modifier")}</button>
-                  <button type="button" className="small-btn" onClick={() => reset2fa(u)}>{tr("Réinit. 2FA")}</button>
-                  <button type="button" className="small-btn" onClick={() => resetPwd(u)}>{tr("Mot de passe")}</button>
-                  {u.sso && <button type="button" className="small-btn" onClick={() => unlinkSso(u)}>{tr("Délier SSO")}</button>}
-                  <button type="button" className="small-btn danger" onClick={() => toggle(u)}>{u.active ? tr('Désactiver') : tr('Réactiver')}</button>
+                  {/* Actions moins courantes dans un menu « Plus » ; chacune ouvre son dialogue de confirmation. Le menu reste
+                      ouvert pendant le dialogue : Échap rend le focus au bouton qui l'a ouvert. */}
+                  <details className="menu" onToggle={(e) => { if (e.currentTarget.open) e.currentTarget.querySelector('button')?.focus() }}>
+                    <summary className="small-btn" aria-label={tr('Autres actions pour {u}', { u: u.username })}>{tr("Plus")} ▾</summary>
+                    <div className="menu-list">
+                      <button type="button" onClick={() => reset2fa(u)}>{tr("Réinitialiser la double authentification")}</button>
+                      <button type="button" onClick={() => resetPwd(u)}>{tr("Nouveau mot de passe")}</button>
+                      {u.sso && <button type="button" onClick={() => unlinkSso(u)}>{tr("Délier SSO")}</button>}
+                      <button type="button" className="danger-text" onClick={() => toggle(u)}>{u.active ? tr('Désactiver le compte') : tr('Réactiver le compte')}</button>
+                    </div>
+                  </details>
                 </div></td>
               </tr>
             ))}

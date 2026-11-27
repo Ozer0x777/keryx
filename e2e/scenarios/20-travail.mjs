@@ -68,7 +68,8 @@ export default async ({ stack, BASE, check, login }) => {
   check(facts.includes('Assigné à') && facts.includes('Test analyste'), "en-tête : assigné du ticket")
   await m.waitForSelector('section[aria-label="Affectation"]')
   const ouverts = await m.locator('.fold > details[open]').evaluateAll((l) => l.map((d) => d.parentElement.getAttribute('aria-label')))
-  check(JSON.stringify(ouverts) === JSON.stringify(['Description', 'Qualification', 'Affectation']), `statut Nouveau : alerte (dans la description), qualification et affectation ouvertes, le reste replié (${ouverts.join(', ')})`)
+  // Formulaires de la phase ouverts ; un panneau de contenu s'ouvre s'il est rempli (le registre des actions l'est dès la création).
+  check(JSON.stringify(ouverts) === JSON.stringify(['Description', 'Qualification', 'Affectation', 'Registre des actions']), `statut Nouveau : description, qualification et affectation ouvertes, registre des actions ouvert car rempli, le reste replié (${ouverts.join(', ')})`)
   check(await m.locator('section[aria-label="Alerte Wazuh"]').count() === 0 && await m.locator('.alert-extra').count() === 1, "l'alerte déjà reprise par la description n'est pas répétée dans un second panneau")
   check(await m.locator('.ticket-steps button.primary').count() === 1, 'un seul bouton primaire parmi les étapes de la barre fixe')
   check(await m.evaluate(() => getComputedStyle(document.querySelector('.ticket-aside')).position) !== 'sticky', 'colonne de pilotage non collante')

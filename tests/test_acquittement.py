@@ -73,7 +73,7 @@ def test_pilotage_et_rapport_client(app, db, world, alert):
     db.commit()
     m = login(app, db, "manager")
     d = m.get("/api/v1/dashboard", params={"client": "ACME"}).json()["acquittement"][crit]
-    assert d == {"moyenne_min": 12.0, "p90_min": 12.0, "acquittes": 1, "non_acquittes": 0}
+    assert d == {"moyenne_min": 12.0, "p90_min": 12.0, "acquittes": 1, "non_acquittes": 0, "horloge_en_avance": 0}
     # rapport client : absent par défaut, présent quand le manager l'active ; le plancher TLP n'est pas touché
     r = m.get("/api/v1/reports/period", params={"client": "ACME"}).json()
     assert r["acquittement_inclus"] is False and "acquittement" not in r
@@ -84,3 +84,15 @@ def test_pilotage_et_rapport_client(app, db, world, alert):
     assert r["acquittement_inclus"] is True and r["acquittement"][crit]["moyenne_min"] == 12.0
     aud = db.scalars(select(AuditEntry).where(AuditEntry.action == "client.politique")).all()[-1]
     assert aud.details["acquittement_rapport_avant"] is False and aud.details["acquittement_rapport"] is True
+
+
+def test_horloge_du_manager_en_avance(app, db, world, alert):
+    """Préproduction 27/11/2026 : manager en avance de 5 min, acquittement « avant » la détection. Délai compté 0,
+    jamais négatif, et le cas est compté à part pour l'expliquer."""
+    ref = ingest(app, world["keys"]["ACME"], alert(ALERT_CRITICAL)).json()["ticket"]
+    t = _t(db, ref)
+    crit = t.criticite_initiale
+    t.acquitted_at, t.acquitted_by = t.detected_at - timedelta(minutes=3), "analyst_acme"
+    db.commit()
+    d = login(app, db, "manager").get("/api/v1/dashboard", params={"client": "ACME"}).json()["acquittement"][crit]
+    assert d["moyenne_min"] == 0.0 and d["p90_min"] == 0.0 and d["horloge_en_avance"] == 1

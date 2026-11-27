@@ -70,10 +70,10 @@ export default function Mitre() {
       </div>
       <form className="row gap wrap" onSubmit={add}>
         <label>{tr("Type")}<select name="scope"><option value="group">{tr("Groupe de règles")}</option><option value="rule">{tr("Identifiant de règle")}</option></select></label>
-        <label>{tr("Valeur")}<input name="target" required placeholder={tr("authentication_failures")} /></label>
-        <label>{tr("Technique")}<input name="technique" required placeholder="T1110" /></label>
-        <label>{tr("Nom")}<input name="name" placeholder={tr("Brute Force")} /></label>
-        <label>{tr("Tactique")}<input name="tactic" placeholder={tr("Credential Access")} /></label>
+        <label>{tr("Valeur")}<input name="target" required placeholder={tr("ex. authentication_failures")} /></label>
+        <label>{tr("Technique")}<input name="technique" required placeholder={tr("ex. T1110")} /></label>
+        <label>{tr("Nom")}<input name="name" placeholder={tr("ex. Brute Force")} /></label>
+        <label>{tr("Tactique")}<input name="tactic" placeholder={tr("ex. Credential Access")} /></label>
         <button className="primary">{tr("Ajouter")}</button>
       </form>
       {list.search}

@@ -51,8 +51,11 @@ def acquittement(tickets: list[Ticket]) -> dict:
     out = {}
     for crit in ("Critique", "Élevée", "Moyenne", "Faible"):
         rows = [t for t in tickets if t.criticite_initiale == crit]
-        d = [(as_utc(t.acquitted_at) - as_utc(t.detected_at)).total_seconds() / 60 for t in rows if t.acquitted_at]
-        out[crit] = {"moyenne_min": _mean(d), "p90_min": _p90(d), "acquittes": len(d), "non_acquittes": len(rows) - len(d)}
+        brut = [(as_utc(t.acquitted_at) - as_utc(t.detected_at)).total_seconds() / 60 for t in rows if t.acquitted_at]
+        # Un délai négatif veut dire que l'horloge du manager Wazuh avance sur Keryx : compté 0 et signalé à part.
+        d = [max(0.0, x) for x in brut]
+        out[crit] = {"moyenne_min": _mean(d), "p90_min": _p90(d), "acquittes": len(d), "non_acquittes": len(rows) - len(d),
+                     "horloge_en_avance": sum(1 for x in brut if x < 0)}
     return out
 
 

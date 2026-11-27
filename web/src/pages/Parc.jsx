@@ -185,7 +185,7 @@ export default function Parc() {
                       <tr key={a.id} className={a.id === selected ? 'selected' : ''}>
                         <td><StatusPill status={a.status} /></td>
                         <td><button type="button" className="link strong nowrap" aria-label={tr('Voir le détail de {name}', { name: a.name })} onClick={() => setParam({ agent: a.id })}>{a.name}</button>
-                          <div className="mono small muted">{a.id}{a.ip ? ` · ${a.ip}` : ''}</div></td>
+                          <div className="mono small muted nowrap">{a.id}{a.ip ? ` · ${a.ip}` : ''}</div></td>
                         <td>{a.os || '—'}</td>
                         <td className="nowrap"><span className="mono">{a.version || '—'}</span>{a.version_gap && <> <span className="pill warn">{tr(GAP[a.version_gap])}</span></>}</td>
                         <td className={a.down24 ? 'danger-text strong nowrap' : 'nowrap'}>{a.status === 'disconnected' ? duration(a.status_since) : a.status === 'never_connected' ? tr('jamais connecté') : '—'}</td>

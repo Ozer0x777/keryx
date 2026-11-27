@@ -58,7 +58,7 @@ export default function IsiPanel({ t, enc, run, open }) {
     </label>
   )
   return (
-    <Section id="isi" title={tr('Classification ETSI ISI')} summary={<>{t.isi?.category ? <span className="mono">{t.isi.category}</span> : tr('à compléter')}<UnsavedBadge show={isiDirty} /></>}>
+    <Section id="isi" filled={Boolean(t.isi?.category)} title={tr('Classification ETSI ISI')} summary={<>{t.isi?.category ? <span className="mono">{t.isi.category}</span> : tr('à compléter')}<UnsavedBadge show={isiDirty} /></>}>
       <p className="muted small">{tr("ETSI GS ISI 002 : les axes marqués * sont obligatoires pour exporter.")}</p>
       <label>{tr('Catégorie')}
         <select value={v.category || ''} disabled={!open} onChange={(e) => set('category', e.target.value || undefined)}>

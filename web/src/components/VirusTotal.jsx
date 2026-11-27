@@ -200,7 +200,7 @@ export function VirusTotalPanel({ t, enc, vt }) {
     : vt.last && fromPanel(vt.last.key) && !vt.failure ? sentence(vt.last.lookup) : ''
 
   return (
-    <Section id="virustotal" title={tr('VirusTotal')} summary={lookups.length ? tr('{n} recherche(s)', { n: lookups.length }) : null} onToggle={(o) => { if (o) setOpened(true) }}>
+    <Section id="virustotal" filled={lookups.length > 0} title={tr('VirusTotal')} summary={lookups.length ? tr('{n} recherche(s)', { n: lookups.length }) : null} onToggle={(o) => { if (o) setOpened(true) }}>
       <p className="muted small">{ONLY_HASH()} {tr("VirusTotal, service externe, apprend seulement que cette empreinte intéresse quelqu'un. Chaque recherche est inscrite ci-dessous et au journal d'audit ; elle n'est jamais montrée au client.")}</p>
       {t.virustotal?.autorise === false
         ? <p className="banner warn">{tr("Le client n'a pas donné son accord à la recherche de ses empreintes chez VirusTotal (PDIS IV.1.g) : aucune recherche n'est possible. Le manager l'enregistre dans « Politique des clients ».")}</p>

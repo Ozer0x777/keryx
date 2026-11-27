@@ -21,14 +21,21 @@ export const PhaseContext = createContext({ status: '', open: null })
 // `tools` : boutons du panneau ; ils sont dans le corps, pas dans <summary> (un bouton dans un bouton de pliage ne
 // serait ni cliquable proprement ni annoncé correctement).
 // `onToggle(ouvert)` : prévient le panneau qu'il vient d'être déplié ou replié (chargement à la première ouverture).
-export default function Section({ id, title, summary, tools, children, className = '', onToggle }) {
+// `filled` (panneaux de contenu : registres, commentaires, liens…) : ouvert s'il a du contenu, replié s'il est vide,
+// quelle que soit la phase ; s'il se remplit pendant qu'on regarde la fiche, il s'ouvre. Absent : règle de la phase.
+export default function Section({ id, title, summary, tools, children, className = '', onToggle, filled }) {
   const { status, open: openIds } = useContext(PhaseContext)
-  const byDefault = openIds ? openIds.includes(id) : true
+  const byDefault = filled !== undefined ? Boolean(filled) : (openIds ? openIds.includes(id) : true)
   const [open, setOpen] = useState(byDefault)
   const phase = useRef(status)
+  const wasFilled = useRef(Boolean(filled))
   useEffect(() => {
     if (phase.current !== status) { phase.current = status; setOpen(byDefault) }
   }, [status, byDefault])
+  useEffect(() => {
+    if (filled && !wasFilled.current) setOpen(true)
+    wasFilled.current = Boolean(filled)
+  }, [filled])
   return (
     <section className={`card section fold ${className}`.trim()} aria-label={title}>
       <details open={open} onToggle={(e) => { setOpen(e.currentTarget.open); onToggle?.(e.currentTarget.open) }}>

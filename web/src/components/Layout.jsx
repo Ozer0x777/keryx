@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../App.jsx'
 import { t, t as tr } from '../i18n.js'
@@ -21,6 +21,9 @@ const TITLES = [
 
 export default function Layout() {
   const { pathname } = useLocation()
+  // Téléphone : la navigation est repliée derrière un bouton « Menu » et se referme à chaque changement de page.
+  const [menuOpen, setMenuOpen] = useState(false)
+  useEffect(() => { setMenuOpen(false) }, [pathname])
   useEffect(() => {
     const hit = TITLES.find(([re]) => re.test(pathname))
     document.title = hit ? `${t(hit[1])} — Keryx` : 'Keryx'
@@ -35,22 +38,27 @@ export default function Layout() {
   return (
     <div className="shell">
       <a className="skip" href="#contenu">{t('Aller au contenu')}</a>
-      <nav className="sidebar" aria-label={t('Navigation principale')}>
+      <nav className={`sidebar${menuOpen ? ' menu-open' : ''}`} aria-label={t('Navigation principale')}>
         <div className="brand"><Shield /><span>{tr("Keryx")}</span></div>
-        <div className="nav-section">{{ client: t('Portail client'), admin: t('Administration') }[me.role] || t('Détection')}</div>
-        {links.map(([to, label]) => (
-          <NavLink key={to} to={to} className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>{label}</NavLink>
-        ))}
         {me.role !== 'admin' && <NotificationBell />}
-        <NavLink to="/profil" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>{t('Mon profil')}</NavLink>
-        <div className="sidebar-user">
-          <span className="avatar" aria-hidden="true">{initials}</span>
-          <span className="who">
-            <span className="name">{me.display_name}</span>
-            <span className="role">{ROLES[me.role]} · {me.sso ? t('Session SSO') : t('2FA active')}</span>
-          </span>
+        <button type="button" className="menu-toggle" aria-expanded={menuOpen} aria-controls="nav-body" onClick={() => setMenuOpen(!menuOpen)}>
+          {menuOpen ? t('Fermer') : t('Menu')}
+        </button>
+        <div className="nav-body" id="nav-body">
+          <div className="nav-section">{{ client: t('Portail client'), admin: t('Administration') }[me.role] || t('Détection')}</div>
+          {links.map(([to, label]) => (
+            <NavLink key={to} to={to} className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>{label}</NavLink>
+          ))}
+          <NavLink to="/profil" className={({ isActive }) => `nav-link nav-profile${isActive ? ' active' : ''}`}>{t('Mon profil')}</NavLink>
+          <div className="sidebar-user">
+            <span className="avatar" aria-hidden="true">{initials}</span>
+            <span className="who">
+              <span className="name">{me.display_name}</span>
+              <span className="role">{ROLES[me.role]} · {me.sso ? t('Session SSO') : t('2FA active')}</span>
+            </span>
+          </div>
+          <button type="button" className="nav-logout" onClick={logout}>{t('Se déconnecter')}</button>
         </div>
-        <button type="button" className="nav-logout" onClick={logout}>{t('Se déconnecter')}</button>
       </nav>
       <main className="content" id="contenu" tabIndex={-1}>
         {(me.role === 'analyst' || me.role === 'manager') && <ChaineBanner />}
