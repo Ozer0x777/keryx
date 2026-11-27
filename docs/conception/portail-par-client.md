@@ -110,7 +110,7 @@ auraient un écran par client.
 1. Fonction de projection client unique, utilisée par l'API actuelle (aucun changement visible).
 2. Liste des exigences PDIS non couvertes en mode tout-en-un (décision 4).
 3. État du ticket côté client et actions demandées au client, utilisables en tout-en-un (décision 6).
-4. Fichiers chiffrés ou non analysables, journal de passage à l'antivirus (décision 5), après lecture de [NT_ADMIN].
+4. Fichiers chiffrés ou non analysables, journal de passage à l'antivirus (décision 5) : fait le 27/11/2026.
 5. Modes `console` et `portail`, routes filtrées par mode.
 6. Synchronisation console vers portail (tickets, commentaires, événements, notifications visibles), TLS mutuel,
    notification après accusé de réception (décision 1).
@@ -149,8 +149,13 @@ Prises par délégation du mainteneur, après lecture intégrale du référentie
    archive chiffrée ou un fichier que l'antivirus ne peut pas analyser reçoit un statut « non analysable » et suit le
    traitement de la quarantaine : jamais ouvert en clair sur un poste sans action explicite et tracée. Chaque
    passage par l'antivirus est journalisé avec l'horodate, le nom et l'empreinte SHA-256, dans les deux sens
-   (IV.3.13.a). Le chapitre « Système d'échange » de la note [NT_ADMIN] auquel renvoie IV.3.13.a reste à lire avant
-   l'étape 4 du découpage.
+   (IV.3.13.a). Fait en mode tout-en-un le 27/11/2026 (statut « non analysable », journal `antivirus.analyse`).
+   Le PDIS renvoie au chapitre « Système d'échange » de [NT_ADMIN] ; lu dans sa version actuelle (guide
+   ANSSI-PA-022 v3.0, chapitre 11, R52 à R58) : protocoles de transfert seulement, à l'initiative de clients situés
+   hors du système d'échange (R54) ; accès limité au besoin (R55) ; aucun compte d'administration (R56) ; aucun
+   stockage durable, suppression dès le transfert ou sous 24 h environ (R57) ; analyse de tout ce qui transite (R58).
+   Pour le portail séparé : un dépôt du client est supprimé du portail dès que la console l'a rapatrié et inscrit au
+   registre (R57) ; le contexte que le portail met à disposition du client (IV.2.3.l) n'est pas un transit et reste.
 6. **Ce que le client met à jour.** La trame d'évaluation (IV.2.3.l) vérifie que le portail permet « le suivi et la
    modification de l'état des tickets » et la vue des actions. Le client modifie donc l'état de ses tickets sur un
    cycle qui lui est propre : « pris en compte », « en cours de traitement chez nous », « traité de notre côté »,

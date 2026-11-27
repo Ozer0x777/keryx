@@ -179,6 +179,11 @@ def ingest_alert(db: DbSession, settings: Settings, tenant: Tenant, alert: dict,
     rule_id = _str(rule.get("id"), 32)
     if not rule_id:
         raise AlertRejected("rule.id vide.")
+    # Criticité imposée par le manager pour cette règle chez ce client (le niveau Wazuh reste le seuil d'entrée).
+    impose = (tenant.criticite_regles or {}).get(rule_id)
+    crit_source = "regle_client" if impose in _CRIT_RANK else "niveau_wazuh"
+    if impose in _CRIT_RANK:
+        crit = impose
     agent_id = _str(agent.get("id"), 32)
     detected = parse_wazuh_timestamp(_str(alert.get("timestamp"), 40))
     now = utcnow()
@@ -255,7 +260,7 @@ def ingest_alert(db: DbSession, settings: Settings, tenant: Tenant, alert: dict,
     db.flush()
     db.add(RawAlert(ticket_id=ticket.id, tenant_id=tenant.id, wazuh_id=wazuh_id, sha256=raw_hash, payload=raw))
     db.add(TicketEvent(ticket_id=ticket.id, actor=actor, action="creation", visible_client=True,
-                       details={"rule_id": rule_id, "rule_level": level, "criticite_initiale": crit,
+                       details={"rule_id": rule_id, "rule_level": level, "criticite_initiale": crit, "criticite_source": crit_source,
                                 "mitre_source": mitre_source}))
     notifications = queue_new_ticket(db, settings, tenant, ticket)
     notifications += astreinte.queue_new_ticket(db, settings, tenant, ticket, actor)   # équipe (ADR-0032)

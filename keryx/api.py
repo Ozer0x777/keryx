@@ -1141,7 +1141,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return
         rows = db.scalars(select(Attachment).where(
             Attachment.id.in_(ids), Attachment.ticket_id == t.id, Attachment.kind == "image",
-            Attachment.visible_client.is_(False), Attachment.scan_status != "quarantaine")).all()
+            Attachment.visible_client.is_(False), Attachment.scan_status.not_in(att.ISOLES))).all()
         for a in rows:
             a.visible_client = True
             db.add(CustodyEvent(attachment_id=a.id, actor=user.username, action="visible_client", reason=origine))
@@ -1323,8 +1323,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             prepared = att.prepare(data, settings, limit)
         except att.AttachmentRejected as exc:
             raise HTTPException(413 if "volumineux" in str(exc) else 422, str(exc))
-        status, detail = att.scan(prepared.content, settings)
-        quarantined = status == "quarantaine"
+        status, detail = analyser(db, t, user, att.safe_filename(file.filename or "fichier"), prepared.content, prepared.kind,
+                                  prepared.sha256)
+        quarantined = att.isole(status)
         try:
             storage = att.store(settings, prepared.content, quarantined)
         except StorageError as exc:
@@ -1336,6 +1337,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except BaseException:
             att.destroy(settings, storage, quarantined)  # pas de fichier orphelin si la base échoue
             raise
+
+    def analyser(db, t, user, nom: str, content: bytes, kind: str, sha256: str) -> tuple[str, str | None]:
+        """Antivirus, puis détection des fichiers qu'il ne peut pas analyser ; chaque passage est journalisé avec
+        l'horodate, le nom et l'empreinte du fichier (PDIS IV.3.13.a)."""
+        status, detail = att.scan(content, settings)
+        if status != "quarantaine":
+            motif = att.non_analysable(content, kind)
+            if motif:
+                status, detail = "non_analysable", motif
+        audit.record(db, user.username, "antivirus.analyse", "ticket", t.ref, t.tenant_id,
+                     {"fichier": nom[:200], "sha256": sha256, "resultat": status, **({"detail": detail} if detail else {})})
+        return status, detail
 
     def _record_attachment(db, t, user, file, prepared, storage, status, detail, quarantined,
                            description, collected_at, method, sensitivity, visible_client):
@@ -1382,7 +1395,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                             confirmer_malveillant: bool = False, x_csrf_token: str | None = Header(default=None),
                             user: User = Depends(current_user), db: DbSession = Depends(get_db)):
         a, t = load_attachment(db, user, attachment_id)
-        if a.kind != "image" or a.scan_status == "quarantaine":
+        if a.kind != "image" or att.isole(a.scan_status):
             # Un fichier se télécharge par un appel explicite de l'interface (jeton CSRF), jamais par une balise <img> ou
             # un lien glissé dans un contenu : sinon un tiers ferait inscrire un téléchargement, avec le motif de son
             # choix, au nom de qui ouvre le ticket (chaîne de possession, ISO/IEC 27037).
@@ -1391,12 +1404,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 raise HTTPException(403, "Jeton CSRF manquant ou invalide.")
         if a.kind == "preuve_externe" or not a.storage_name or a.lifecycle != "conserve":
             raise HTTPException(410, "Contenu non disponible dans Keryx (preuve externe, restituée ou détruite).")
-        quarantined = a.scan_status == "quarantaine"
+        quarantined = att.isole(a.scan_status)
         if quarantined:
             if user.role == "client":
                 raise HTTPException(404, "Pièce introuvable.")
             if not confirmer_malveillant or not motif or len(motif) < 3:
-                raise HTTPException(409, "Fichier en quarantaine : confirmer le téléchargement et indiquer un motif.")
+                raise HTTPException(409, "Fichier isolé (quarantaine, ou impossible à analyser par l'antivirus) : confirmer le "
+                                         "téléchargement et indiquer un motif.")
         if a.kind == "fichier" and (not motif or len(motif) < 3):
             raise HTTPException(422, "Indiquer le motif du téléchargement (chaîne de possession).")
         try:
@@ -1454,7 +1468,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # Suppression du fichier seulement une fois la destruction enregistrée en base.
         if body.lifecycle == "detruit" and a.storage_name:
             try:
-                att.destroy(settings, a.storage_name, a.scan_status == "quarantaine")
+                att.destroy(settings, a.storage_name, att.isole(a.scan_status))
             except StorageError as exc:  # la destruction est déjà tracée : l'objet restant est à purger à la main
                 log.error("Destruction d'un objet à vérifier (pièce %s) : %s", a.id, exc)
         return attachment_view(a)
@@ -1524,7 +1538,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         login_ip_limiter=login_ip_limiter, login_user_limiter=login_user_limiter, sso_only=sso_only,
         count_second_factor_failure=count_second_factor_failure, open_session=open_session,
         set_cookie=_set_cookie, load_attachment=load_attachment, SESSION_COOKIE=SESSION_COOKIE, CSRF_COOKIE=CSRF_COOKIE, oidc_providers=oidc_providers,
-        limiter=limiter, attachment_view=attachment_view, input_date=input_date)
+        limiter=limiter, attachment_view=attachment_view, input_date=input_date, analyser=analyser)
     routes_admin.register(app, ctx)
     routes_work.register(app, ctx)
     routes_reports.register(app, ctx)

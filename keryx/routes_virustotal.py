@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
+from . import attachments as att
 from . import audit
 from . import virustotal as vt
 from .ids import rfc3339
@@ -177,7 +178,7 @@ def register(app, ctx) -> None:
             digest, origin = piece_hash(db, a)
             pieces.append({"source": "preuve_externe" if a.kind == "preuve_externe" else "piece", "attachment_id": a.id,
                            "filename": a.filename, "hash": digest, "hash_type": "sha256", "origin": origin,
-                           "quarantine": a.scan_status == "quarantaine"})
+                           "quarantine": att.isole(a.scan_status)})
         alerts = alert_candidates(db, t)
         # Les empreintes des alertes sont du contenu que la lecture du ticket ne montre pas telles quelles : tracé.
         audit.record(db, user.username, "ticket.virustotal_hashes", "ticket", t.ref, t.tenant_id,

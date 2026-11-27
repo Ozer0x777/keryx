@@ -163,6 +163,53 @@ function Client({ c, canaux, onSaved }) {
   )
 }
 
+// Criticité initiale imposée par règle Wazuh, pour un, plusieurs ou tous les clients du manager. Aucune règle en dur :
+// chacun règle les siennes ; le niveau Wazuh reste le seuil d'entrée.
+function CriticiteRegles({ items, onChange }) {
+  const [regle, setRegle] = useState('')
+  const [crit, setCrit] = useState('Élevée')
+  const [choix, setChoix] = useState([])
+  const [status, track] = useActionStatus()
+  const tous = choix.length === 0
+  const regles = {}
+  items.forEach((c) => Object.entries(c.criticite_regles || {}).forEach(([r, v]) => { (regles[r] ||= []).push(`${c.key} : ${tr(v)}`) }))
+  const appliquer = (json, ok) => track(async () => { await api('/politique/criticite-regles', { method: 'PUT', json }); await onChange(); return true }, ok)
+  return (
+    <section className="card section" aria-label={tr('Criticité par règle Wazuh')}>
+      <header className="section-head"><h2>{tr('Criticité par règle Wazuh')}</h2></header>
+      <div className="section-body stack">
+        <p className="field-hint">{tr("Impose la criticité initiale des tickets d'une règle Wazuh, pour un, plusieurs ou tous vos clients. Le niveau Wazuh reste le seuil d'entrée ; l'origine de la criticité est inscrite au registre du ticket.")}</p>
+        <div className="row wrap gap">
+          <label>{tr('Identifiant de la règle')}<input value={regle} maxLength={32} placeholder="60148" onChange={(e) => setRegle(e.target.value.trim())} /></label>
+          <label>{tr('Criticité initiale')}<select value={crit} onChange={(e) => setCrit(e.target.value)}>
+            {['Critique', 'Élevée', 'Moyenne', 'Faible'].map((k) => <option key={k} value={k}>{tr(k)}</option>)}</select></label>
+        </div>
+        <fieldset>
+          <legend>{tr('Clients concernés')}</legend>
+          <label className="check"><input type="checkbox" checked={tous} onChange={() => setChoix([])} />{' '}{tr('Tous mes clients')}</label>
+          {items.map((c) => (
+            <label key={c.key} className="check"><input type="checkbox" checked={choix.includes(c.key)}
+              onChange={(e) => setChoix(e.target.checked ? [...choix, c.key] : choix.filter((x) => x !== c.key))} />{' '}{c.name}</label>
+          ))}
+        </fieldset>
+        <div className="row wrap gap">
+          <button type="button" className="primary" disabled={!/^[A-Za-z0-9_.-]{1,32}$/.test(regle)}
+            onClick={() => appliquer({ regle, criticite: crit, ...(tous ? {} : { clients: choix }) }, tr('Criticité appliquée.'))}>{tr('Appliquer')}</button>
+          <button type="button" disabled={!/^[A-Za-z0-9_.-]{1,32}$/.test(regle)}
+            onClick={() => appliquer({ regle, criticite: null, ...(tous ? {} : { clients: choix }) }, tr('Règle retirée.'))}>{tr('Retirer cette règle')}</button>
+        </div>
+        <ActionStatus state={status} />
+        {Object.keys(regles).length === 0 ? <p className="muted">{tr('Aucune criticité imposée : elle se calcule depuis le niveau Wazuh.')}</p> : (
+          <div className="table-wrap" tabIndex={0} role="region" aria-label={tr('Criticités imposées par règle')}><table className="grid">
+            <thead><tr><th scope="col">{tr('Règle')}</th><th scope="col">{tr('Clients et criticité')}</th></tr></thead>
+            <tbody>{Object.entries(regles).sort().map(([r, v]) => <tr key={r}><th scope="row" className="mono">{r}</th><td>{v.join(' · ')}</td></tr>)}</tbody>
+          </table></div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 export default function Politique() {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
@@ -176,6 +223,7 @@ export default function Politique() {
       </div></header>
       {error && <p className="error" role="alert">{error}</p>}
       {data === null && !error && <p className="loading">{tr('Chargement…')}</p>}
+      {data && <CriticiteRegles items={data.items} onChange={() => api('/politique').then(setData)} />}
       {data?.items.map((c) => <Client key={c.key} c={c} canaux={data.canaux} onSaved={saved} />)}
     </>
   )

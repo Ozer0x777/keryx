@@ -5,6 +5,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 ## [Non publié]
 
 ### Ajouté
+- Criticité par règle Wazuh : le manager impose la criticité initiale des tickets d'une règle pour un, plusieurs ou
+  tous ses clients (« Politique des clients ») ; aucune règle en dur ; le niveau Wazuh reste le seuil d'entrée ;
+  l'origine de la criticité est inscrite au registre du ticket. Migration 0031.
+- Fichiers que l'antivirus ne peut pas analyser (PDIS IV.3.13.a) : archive ZIP chiffrée (y compris dans une autre
+  archive), endommagée ou illisible ; statut « non analysable », même traitement que la quarantaine (stockée à part,
+  jamais remise au client, remise à l'équipe dans une archive chiffrée après confirmation) ; chaque passage par
+  l'antivirus inscrit au journal d'audit avec l'horodate, le nom et l'empreinte du fichier.
 - Indicateurs PDIS (IV.2.1.cc, IV.2.3.k, IV.5.1.e) : taille de la base des tickets et des notifications, remplissage
   du disque des pièces, réussite de l'envoi des notifications par mois.
 

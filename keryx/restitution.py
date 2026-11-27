@@ -87,7 +87,7 @@ def export_client(db: DbSession, settings: Settings, tenant: Tenant, out) -> dic
         for a in pieces:
             if not a.storage_name:
                 continue                                   # preuve externe : conservée hors de Keryx
-            quarantaine = a.scan_status == "quarantaine"
+            quarantaine = att.isole(a.scan_status)
             try:
                 content = att.read(settings, a.storage_name, quarantaine)
             except (OSError, Exception):  # noqa: BLE001 - une pièce illisible est signalée, l'export continue

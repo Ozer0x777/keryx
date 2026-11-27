@@ -16,6 +16,7 @@ import os
 import socket
 import struct
 import warnings
+import zipfile
 from dataclasses import dataclass
 
 from PIL import Image
@@ -98,6 +99,44 @@ def prepare(data: bytes, settings: Settings, max_bytes: int | None = None) -> Pr
         content, ctype = _reencode_image(data)
         return Prepared("image", content, ctype, hashlib.sha256(content).hexdigest(), original)
     raise AttachmentRejected("Type de fichier non accepté : archive ZIP, PNG, JPEG ou WebP uniquement.")
+
+
+# ---------------------------------------------------------------- fichiers que l'antivirus ne peut pas analyser
+# PDIS IV.3.13.a : « traitement spécifique pour les fichiers chiffrés ou ne pouvant être analysés ». Une archive
+# chiffrée (ou une archive chiffrée dans une archive) échappe à l'antivirus, qui la déclarerait saine sans en avoir vu
+# le contenu ; une archive endommagée ne s'analyse pas non plus. Ces pièces suivent le traitement de la quarantaine :
+# stockées à part, jamais remises en clair au client, téléchargées par l'équipe dans une archive chiffrée, tracées.
+ISOLES = ("quarantaine", "non_analysable")
+PROFONDEUR_MAX = 3
+
+
+def isole(status: str | None) -> bool:
+    return status in ISOLES
+
+
+def non_analysable(content: bytes, kind: str, profondeur: int = 0) -> str | None:
+    """Motif pour lequel une pièce ne peut pas être analysée, ou None. Ne lit que les archives ZIP."""
+    if kind != "fichier" or not content.startswith(b"PK\x03\x04"):
+        return None                       # seules les archives ZIP sont ouvertes ; le reste va à l'antivirus seul
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as z:
+            infos = z.infolist()
+            if any(i.flag_bits & 0x1 for i in infos):
+                return "archive chiffrée"
+            if z.testzip() is not None:
+                return "archive endommagée"
+            for i in infos:
+                if profondeur + 1 >= PROFONDEUR_MAX or i.file_size > 50 * 1024 * 1024:
+                    continue
+                with z.open(i) as f:
+                    tete = f.read(4)
+                if tete == b"PK\x03\x04":
+                    motif = non_analysable(z.read(i), "fichier", profondeur + 1)
+                    if motif:
+                        return f"{motif} (dans « {i.filename[:80]} »)"
+    except (zipfile.BadZipFile, zipfile.LargeZipFile, NotImplementedError, RuntimeError, ValueError, OSError):
+        return "archive illisible"
+    return None
 
 
 # ---------------------------------------------------------------- antivirus (clamd, protocole INSTREAM)
