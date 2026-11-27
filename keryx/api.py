@@ -1125,6 +1125,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         t.updated_at = utcnow()
         if body.status in ("faux_positif", "cloture"):
             t.closed_at = t.updated_at
+            inbox.prevenir_clients(db, t, "incident_resolu", actor=None)
             if t.demande_client == "cloture":
                 t.demande_client = None          # demande de clôture du client acceptée (PDIS IV.2.3.l)
         # Le client voit le changement de statut, jamais le motif : il est consigné à part, en interne.
@@ -1220,6 +1221,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 if t.tenant_id in [x.id for x in u.tenants]]
             for u in targets:
                 inbox.push(db, u, "reponse_client", t.ref, actor=author.username)
+        elif visible:
+            inbox.prevenir_clients(db, t, "reponse_soc", actor=author.display_name)   # réponse du SOC au client
 
     @app.post("/api/v1/tickets/{ref}/comments", status_code=201)
     def add_comment(ref: str, body: CommentIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):

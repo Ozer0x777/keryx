@@ -5,6 +5,12 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 ## [Non publié]
 
 ### Ajouté
+- Portail client, accueil : « À faire de votre côté » (autoriser ou refuser une mesure, signaler une action faite),
+  chiffres (en attente, en cours, résolus ce mois-ci, machines), dernières nouvelles du SOC dites en phrases, état du
+  parc ; c'est la page d'arrivée du client. Le client lit et imprime son rapport d'incidents (sans les noms des
+  analystes, les retards ni les échéances internes). Notifications propres au client dans la cloche (décision
+  attendue, réponse du SOC, incident résolu), chacune désactivable dans son profil. Périodes en un clic sur les
+  rapports (mois en cours, mois précédent, 30 derniers jours). API : `GET /api/v1/client/accueil`.
 - Portail client, lu par un client : liste avec filtres « En cours / Votre réponse attendue / Résolus / Tous »,
   statut en mots de client (« Le SOC analyse », « Votre réponse attendue », « Réponse en cours », « Résolu »),
   priorité et dernière mise à jour, marquage TLP dit une fois ; fiche avec « À faire de votre côté » (autoriser ou

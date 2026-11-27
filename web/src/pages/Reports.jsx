@@ -13,6 +13,13 @@ export default function Reports() {
   const { me } = useAuth()
   const [qs] = useSearchParams()
   const today = new Date()
+  const isClient = me.role === 'client'
+  // Périodes en un clic (A09) : mois en cours, mois précédent, 30 derniers jours (dates UTC, comme le serveur).
+  const PERIODES = [
+    [tr('Mois en cours'), () => ({ from: monthStartUtc(today), to: isoDay(today) })],
+    [tr('Mois précédent'), () => { const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 0)); return { from: monthStartUtc(d), to: isoDay(d) } }],
+    [tr('30 derniers jours'), () => ({ from: isoDay(new Date(today.getTime() - 29 * 86400000)), to: isoDay(today) })],
+  ]
   const [f, setF] = useState({ client: qs.get('client') || me.clients[0]?.key || '', from: monthStartUtc(today), to: isoDay(today) })
   const [r, setR] = useState(null)
   const [error, setError] = useState('')
@@ -30,15 +37,23 @@ export default function Reports() {
   }
   return (
     <>
-      <header className="page-head noprint"><div><h1>{tr("Rapports et registre")}</h1><p className="muted">{tr("Rapport périodique d'un client, exportable. Pour un PDF, utilisez « Imprimer » puis « Enregistrer au format PDF ».")}</p></div></header>
+      <header className="page-head noprint"><div><h1>{isClient ? tr('Rapports') : tr("Rapports et registre")}</h1><p className="muted">{isClient
+        ? tr("Le rapport d'incidents de votre organisation sur la période choisie. Pour un PDF, utilisez « Imprimer » puis « Enregistrer au format PDF ».")
+        : tr("Rapport périodique d'un client, exportable. Pour un PDF, utilisez « Imprimer » puis « Enregistrer au format PDF ».")}</p></div></header>
+      <div className="row wrap gap noprint periodes" role="group" aria-label={tr('Période')}>
+        {PERIODES.map(([label, fn]) => {
+          const p = fn(); const on = f.from === p.from && f.to === p.to
+          return <button type="button" key={label} className={`vchip${on ? ' on' : ''}`} aria-pressed={on} onClick={() => setF({ ...f, ...p })}>{label}</button>
+        })}
+      </div>
       <form className="filters noprint" onSubmit={generate} aria-label={tr("Paramètres du rapport")}>
-        <label className="filter">{tr("Client")}<select value={f.client} onChange={set('client')} required>{me.clients.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}</select></label>
+        {(!isClient || me.clients.length > 1) && <label className="filter">{tr("Client")}<select value={f.client} onChange={set('client')} required>{me.clients.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}</select></label>}
         <label className="filter">{tr("Du")}<input type="date" value={f.from} onChange={set('from')} /></label>
         <label className="filter">{tr("Au")}<input type="date" value={f.to} onChange={set('to')} /></label>
         <div className="row wrap gap">
           <button className="primary">{tr("Générer")}</button>
-          <button type="button" onClick={csv}>{tr("Exporter le registre (CSV)")}</button>
-          <button type="button" onClick={notifCsv}>{tr("Exporter le registre des notifications (CSV)")}</button>
+          {!isClient && <button type="button" onClick={csv}>{tr("Exporter le registre (CSV)")}</button>}
+          {!isClient && <button type="button" onClick={notifCsv}>{tr("Exporter le registre des notifications (CSV)")}</button>}
           <button type="button" onClick={() => window.print()} disabled={!r}>{tr("Imprimer / PDF")}</button>
         </div>
       </form>
@@ -49,7 +64,8 @@ export default function Reports() {
           <p className="muted">{tr('Période du {from} au {to} · généré le {when} · TLP:AMBER', { from: r.period.from, to: r.period.to, when: formatUtc(r.generated_at) })}</p>
           <h2>{tr("Synthèse")}</h2>
           <dl className="kv"><dt>{tr("Incidents créés")}</dt><dd>{r.totals.created}</dd><dt>{tr("Incidents clos")}</dt><dd>{r.totals.closed}</dd>
-            <dt>{tr("Ouverts à ce jour")}</dt><dd>{r.totals.open}</dd><dt>{tr("Échéances tenues")}</dt><dd>{r.sla.rate_percent == null ? '—' : tr('{p} % ({a} sur {b})', { p: r.sla.rate_percent, a: r.sla.resolution_within_target, b: r.sla.closed })}</dd>
+            <dt>{tr("Ouverts à ce jour")}</dt><dd>{r.totals.open}</dd>
+            {r.sla && <><dt>{tr("Échéances tenues")}</dt><dd>{r.sla.rate_percent == null ? '—' : tr('{p} % ({a} sur {b})', { p: r.sla.rate_percent, a: r.sla.resolution_within_target, b: r.sla.closed })}</dd></>}
             <dt>{tr("Délai moyen de résolution")}</dt><dd>{r.delays.resolution_hours_avg == null ? '—' : `${r.delays.resolution_hours_avg} h`}</dd></dl>
           {r.acquittement && <>
             <h2>{tr("Délai d'acquittement")}</h2>

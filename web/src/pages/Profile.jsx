@@ -117,7 +117,8 @@ export default function Profile() {
         <section className="card section" aria-label={tr("Notifications")}>
           <header className="section-head"><h2>{tr("Notifications dans l'interface")}</h2></header>
           {prefs.kinds.map((k) => (
-            <label key={k} className="check"><input type="checkbox" checked={prefs.prefs[k]} onChange={(e) => setPref(k, e.target.checked)} /> {{ assignation: tr("Ticket qui m'est affecté"), mention: tr('Mention dans un commentaire'), echeance: tr('Échéance dépassée'), reponse_client: tr("Réponse d'un client") }[k]}</label>
+            <label key={k} className="check"><input type="checkbox" checked={prefs.prefs[k]} onChange={(e) => setPref(k, e.target.checked)} /> {{ assignation: tr("Ticket qui m'est affecté"), mention: tr('Mention dans un commentaire'), echeance: tr('Échéance dépassée'), reponse_client: tr("Réponse d'un client"),
+              decision_attendue: tr('Une décision ou une action est attendue de vous'), reponse_soc: tr('Le SOC vous répond'), incident_resolu: tr('Un incident est résolu') }[k]}</label>
           ))}
         </section>
       )}

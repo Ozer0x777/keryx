@@ -6,6 +6,7 @@ import { setModeDates } from './labels.js'
 import Layout from './components/Layout.jsx'
 import { useConfirm } from './components/Confirm.jsx'
 import { clearDrafts, disableLeaveGuard, unsavedLabels } from './components/Unsaved.jsx'
+import Accueil from './pages/Accueil.jsx'
 import Admin from './pages/Admin.jsx'
 import AuditPage from './pages/AuditPage.jsx'
 import Dashboard from './pages/Dashboard.jsx'
@@ -78,13 +79,14 @@ export default function App() {
 
   if (me === undefined) return <p className="loading">{t('Chargement…')}</p>
   setModeDates(me?.role === 'client' ? 'local' : 'utc')   // heure locale pour le client, UTC pour l'équipe
-  const home = me?.role === 'admin' ? '/admin' : '/tickets'
+  const home = me?.role === 'admin' ? '/admin' : me?.role === 'client' ? '/accueil' : '/tickets'
   return (
     <AuthContext.Provider value={{ me, refresh, logout }}>
       {dialog}
       <Routes>
         <Route path="/connexion" element={me ? <Navigate to={home} replace /> : <Login onDone={refresh} />} />
         <Route element={me ? <Layout /> : <Navigate to="/connexion" replace />}>
+          <Route path="/accueil" element={<Accueil />} />
           <Route path="/tickets" element={<Tickets />} />
           <Route path="/kanban" element={<Kanban />} />
           <Route path="/parc" element={<Parc />} />

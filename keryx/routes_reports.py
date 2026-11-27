@@ -180,8 +180,8 @@ def csv_cell(value) -> str:
 def register(app, ctx) -> None:
     get_db, current_user, require_role, commit = ctx.get_db, ctx.current_user, ctx.require_role, ctx.commit
 
-    def scope(user: User, client: str | None, db: DbSession) -> dict[str, Tenant]:
-        require_role(user, "analyst", "manager")
+    def scope(user: User, client: str | None, db: DbSession, allow_client: bool = False) -> dict[str, Tenant]:
+        require_role(user, "analyst", "manager", *(("client",) if allow_client else ()))
         tenants = {t.id: t for t in user.tenants}
         if client:
             tenants = {i: t for i, t in tenants.items() if t.key == client.upper()}
@@ -276,14 +276,20 @@ def register(app, ctx) -> None:
     @app.get("/api/v1/reports/period")
     def period_report(client: str | None = None, start: date | None = Query(default=None, alias="from"),
                       to: date | None = None, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
-        """Rapport périodique d'un client : synthèse chiffrée + liste des incidents de la période."""
-        require_role(user, "analyst", "manager")
+        """Rapport périodique d'un client : synthèse chiffrée + liste des incidents de la période. Le client peut lire le
+        sien (C12) : c'est le rapport qui lui est remis ; ses seuls clients sont dans son périmètre."""
+        require_role(user, "analyst", "manager", "client")
         if not client:
             raise HTTPException(422, "Indiquer le client du rapport.")
-        tenants = scope(user, client, db)
+        tenants = scope(user, client, db, allow_client=True)
         s, e = period(start, to)
         out = compute(db, tenants, s, e)
         tenant = next(iter(tenants.values()))
+        if user.role == "client":
+            # Données internes à l'équipe : noms des analystes, retards et échéances (cibles internes), jamais au client.
+            out.pop("workload", None)
+            out.pop("sla", None)
+            out["totals"].pop("overdue", None)
         rows = [t for t in load(db, tenants, s, e) if s <= as_utc(t.created_at) < e or (t.closed_at and s <= as_utc(t.closed_at) < e)]
         rows.sort(key=lambda t: as_utc(t.created_at))
         out["client"] = {"key": tenant.key, "name": tenant.name}

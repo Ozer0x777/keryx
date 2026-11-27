@@ -4,7 +4,8 @@ import { api } from '../api.js'
 import { t, t as tr } from '../i18n.js'
 import { formatUtc } from '../labels.js'
 
-const KINDS = { get assignation() { return t('Ticket affecté') }, get mention() { return t('Vous avez été mentionné') }, get echeance() { return t('Échéance dépassée') }, get reponse_client() { return t('Réponse du client') } }
+const KINDS = { get assignation() { return t('Ticket affecté') }, get mention() { return t('Vous avez été mentionné') }, get echeance() { return t('Échéance dépassée') }, get reponse_client() { return t('Réponse du client') },
+  get decision_attendue() { return t('Décision attendue de votre part') }, get reponse_soc() { return t('Réponse du SOC') }, get incident_resolu() { return t('Incident résolu') } }
 
 // Cloche : nombre de notifications non lues (relevé toutes les 60 s) et liste. Référence et nature seulement.
 export default function NotificationBell() {

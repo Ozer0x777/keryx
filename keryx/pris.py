@@ -205,6 +205,7 @@ def register(app, ctx) -> None:
         db.add(m)
         db.flush()
         event(db, t, user, "mesure_proposee", {"id": m.id, "type": m.type, "libelle": m.libelle}, visible_client=True)
+        inbox.prevenir_clients(db, t, "decision_attendue", actor=None)
         commit(db)
         return {"mesures": mesures(db, t)}
 
