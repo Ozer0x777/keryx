@@ -9,10 +9,11 @@ export default async ({ stack, BASE, check, login }) => {
 
   const m = await login('manager')
   await m.goto(`${BASE}/tickets`)
-  await m.waitForSelector('.stats-priority .stat-filter')
-  const cartes = await m.locator('.stats-priority .stat-filter .stat-label').allInnerTexts()
-  check(JSON.stringify(cartes) === JSON.stringify(['Critiques non assignés', 'En attente du client', 'Dossiers incomplets']), `trois vues de priorisation (${cartes.join(' | ')})`)
-  const carte = m.locator('.stats-priority .stat-filter', { hasText: 'Critiques non assignés' })
+  await m.waitForSelector('.stats-row .stat-filter')
+  const cartes = await m.locator('.stats-row .stat-filter .stat-label').allInnerTexts()
+  // Une seule rangée de tuiles : ce qui demande une action d'abord, les trois vues de priorisation comprises.
+  check(JSON.stringify(cartes) === JSON.stringify(['Critiques non assignés', 'En retard', 'À qualifier', 'En réponse', 'Critiques ouverts', 'REX en attente', 'En attente du client', 'Dossiers incomplets']), `tuiles sur une rangée, actions d'abord (${cartes.join(' | ')})`)
+  const carte = m.locator('.stats-row .stat-filter', { hasText: 'Critiques non assignés' })
   await until(async () => !(await carte.locator('strong').innerText()).includes('…'), 'compteur chargé')
   check(Number(await carte.locator('strong').innerText()) >= 1, 'critiques non assignés : le compteur compte le ticket critique')
   await carte.click()
@@ -22,7 +23,7 @@ export default async ({ stack, BASE, check, login }) => {
   check(await eventually(async () => await ouverts.getAttribute('aria-pressed') === 'false'), 'critiques non assignés : « Critiques ouverts » n\'est pas enfoncée en même temps')
   await until(async () => (await m.locator('tbody tr').count()) >= 1 && (await m.locator('tbody').innerText()).includes(made.ticket), 'la liste montre le ticket critique')
   // Une autre vue remplace celle-ci : plus d'assigné ni de gravité cachés
-  const attente = m.locator('.stats-priority .stat-filter', { hasText: 'En attente du client' })
+  const attente = m.locator('.stats-row .stat-filter', { hasText: 'En attente du client' })
   await attente.click()
   await m.waitForFunction(() => location.search.includes('awaiting_client=1') && !location.search.includes('assignee') && !location.search.includes('severity'))
   check(await eventually(async () => await attente.getAttribute('aria-pressed') === 'true' && await carte.getAttribute('aria-pressed') === 'false'), 'en attente du client : vue exclusive, filtres précédents retirés')

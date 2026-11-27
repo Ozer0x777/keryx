@@ -2,7 +2,7 @@
 // au retour d'un ticket, partageable et conservé au rechargement. Fonctions pures, testées par npm test.
 export const DEFAULTS = { status: '', severity: '', client: '', rex_en_attente: false, critical_unassigned: false, awaiting_client: false, incomplete: false, q: '', assignee: '', overdue: false, sort: 'created', order: 'desc', page: '1', per_page: '50' }
 const BOOLEANS = ['rex_en_attente', 'overdue', 'critical_unassigned', 'awaiting_client', 'incomplete']
-export const SORTS = ['created', 'updated', 'detected', 'ref', 'status', 'occurrences', 'criticite', 'gravite']
+export const SORTS = ['created', 'updated', 'detected', 'ref', 'status', 'occurrences', 'criticite', 'gravite', 'echeance']
 export const SEVERITIES = ['Critique', 'Élevée', 'Moyenne', 'Faible']   // ordre de tri métier, du plus grave au moins grave
 export const PER_PAGE = ['25', '50', '100']                              // tickets par page (l'API en accepte 500 au plus)
 export const OPEN_STATUSES = 'nouveau,en_evaluation,en_reponse'
