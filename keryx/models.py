@@ -92,6 +92,9 @@ class Tenant(Base):
     # PDIS IV.1.g : accord du client avant toute communication d'informations à un tiers. Une recherche VirusTotal
     # envoie une empreinte à un service externe : refusée tant que le manager n'a pas enregistré cet accord.
     virustotal_autorise: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    # Criticité initiale imposée par règle Wazuh, réglée par le manager pour ce client (identifiant de règle ->
+    # criticité) : le niveau Wazuh d'une règle peut ne pas refléter son enjeu chez ce client. Aucune règle en dur.
+    criticite_regles: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Délais cibles par gravité, en heures : {"Critique": {"qualification": 1, "resolution": 8}, ...}
     sla: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Taille maximale d'une pièce, en Mio (1 à 20) ; vide = 20 Mio, plafond fixé par le plan [PRIS VI.2.4]
@@ -387,7 +390,7 @@ class MitreMapping(Base):
 
 
 ATTACHMENT_KINDS = ("fichier", "image", "preuve_externe")
-SCAN_STATUS = ("non_analyse", "sain", "quarantaine")
+SCAN_STATUS = ("non_analyse", "sain", "quarantaine", "non_analysable")
 LIFECYCLE = ("conserve", "restitue", "detruit")
 SENSITIVITY = TLP
 

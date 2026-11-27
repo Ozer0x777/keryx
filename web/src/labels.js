@@ -30,7 +30,9 @@ export const DOMMAGES = { get limites() { return t('Limités') }, get significat
 export const IMPORTANCES = { get standard() { return t('Standard') }, get sensible() { return t('Sensible') }, get vital() { return t('Vital') } }
 export const TLPS = ['TLP:CLEAR', 'TLP:GREEN', 'TLP:AMBER', 'TLP:AMBER+STRICT', 'TLP:RED']
 export const ROLES = { get admin() { return t('Admin') }, get manager() { return t("Manager d'équipe") }, get analyst() { return t('Analyste') }, get client() { return t('Client') } }
-export const SCAN = { get non_analyse() { return t('Non analysé') }, get sain() { return t('Sain') }, get quarantaine() { return t('Quarantaine') } }
+export const SCAN = { get non_analyse() { return t('Non analysé') }, get sain() { return t('Sain') }, get quarantaine() { return t('Quarantaine') }, get non_analysable() { return t('Non analysable') } }
+// Pièce isolée : en quarantaine, ou que l'antivirus ne peut pas analyser (archive chiffrée, endommagée), PDIS IV.3.13.a.
+export const isole = (status) => status === 'quarantaine' || status === 'non_analysable'
 export const LIFECYCLE = { get conserve() { return t('Conservé') }, get restitue() { return t('Restitué') }, get detruit() { return t('Détruit') } }
 export const MITRE_SOURCE = { get wazuh() { return t('Wazuh') }, get table() { return t('Table') }, get manuel() { return t('Manuel') }, get a_completer() { return t('à compléter') } }
 

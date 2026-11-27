@@ -20,6 +20,13 @@ from .models import NIVEAUX_CLASSIFICATION, TLP, OnCallChannel, Tenant, Ticket, 
 OUVERTS = ("nouveau", "en_evaluation", "en_reponse")
 
 
+class CriticiteRegleIn(BaseModel):
+    """Une règle Wazuh, une criticité (vide : retirer), pour un, plusieurs ou tous les clients du manager."""
+    regle: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,32}$")
+    criticite: str | None = None
+    clients: list[str] | None = Field(default=None, max_length=500)     # absent : tous les clients du manager
+
+
 class PolitiqueIn(BaseModel):
     """Seuls les champs envoyés changent."""
     tlp_plancher: str | None = Field(default=None, max_length=20)
@@ -30,6 +37,7 @@ class PolitiqueIn(BaseModel):
     # Moyen secondaire de notification (PDIS IV.2.3.b)
     notif_secours_canal_id: str | None = Field(default=None, max_length=36)
     virustotal_autorise: bool | None = None          # accord du client (PDIS IV.1.g)
+    criticite_regles: dict[str, str] | None = Field(default=None, max_length=500)   # règle Wazuh -> criticité
     # Astreinte (ADR-0032)
     astreinte_active: bool | None = None
     astreinte_criticites: list[str] | None = Field(default=None, max_length=4)
@@ -67,6 +75,7 @@ def register(app, ctx) -> None:
                 "niveau_classification_defaut": t.niveau_classification_defaut or "Non protégé",
                 "version_regles": t.version_regles,
                 "notif_secours": secours_vue(t), "virustotal_autorise": bool(t.virustotal_autorise),
+                "criticite_regles": t.criticite_regles or {},
                 "acquittement_rapport": bool(t.acquittement_rapport),
                 "astreinte": {"active": bool(t.astreinte_active),
                               "criticites": list(t.astreinte_criticites or ["Critique"]),
@@ -138,6 +147,30 @@ def register(app, ctx) -> None:
         apres = {"active": bool(tenant.battement_active), "periode": tenant.battement_periode_min,
                  "delai": tenant.battement_delai_min}
         return {"battement_avant": avant, "battement": apres} if avant != apres else {}
+
+    @app.put("/api/v1/politique/criticite-regles")
+    def criticite_regle(body: CriticiteRegleIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        """Impose (ou retire) la criticité initiale d'une règle Wazuh chez un, plusieurs ou tous les clients du
+        manager. Un client hors de son périmètre est refusé, sans rien appliquer."""
+        require_role(user, "manager")
+        if body.criticite is not None and body.criticite not in CRITICITES:
+            raise HTTPException(422, f"Criticité attendue parmi : {', '.join(CRITICITES)}.")
+        siens = {t.key: t for t in user.tenants}
+        cles = sorted(siens) if body.clients is None else sorted({c.upper() for c in body.clients})
+        if not cles or any(c not in siens for c in cles):
+            raise HTTPException(404, "Client inconnu.")
+        for c in cles:
+            t = db.get(Tenant, siens[c].id)
+            regles = dict(t.criticite_regles or {})
+            if body.criticite is None:
+                regles.pop(body.regle, None)
+            else:
+                regles[body.regle] = body.criticite
+            t.criticite_regles = regles or None
+        audit.record(db, user.username, "client.criticite_regle", "regle", body.regle, None,
+                     {"criticite": body.criticite, "clients": cles})
+        commit(db)
+        return {"regle": body.regle, "criticite": body.criticite, "clients": cles}
 
     @app.post("/api/v1/politique/{client}/essai-secours")
     def essai_secours(client: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
@@ -214,6 +247,14 @@ def register(app, ctx) -> None:
             trace_astreinte["niveau_classification_defaut"] = tenant.niveau_classification_defaut = body.niveau_classification_defaut
         if "version_regles" in sent:
             trace_astreinte["version_regles"] = tenant.version_regles = (body.version_regles or "").strip() or None
+        if "criticite_regles" in sent:
+            import re as _re
+            regles = {str(k).strip(): v for k, v in (body.criticite_regles or {}).items() if str(k).strip()}
+            if any(not _re.fullmatch(r"[A-Za-z0-9_.-]{1,32}", k) for k in regles):
+                raise HTTPException(422, "Identifiant de règle Wazuh attendu (lettres, chiffres, « . », « _ », « - », 32 au plus).")
+            if any(v not in CRITICITES for v in regles.values()):
+                raise HTTPException(422, f"Criticité attendue parmi : {', '.join(CRITICITES)}.")
+            trace_astreinte["criticite_regles"] = tenant.criticite_regles = regles or None
         if body.virustotal_autorise is not None and body.virustotal_autorise != bool(tenant.virustotal_autorise):
             trace_astreinte["virustotal_autorise"] = tenant.virustotal_autorise = body.virustotal_autorise
         if "notif_secours_canal_id" in sent and body.notif_secours_canal_id != tenant.notif_secours_canal_id:

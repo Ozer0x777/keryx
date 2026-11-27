@@ -346,7 +346,7 @@ def _main(argv: list[str] | None = None) -> int:
         rows = db.scalars(_select(Attachment).where(Attachment.storage_name.is_not(None), Attachment.lifecycle != "detruit")).all()
         db.commit()  # fin de la transaction de lecture : la copie ne bloque pas les écritures de l'application (SQLite)
         for a in rows:
-            quarantined = a.scan_status == "quarantaine"
+            quarantined = att.isole(a.scan_status)
             path = att._path(settings, a.storage_name, quarantined)
             key = att._object_key(objects, a.storage_name, quarantined)
             try:

@@ -160,8 +160,8 @@ def register(app, ctx) -> None:
         method = (f"{wz.METHOD_LABEL} : API _search sur {source.get('indexer')}, index {source.get('index_pattern')}, "
                   f"agent {source.get('agent_id')}, {requested.get('before')} avant et {requested.get('after')} après "
                   f"l'alerte {(doc.get('alert') or {}).get('id') or 'du ticket'}")[:500]
-        status, detail = att.scan(raw, settings)
-        quarantined = status == "quarantaine"
+        status, detail = ctx.analyser(db, t, user, "contexte-wazuh.json", raw, "fichier", hashlib.sha256(raw).hexdigest())
+        quarantined = att.isole(status)
         try:
             storage = att.store(settings, raw, quarantined)
         except StorageError as exc:

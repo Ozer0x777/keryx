@@ -27,8 +27,7 @@ import { isoToUtcInput, untilUtc, utcClock, utcInputNow, utcInputToIso } from '.
 import { queuePath } from '../queue.js'
 import { confirmTransition, needsConfirm } from '../transitions.jsx'
 import {
-  DOMMAGES, formatUtc, IMPORTANCES, LIFECYCLE, MITRE_SOURCE, SCAN, STATUS, TLPS, TRANSITIONS, VERDICTS,
-} from '../labels.js'
+  DOMMAGES, formatUtc, IMPORTANCES, LIFECYCLE, MITRE_SOURCE, SCAN, STATUS, TLPS, TRANSITIONS, VERDICTS, isole } from '../labels.js'
 
 // Le HTML affiché ici (description, commentaires, synthèse) est assaini côté serveur (nh3, liste blanche).
 function Html({ html }) {
@@ -420,10 +419,10 @@ function Attachments({ t, enc, me, run, vt }) {
 
   const fetchContent = async (a, params) => {
     const blob = await api(`/attachments/${a.id}/content`, { params })
-    downloadBlob(blob, a.filename + (a.scan_status === 'quarantaine' ? '.quarantaine.zip' : ''))
+    downloadBlob(blob, a.filename + (isole(a.scan_status) ? '.quarantaine.zip' : ''))
   }
   const download = async (a) => {
-    const quarantined = a.scan_status === 'quarantaine'
+    const quarantined = isole(a.scan_status)
     setRowStatus(null)
     if (a.kind !== 'fichier' && !quarantined) {   // image insérée dans un texte : pas de motif demandé
       try { await fetchContent(a, {}) } catch (e) { setRowStatus({ id: a.id, error: e.message }) }
@@ -525,11 +524,11 @@ function Attachments({ t, enc, me, run, vt }) {
                   <td className="small">{formatUtc(a.collected_at)}<div className="muted">{a.method}</div></td>
                   <td className="small"><span className="mono" title={a.sha256}>{a.sha256.slice(0, 12)}…{a.sha256.slice(-6)}</span>
                     {a.lifecycle === 'conserve' && <Stamps attachmentId={a.id} canStamp={isTeam && !!me.features?.timestamping} />}</td>
-                  <td><span className={`pill ${a.scan_status === 'quarantaine' ? 'danger' : a.scan_status === 'sain' ? 'ok' : ''}`}>{SCAN[a.scan_status]}</span></td>
+                  <td><span className={`pill ${a.scan_status === 'quarantaine' ? 'danger' : a.scan_status === 'non_analysable' ? 'warn' : a.scan_status === 'sain' ? 'ok' : ''}`} title={a.scan_detail || undefined}>{SCAN[a.scan_status]}</span></td>
                   <td>{a.kind === 'preuve_externe' ? tr('Hors Keryx') : LIFECYCLE[a.lifecycle]}</td>
                   <td>
                     <div className="row gap wrap">
-                      {a.kind !== 'preuve_externe' && a.lifecycle === 'conserve' && !(isClient && a.scan_status === 'quarantaine') &&
+                      {a.kind !== 'preuve_externe' && a.lifecycle === 'conserve' && !(isClient && isole(a.scan_status)) &&
                         <button type="button" className="small-btn" onClick={() => download(a)}>{tr("Télécharger")}</button>}
                       {isTeam && a.lifecycle === 'conserve' && <button type="button" className="small-btn" onClick={() => lifecycle(a, 'restitue')}>{tr("Restituer")}</button>}
                       {/* Seule l'empreinte de la pièce part vers VirusTotal ; c'est le serveur qui la prend. */}

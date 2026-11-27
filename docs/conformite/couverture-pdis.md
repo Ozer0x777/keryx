@@ -57,7 +57,7 @@ Statuts :
 | IV.3.9.o | Écart entre sources de temps connu | Couvert | Écart d'horloge entre manager Wazuh et Keryx affiché (ADR-0028) |
 | IV.3.10.a | Seules les interconnexions listées sont permises | Partiel | VirusTotal et les webhooks d'astreinte vers un service hébergé chez un tiers ne sont pas des interconnexions permises : à laisser désactivés dans une architecture qui vise le référentiel (ils le sont par défaut) |
 | IV.3.12 | Messagerie de notification dans la zone de notification | Infrastructure | Keryx envoie en SMTP chiffré vers le relais désigné |
-| IV.3.13.a | Antivirus dans la zone d'échange, traitement des fichiers chiffrés ou non analysables, journal horodate, nom, empreinte | Partiel | ClamAV et quarantaine chiffrée ; empreinte et chaîne de possession par pièce ; **archive chiffrée sans traitement propre** |
+| IV.3.13.a | Antivirus dans la zone d'échange, traitement des fichiers chiffrés ou non analysables, journal horodate, nom, empreinte | Couvert | ClamAV et quarantaine chiffrée ; archive chiffrée, endommagée ou illisible classée « non analysable » et isolée ; chaque passage journalisé (`antivirus.analyse`) ; `test_fichiers_non_analysables.py`. Système d'échange du portail séparé : voir ADR-0027 |
 | IV.3.13.b | Une machine par client pour le portail, le stockage des incidents et des notifications | Écart | Mode tout-en-un ; séparation décidée (ADR-0027) |
 | IV.3.13.c | Annuaire dédié aux clients ; comptes nominatifs, deux facteurs ; authentification mutuelle entre machines | Partiel | Comptes nominatifs, second facteur obligatoire, realm Keycloak `clients` ; authentification mutuelle console et portail : ADR-0027 |
 | IV.3.13.e, f | Le client n'accède qu'au nécessaire, sans droit d'administration | Couvert | Rôle Client limité à ses tickets (`test_access.py`) |
@@ -109,15 +109,14 @@ rôles.
 
 ## Écarts du logiciel
 
-Corrigés le 26/11/2026 : conservation du contexte (IV.5.3.6), contenu du ticket (IV.2.1.w), stratégie, moyen
+Corrigés le 27/11/2026 : fichiers chiffrés ou non analysables (IV.3.13.a), capacité du stockage et envoi des
+notifications (IV.2.1.cc, IV.2.3.k). Corrigés le 26/11/2026 : conservation du contexte (IV.5.3.6), contenu du ticket (IV.2.1.w), stratégie, moyen
 secondaire et registre des notifications (IV.2.3), état du ticket modifiable par le client (IV.2.3.l), réversibilité
 (IV.5.2.b, f), accord du client pour VirusTotal (IV.1.g), verrouillage journalisé (IV.3.9.c), indicateurs de tickets,
 de notifications et du portail (IV.5.1).
 
 Restent, dans l'ordre du découpage de l'ADR-0027 :
 
-1. **Fichiers chiffrés ou non analysables (IV.3.13.a)** : statut propre et isolement, journal de passage à
-   l'antivirus, après lecture du chapitre « Système d'échange » de [NT_ADMIN].
-2. **Portail par client (IV.3.13.b, c)** : une machine par client, authentification mutuelle console et portail.
-3. **Pare-feu applicatif (IV.3.13.g)** : Coraza et l'OWASP CRS devant chaque portail.
-4. **Disponibilité du portail** (IV.5.1.e, g) : mesurée par la console en mode portail (ADR-0027).
+1. **Portail par client (IV.3.13.b, c)** : une machine par client, authentification mutuelle console et portail.
+2. **Pare-feu applicatif (IV.3.13.g)** : Coraza et l'OWASP CRS devant chaque portail.
+3. **Disponibilité du portail** (IV.5.1.e, g) : mesurée par la console en mode portail (ADR-0027).
