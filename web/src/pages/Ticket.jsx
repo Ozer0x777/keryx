@@ -381,11 +381,29 @@ function Description({ t, enc, canEdit, run, onImage, alertMerged }) {
           <dl className="kv">
             <dt>{tr("Groupes")}</dt><dd className="mono">{t.rule.groups.join(', ') || '—'}</dd>
             <dt>{tr("Classification")}</dt><dd className="mono small">{t.classification.join(', ') || '—'}</dd>
+            <LienAlerte t={t} />
           </dl>
           <p className="muted small">{tr('{n} alerte(s) brute(s) conservée(s) avec empreinte SHA-256', { n: t.raw_alerts })}</p>
         </div>
       )}
     </Section>
+  )
+}
+
+// Identifiant de l'alerte Wazuh d'origine et lien vers le tableau de bord (équipe seulement) ; sans réglage, où le régler.
+function LienAlerte({ t }) {
+  const a = t.wazuh_alerte
+  if (!a) return null
+  const url = t.wazuh?.alert_url?.startsWith('https://') ? t.wazuh.alert_url : null
+  return (
+    <>
+      <dt>{tr("Alerte Wazuh")}</dt>
+      <dd>
+        <span className="mono">{a.id || tr("identifiant non conservé")}</span>
+        {url && <> · <a href={url} target="_blank" rel="noopener noreferrer">{tr("Ouvrir dans Wazuh")}<span aria-hidden="true"> ↗</span><span className="sr-only"> {tr("(nouvel onglet)")}</span></a></>}
+        {!url && !a.lien_regle && <div className="field-hint">{tr("Lien vers le tableau de bord Wazuh non réglé : l'Admin le règle dans Administration > Clients > Paramétrer > Contexte Wazuh.")}</div>}
+      </dd>
+    </>
   )
 }
 
@@ -399,6 +417,7 @@ function AlertBlock({ t }) {
         <dt>{tr("Agent")}</dt><dd className="mono">{[t.agent.id, t.agent.name, t.agent.ip].filter(Boolean).join(' · ') || '—'}</dd>
         <dt>{tr("Collecteur")}</dt><dd className="mono">{t.collecteur || '—'}</dd>
         <dt>{tr("Classification")}</dt><dd className="mono small">{t.classification.join(', ') || '—'}</dd>
+        <LienAlerte t={t} />
       </dl>
     </Section>
   )
