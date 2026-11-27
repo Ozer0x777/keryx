@@ -4,6 +4,20 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+### Corrigé
+- Procès-verbal de destruction : son fichier est créé avant la destruction ; si le chemin est inutilisable (fichier
+  déjà présent, dossier absent, droits), rien n'est détruit. Il pouvait auparavant manquer après une destruction
+  faite.
+- Les mesures d'endiguement figurent dans l'export du client, dans les comptes de la destruction et dans le
+  procès-verbal.
+- Discrétion élevée : la recherche VirusTotal est refusée pour tout le client tant qu'un de ses tickets ouverts est
+  en discrétion élevée (un même incident couvre souvent plusieurs tickets).
+- Mesures d'endiguement : plus de décision ni d'application sur un ticket clos (l'équipe peut encore lever une
+  mesure en place) ; la décision du client prévient l'assigné, sinon l'équipe du client.
+- Point de situation et rapport d'analyse : les occurrences d'alerte répétées sont comptées et non listées ; le point
+  de situation borne le nombre d'actions détaillées.
+- Posture : longueur maximale des champs « Effectifs » et « Validée le » alignée sur celle du serveur.
+
 ## [0.11.0] : 2026-11-27
 
 **À lire avant la mise à jour** : aucun comportement par défaut ne change. Migrations 0031 et 0032, appliquées

@@ -19,8 +19,8 @@ export const CHAMPS = {
     ['discretion', tr("Niveau de discrétion vis-à-vis de l'attaquant"), 'choix', DISCRETION],
     ['demarche', tr('Démarche générale de réponse'), 'texte'], ['jalons', tr('Grands jalons et calendrier'), 'texte'],
     ['activites', tr('Activités de réponse à réaliser'), 'texte'], ['informations_a_collecter', tr('Informations à collecter et modes opératoires'), 'texte'],
-    ['effectifs', tr("Nombre d'analystes et d'experts"), 'ligne'], ['validee_par', tr('Posture validée par (correspondant du commanditaire)'), 'ligne'],
-    ['validee_le', tr('Validée le'), 'ligne'],
+    ['effectifs', tr("Nombre d'analystes et d'experts"), 'ligne', 2000], ['validee_par', tr('Posture validée par (correspondant du commanditaire)'), 'ligne', 200],
+    ['validee_le', tr('Validée le'), 'ligne', 40],
   ],
   comprehension: [
     ['attaquant_present', tr("L'attaquant est-il toujours présent ?"), 'choix', PRESENCE],
@@ -74,7 +74,8 @@ function Bloc({ t, enc, run, bloc, titre, aide, editable }) {
             <fieldset key={k}><legend>{label}</legend>{Object.entries(choix).map(([c, l]) => (
               <label key={c} className="check"><input type="checkbox" checked={(v[k] || []).includes(c)} disabled={!editable}
                 onChange={(e) => set(k, e.target.checked ? [...(v[k] || []), c] : (v[k] || []).filter((x) => x !== c))} />{' '}{l}</label>))}</fieldset>)
-          if (sorte === 'ligne') return <label key={k} htmlFor={id}>{label}<input id={id} value={v[k] || ''} maxLength={200} disabled={!editable} onChange={(e) => set(k, e.target.value)} /></label>
+          // Longueur maximale reprise du schéma du serveur (keryx/pris.py), pour chaque champ d'une ligne.
+          if (sorte === 'ligne') return <label key={k} htmlFor={id}>{label}<input id={id} value={v[k] || ''} maxLength={choix} disabled={!editable} onChange={(e) => set(k, e.target.value)} /></label>
           return <label key={k} htmlFor={id}>{label}<textarea id={id} rows={2} value={v[k] || ''} maxLength={20000} disabled={!editable} onChange={(e) => set(k, e.target.value)} /></label>
         })}
         {editable && <div><button type="button" className="primary" disabled={!changed} onClick={save}>{tr('Enregistrer')}</button></div>}
@@ -141,14 +142,14 @@ export function Mesures({ t, enc, run, isClient, open }) {
             <div className="muted small">{tr('proposée par {who} le {d}', { who: m.cree_par, d: formatUtc(m.cree_le) })}{m.decision_par ? ` · ${tr('décision : {who}', { who: m.decision_par })}` : ''}{m.maj_le ? ` · ${formatUtc(m.maj_le)}` : ''}</div>
             {m.commentaire && <div className="small">{m.commentaire}</div>}
             <div className="row wrap gap">
-              {isClient && m.etat === 'proposee' && <>
+              {isClient && open && m.etat === 'proposee' && <>
                 <button type="button" className="primary" onClick={() => maj(m, 'acceptee')}>{tr('Accepter')}</button>
                 <button type="button" onClick={() => maj(m, 'refusee')}>{tr('Refuser')}</button></>}
-              {!isClient && m.etat === 'proposee' && <>
+              {!isClient && open && m.etat === 'proposee' && <>
                 <label>{tr('Décision rapportée, prise par')}<input value={auteur[m.id] || ''} maxLength={200} onChange={(e) => setAuteur({ ...auteur, [m.id]: e.target.value })} /></label>
                 <button type="button" disabled={!(auteur[m.id] || '').trim()} onClick={() => maj(m, 'acceptee', { decision_par: auteur[m.id] })}>{tr('Acceptée')}</button>
                 <button type="button" disabled={!(auteur[m.id] || '').trim()} onClick={() => maj(m, 'refusee', { decision_par: auteur[m.id] })}>{tr('Refusée')}</button></>}
-              {!isClient && m.etat === 'acceptee' && <button type="button" onClick={() => maj(m, 'appliquee')}>{tr('Marquer appliquée')}</button>}
+              {!isClient && open && m.etat === 'acceptee' && <button type="button" onClick={() => maj(m, 'appliquee')}>{tr('Marquer appliquée')}</button>}
               {!isClient && m.etat === 'appliquee' && <button type="button" onClick={() => maj(m, 'levee')}>{tr('Marquer levée')}</button>}
               {!isClient && open && ['refusee', 'levee'].includes(m.etat) && <button type="button" onClick={() => maj(m, 'proposee')}>{tr('Proposer de nouveau')}</button>}
             </div>

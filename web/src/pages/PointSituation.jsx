@@ -40,7 +40,8 @@ export default function PointSituation() {
           {p.actions.length === 0 ? <p className="muted">{tr('Aucune action sur la période.')}</p> : (
             <table className="grid"><thead><tr><th scope="col">{tr('Date')}</th><th scope="col">{tr('Auteur')}</th><th scope="col">{tr('Action')}</th></tr></thead>
               <tbody>{p.actions.map((a, i) => <tr key={i}><td className="mono small">{formatUtc(a.ts)}</td><td>{a.acteur}</td><td>{a.action}</td></tr>)}</tbody></table>)}
-          <p>{tr('{n} commentaire(s), {m} pièce(s) collectée(s), {c} entrée(s) de crise sur la période.', { n: p.commentaires.length, m: p.pieces.length, c: p.crise.length })}</p>
+          {p.actions_omises > 0 && <p className="muted">{tr('{n} action(s) plus ancienne(s) de la période non reprise(s) ici : voir le registre du ticket.', { n: p.actions_omises })}</p>}
+          <p>{tr('{o} occurrence(s) de l\'alerte, {n} commentaire(s), {m} pièce(s) collectée(s), {c} entrée(s) de crise sur la période.', { o: p.occurrences, n: p.commentaires.length, m: p.pieces.length, c: p.crise.length })}</p>
           {p.crise.length > 0 && <><h2>{tr('Crise')}</h2><ul>{p.crise.map((e, i) => <li key={i}>{formatUtc(e.ts)} — {e.type} : {e.texte}</li>)}</ul></>}
         </article>
       )}

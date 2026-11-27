@@ -195,10 +195,12 @@ def register(app, ctx) -> None:
         if not db.get(Tenant, t.tenant_id).virustotal_autorise:
             raise HTTPException(403, "Le client n'a pas donné son accord à la recherche d'empreintes chez VirusTotal "
                                      "(PDIS IV.1.g) : le manager l'enregistre dans « Politique des clients ».")
-        from .pris import discretion_elevee
-        if discretion_elevee(t):
-            raise HTTPException(409, "Niveau de discrétion élevé vis-à-vis de l'attaquant (PRIS VI.3.b, VI.5.2.4) : "
-                                     "aucune recherche en source ouverte depuis Keryx sur ce ticket.")
+        from .pris import ticket_discret
+        discret = ticket_discret(db, t)
+        if discret is not None:
+            raise HTTPException(409, "Niveau de discrétion élevé vis-à-vis de l'attaquant (PRIS VI.3.b, VI.5.2.4) sur "
+                                     f"{discret.ref} : aucune recherche en source ouverte depuis Keryx pour ce client "
+                                     "tant que ce ticket est ouvert.")
         attachment, origin = None, None
         if body.source == "piece":
             if body.hash is not None or not body.attachment_id:

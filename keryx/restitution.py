@@ -27,7 +27,7 @@ from .config import Settings
 from .ids import rfc3339, utcnow
 from .models import (
     ActionClient, ApiKey, Attachment, AuditEntry, Comment, CrisisEntry, CustodyEvent, HashLookup, InboxItem,
-    Notification, RawAlert, Template, Tenant, Ticket, TicketEvent, TicketLink, Timestamp, User, UserTenant,
+    MesureEndiguement, Notification, RawAlert, Template, Tenant, Ticket, TicketEvent, TicketLink, Timestamp, User, UserTenant,
     WazuhAgent, WazuhAgentEvent,
 )
 
@@ -67,6 +67,7 @@ def export_client(db: DbSession, settings: Settings, tenant: Tenant, out) -> dic
         "chaine-de-possession.json": _rows(db, CustodyEvent, CustodyEvent.attachment_id.in_([a.id for a in pieces])),
         "liens.json": _rows(db, TicketLink, TicketLink.tenant_id == tenant.id),
         "crise.json": _rows(db, CrisisEntry, CrisisEntry.tenant_id == tenant.id),
+        "mesures-endiguement.json": _rows(db, MesureEndiguement, MesureEndiguement.tenant_id == tenant.id),
         "actions-client.json": _rows(db, ActionClient, ActionClient.tenant_id == tenant.id),
         "recherches-empreintes.json": _rows(db, HashLookup, HashLookup.tenant_id == tenant.id),
         "notifications.json": _rows(db, Notification, Notification.tenant_id == tenant.id),
@@ -116,10 +117,14 @@ def proces_verbal(db: DbSession, tenant: Tenant) -> dict:
     destruction ; la date et le mode sont ajoutés quand elle est faite."""
     tickets = db.scalars(select(Ticket).where(Ticket.tenant_id == tenant.id).order_by(Ticket.seq)).all()
     pieces = db.scalars(select(Attachment).where(Attachment.tenant_id == tenant.id)).all()
+    mesures = db.scalars(select(MesureEndiguement).where(MesureEndiguement.tenant_id == tenant.id)).all()
+    refs = {t.id: t.ref for t in tickets}
     return {"client": tenant.key, "nom": tenant.name,
             "tickets": [{"ref": t.ref, "titre": t.title, "detecte_le": rfc3339(t.detected_at)} for t in tickets],
-            "pieces": [{"id": a.id, "fichier": a.filename, "sha256": a.sha256, "ticket": next(
-                (t.ref for t in tickets if t.id == a.ticket_id), None), "stockee": bool(a.storage_name)} for a in pieces]}
+            "pieces": [{"id": a.id, "fichier": a.filename, "sha256": a.sha256, "ticket": refs.get(a.ticket_id),
+                        "stockee": bool(a.storage_name)} for a in pieces],
+            "mesures_endiguement": [{"id": m.id, "ticket": refs.get(m.ticket_id), "libelle": m.libelle,
+                                     "etat": m.etat, "decision_par": m.decision_par} for m in mesures]}
 
 
 def destroy_client(db: DbSession, settings: Settings, tenant: Tenant, actor: str, dry_run: bool = True,
@@ -143,6 +148,7 @@ def destroy_client(db: DbSession, settings: Settings, tenant: Tenant, actor: str
         ("actions_client", ActionClient, ActionClient.tenant_id == tenant.id),
         ("liens", TicketLink, TicketLink.tenant_id == tenant.id),
         ("crise", CrisisEntry, CrisisEntry.tenant_id == tenant.id),
+        ("mesures_endiguement", MesureEndiguement, MesureEndiguement.tenant_id == tenant.id),
         ("notifications", Notification, Notification.tenant_id == tenant.id),
         ("boites_de_reception", InboxItem, InboxItem.ticket_ref.in_(refs)),
         ("horodatages", Timestamp, Timestamp.tenant_id == tenant.id),

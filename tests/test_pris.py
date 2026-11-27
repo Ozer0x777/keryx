@@ -114,3 +114,51 @@ def test_point_de_situation(app, db, world, alert):
     assert p["comprehension"]["attaquant_present"] == "inconnu" and p["mesures"][0]["libelle"].startswith("Réinit")
     assert any(x["action"] == "mesure_proposee" for x in p["actions"])
     assert login(app, db, "client_acme").get(f"/api/v1/tickets/{ref}/point-situation").status_code == 403
+
+
+def test_mesures_sur_ticket_clos_et_equipe_prevenue(app, db, world, alert):
+    """Revue : décision du client → l'équipe est prévenue ; ticket clos → plus de décision, levée encore possible."""
+    from sqlalchemy import update
+
+    from keryx.models import InboxItem, Ticket
+    ref = _ticket(app, world, alert)
+    a, c = login(app, db, "analyst_acme"), login(app, db, "client_acme")
+    m1 = a.post(f"/api/v1/tickets/{ref}/mesures", json={"libelle": "Isoler le poste"}).json()["mesures"][0]
+    m2 = a.post(f"/api/v1/tickets/{ref}/mesures", json={"libelle": "Couper le VPN"}).json()["mesures"][1]
+    assert c.patch(f"/api/v1/tickets/{ref}/mesures/{m1['id']}", json={"etat": "acceptee"}).status_code == 200
+    db.rollback()
+    assert db.scalars(select(InboxItem).where(InboxItem.ticket_ref == ref, InboxItem.kind == "reponse_client")).first()
+    db.rollback()
+    assert a.patch(f"/api/v1/tickets/{ref}/mesures/{m1['id']}", json={"etat": "appliquee"}).status_code == 200
+    db.execute(update(Ticket).where(Ticket.ref == ref).values(status="cloture"))
+    db.commit()
+    assert c.patch(f"/api/v1/tickets/{ref}/mesures/{m2['id']}", json={"etat": "acceptee"}).status_code == 409
+    assert a.patch(f"/api/v1/tickets/{ref}/mesures/{m1['id']}", json={"etat": "levee"}).status_code == 200
+
+
+def test_discretion_elevee_s_applique_a_tout_le_client(app, db, world, alert):
+    """Revue : un autre ticket ouvert du même client ne permet pas de contourner la discrétion élevée."""
+    from sqlalchemy import update
+
+    from keryx.models import Tenant
+    ref_a = _ticket(app, world, alert)
+    autre = dict(ALERT_SSH_BRUTEFORCE, id="autre-1", agent={"id": "077", "name": "srv-autre", "ip": "10.0.0.77"})
+    ref_b = ingest(app, world["keys"]["ACME"], alert(autre)).json()["ticket"]
+    assert ref_b != ref_a
+    db.execute(update(Tenant).values(virustotal_autorise=True))
+    db.commit()
+    app.state.settings.virustotal_enabled = True
+    a = login(app, db, "analyst_acme")
+    a.put(f"/api/v1/tickets/{ref_a}/pris/posture", json={"discretion": "eleve"})
+    r = a.post(f"/api/v1/tickets/{ref_b}/virustotal", json={"source": "saisie", "hash": "b" * 64})
+    assert r.status_code == 409 and ref_a in r.json()["detail"]
+
+
+def test_point_de_situation_compte_les_occurrences(app, db, world, alert):
+    """Revue : les occurrences d'alerte répétées sont comptées, pas listées une à une."""
+    ref = _ticket(app, world, alert)
+    for i in range(3):
+        ingest(app, world["keys"]["ACME"], alert(dict(ALERT_SSH_BRUTEFORCE, id=f"rep-{i}")))
+    p = login(app, db, "analyst_acme").get(f"/api/v1/tickets/{ref}/point-situation").json()
+    assert p["occurrences"] >= 3 and not any(x["action"] == "occurrence" for x in p["actions"])
+    assert p["actions_omises"] == 0
