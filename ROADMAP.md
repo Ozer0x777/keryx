@@ -33,7 +33,9 @@ Chaque essai réel donne lieu à une correction ou à une note dans la documenta
 - Couverture des exigences PDIS (`docs/conformite/couverture-pdis.md`) : écarts du logiciel corrigés dans la 0.10.0 ;
   restent les fichiers chiffrés ou non analysables, le portail par client, le pare-feu applicatif et les indicateurs
   de capacité (section 5 et ADR-0027).
-- Couverture du référentiel PRIS v3.2 et de sa trame d'évaluation, sur le même modèle.
+- Couverture du référentiel PRIS v3.2 (`docs/conformite/couverture-pris.md`) : écarts du logiciel corrigés le
+  27/11/2026 ; restent partiels le registre des actions sur une ressource du SI cible et le retour d'expérience par
+  rubriques.
 
 ## 4. Robustesse et exploitation
 
@@ -41,13 +43,14 @@ Chaque essai réel donne lieu à une correction ou à une note dans la documenta
   son expiration, ADR-0017).
 - Validation de l'export IODEF contre le schéma officiel complet ; PDF des rapports produit côté serveur.
 
-## 5. Portail par client (optionnel)
+## 5. Portail par client, pare-feu applicatif, disponibilité (mis de côté le 27/11/2026)
 
-Séparer le portail client de la console d'analyse, une machine par client (PDIS IV.3.13.b), pour un prestataire qui
-vise la qualification. ADR-0027 accepté le 26/11/2026 après lecture intégrale du référentiel : décisions et découpage
-dans `docs/conception/portail-par-client.md`. Premières étapes, utiles aussi en tout-en-un : liste publiée des
-exigences PDIS non couvertes par ce mode, actions demandées au client, traitement des fichiers chiffrés ou non
-analysables. Le mode tout-en-un reste le produit principal.
+Seuls écarts PDIS du logiciel restants. Ordre recommandé : d'abord le pare-feu applicatif (Coraza et l'OWASP CRS
+dans le Caddy du kit, en profil optionnel puis par défaut, après passage de toute la suite e2e), utile à tous ; la
+disponibilité par une sonde extérieure documentée sur `/healthz` (un logiciel ne mesure pas ses propres pannes) ;
+le portail séparé par client (ADR-0027, `docs/conception/portail-par-client.md`) quand un déploiement visant la
+qualification se présente, ses étapes 1 et 5 (projection client unique, modes) pouvant être faites avant sans
+changement visible. Le mode tout-en-un reste le produit principal.
 
 ## Souhaité, selon les moyens
 

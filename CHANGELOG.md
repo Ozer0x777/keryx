@@ -5,6 +5,15 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 ## [Non publié]
 
 ### Ajouté
+- Réponse aux incidents (référentiel PRIS v3.2), onglet Investigation de la fiche : posture et niveau de discrétion
+  vis-à-vis de l'attaquant (en discrétion élevée, recherche VirusTotal refusée) ; compréhension structurée de
+  l'incident (présence de l'attaquant, mode opératoire en huit volets, caractérisation, périmètre) ; mesures
+  d'endiguement et procédures d'urgence proposées par l'équipe, acceptées ou refusées par le client ; cadre du
+  rapport d'analyse, équipe et interlocuteurs. Pages imprimables « Rapport d'analyse » (PRIS VI.7) et « Point de
+  situation » (VI.6.a). Registre de crise complété : objectifs stratégiques, actions rattachées à un objectif et à
+  un arbitrage, entité responsable, validation par la cellule de crise, critères de sortie, dérogations et risques.
+  Procès-verbal de destruction (`keryx destroy-client --pv`). Couverture : `docs/conformite/couverture-pris.md`.
+  Migration 0032.
 - Criticité par règle Wazuh : le manager impose la criticité initiale des tickets d'une règle pour un, plusieurs ou
   tous ses clients (« Politique des clients ») ; aucune règle en dur ; le niveau Wazuh reste le seuil d'entrée ;
   l'origine de la criticité est inscrite au registre du ticket. Migration 0031.

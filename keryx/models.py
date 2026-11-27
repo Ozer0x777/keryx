@@ -276,6 +276,9 @@ class Ticket(Base):
     # Suivi par le client (PDIS IV.2.3.l) : état du ticket de son côté et demande de clôture ou de réouverture,
     # que l'équipe accepte (par le statut) ou refuse. La qualification et la clôture restent à l'équipe.
     etat_client: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Réponse aux incidents (PRIS) : compréhension structurée de l'incident (VI.5.3.e), posture et niveau de
+    # discrétion vis-à-vis de l'attaquant (VI.3.b), cadre du rapport d'analyse (VI.7). Voir keryx/pris.py.
+    pris: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     demande_client: Mapped[str | None] = mapped_column(String(16), nullable=True)
     etat_client_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     occurrences: Mapped[int] = mapped_column(Integer, default=1)
@@ -566,7 +569,9 @@ class SavedFilter(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-CRISIS_KINDS = ("decision", "action", "synthese")
+# Registre de crise (PRIS VI.5.5.1) : décision (arbitrage), objectif stratégique, action (objectif opérationnel, avec
+# responsable et délai), synthèse de la situation, critère de sortie de crise (VI.3.g, VI.5.5.1.h), dérogation (d.iii).
+CRISIS_KINDS = ("decision", "objectif", "action", "synthese", "critere_sortie", "derogation")
 
 
 class CrisisEntry(Base):
@@ -581,6 +586,14 @@ class CrisisEntry(Base):
     owner: Mapped[str | None] = mapped_column(String(120), nullable=True)
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     done: Mapped[bool] = mapped_column(Boolean, default=False)
+    # PRIS VI.5.5.1.e, j : objectif stratégique de rattachement d'une action, arbitrage qui l'a permise et entité
+    # responsable de l'arbitrage ; risque associé à une dérogation ; validation par la cellule de crise stratégique.
+    parent_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    decision_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    entite: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    risque: Mapped[str | None] = mapped_column(Text, nullable=True)
+    valide_par: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    valide_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by: Mapped[str] = mapped_column(String(120))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -651,6 +664,25 @@ class ActionClient(Base):
     tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
     libelle: Mapped[str] = mapped_column(String(500))
     etat: Mapped[str] = mapped_column(String(16), default="a_faire", server_default="a_faire")
+    commentaire: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cree_par: Mapped[str] = mapped_column(String(64))
+    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    maj_par: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    maj_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class MesureEndiguement(Base):
+    """Mesure d'endiguement ou procédure d'urgence « bouton rouge » (PRIS VI.5.4) : proposée par l'équipe, décidée
+    par le commanditaire (sur le portail ou rapportée par l'équipe), appliquée puis levée ; réévaluée au fil de
+    l'incident."""
+    __tablename__ = "mesures_endiguement"
+    id: Mapped[str] = _id()
+    ticket_id: Mapped[str] = mapped_column(ForeignKey("tickets.id", ondelete="CASCADE"), index=True)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("tenants.id"), index=True)
+    type: Mapped[str] = mapped_column(String(16), default="endiguement")        # endiguement | urgence
+    libelle: Mapped[str] = mapped_column(String(1000))
+    etat: Mapped[str] = mapped_column(String(16), default="proposee")           # proposee | acceptee | refusee | appliquee | levee
+    decision_par: Mapped[str | None] = mapped_column(String(200), nullable=True)
     commentaire: Mapped[str | None] = mapped_column(Text, nullable=True)
     cree_par: Mapped[str] = mapped_column(String(64))
     cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

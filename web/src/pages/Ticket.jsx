@@ -6,6 +6,7 @@ import { useAuth } from '../App.jsx'
 import { tlpAuMoins, tlpSous } from '../tlp.js'
 import { fmtMin } from '../components/Acquittement.jsx'
 import SuiviClient from '../components/SuiviClient.jsx'
+import Pris, { Mesures } from '../components/Pris.jsx'
 
 const NIVEAUX_CLASSIFICATION = ['Non protégé', 'Diffusion Restreinte']
 import { ActionStatus, useActionStatus } from '../components/ActionStatus.jsx'
@@ -287,6 +288,7 @@ export default function Ticket() {
             {t.wazuh?.context && <WazuhContext t={t} enc={enc} run={run} open={open} />}
             <Mitre t={t} enc={enc} run={run} open={open} />
             <IsiPanel t={t} enc={enc} run={run} open={open} />
+            <Pris t={t} enc={enc} run={run} open={open} />
             {alertMerged && !t.wazuh?.context && <p className="muted">{tr("L'alerte Wazuh est reprise dans la description (onglet Vue générale).")}</p>}
           </TabPanel>
           <TabPanel id="preuves" idBase="ticket" active={tab === 'preuves'}>
@@ -310,6 +312,7 @@ export default function Ticket() {
           <div className="ticket-main">
             <Description t={t} enc={enc} canEdit={false} run={run} onImage={uploadImage} alertMerged={false} />
             <SuiviClient t={t} enc={enc} isClient run={run} open={open} />
+            <Mesures t={t} enc={enc} run={run} isClient open={open} />
             <Attachments t={t} enc={enc} me={me} run={run} vt={vt} />
             <Events t={t} />
             <Comments t={t} enc={enc} isClient={isClient} me={me} run={run} onImage={uploadImage} templates={templates('commentaire')} />

@@ -129,6 +129,7 @@ def _main(argv: list[str] | None = None) -> int:
     de = sub.add_parser("destroy-client", help="Fin de prestation : détruit toutes les données d'un client (PDIS IV.5.2.f), "
                                                "après un export ; simulation sans --confirm")
     de.add_argument("client"); de.add_argument("--confirm", metavar="CLE", help="répéter la clé du client pour exécuter")
+    de.add_argument("--pv", metavar="FICHIER", help="écrire le procès-verbal de destruction (JSON, PRIS VI.8.d)")
     sub.add_parser("backup", help="Sauvegarde chiffrée (base SQLite + pièces)").add_argument("out")
     r = sub.add_parser("restore", help="Restaure une sauvegarde dans un dossier vide et vérifie l'audit")
     r.add_argument("file"); r.add_argument("--to", required=True)
@@ -413,6 +414,7 @@ def _main(argv: list[str] | None = None) -> int:
             print(f"Export de {tenant.key} : {args.out} ({len(content)} octets, SHA-256 {digest})")
             return 0
         execute = args.confirm == tenant.key
+        pv = restitution.proces_verbal(db, tenant)
         try:
             comptes = restitution.destroy_client(db, settings, tenant, actor, dry_run=not execute)
         except ValueError as exc:
@@ -420,6 +422,17 @@ def _main(argv: list[str] | None = None) -> int:
             return 1
         if execute:
             db.commit()
+        if args.pv:
+            import json as _json
+            from .ids import rfc3339 as _rfc, utcnow as _now
+            pv.update({"detruit": execute, "date": _rfc(_now()) if execute else None, "par": actor, "comptes": comptes,
+                       "mode": ("suppression en base des données du client et des fichiers des pièces (disque ou "
+                                "stockage objet) ; comptes Client désactivés ; journal d'audit conservé (références "
+                                "seulement)") if execute else "simulation : rien n'a été détruit"})
+            fd = os.open(args.pv, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                _json.dump(pv, f, ensure_ascii=False, indent=1)
+            print(f"Procès-verbal : {args.pv}")
         for k, v in comptes.items():
             print(f"{k} : {v}")
         print("Données détruites." if execute else f"Simulation : relancer avec --confirm {tenant.key} pour détruire.")

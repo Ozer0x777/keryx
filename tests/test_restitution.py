@@ -65,3 +65,29 @@ def test_destruction_apres_export(app, db, world, alert, settings):
     assert db.scalars(select(User).where(User.username == "client_acme")).one().active is False
     assert db.scalars(select(AuditEntry).where(AuditEntry.action == "client.destruction")).one().details["tickets"] == 1
     assert login(app, db, "analyst_acme").get("/api/v1/tickets/DELTA-1").status_code == 404     # toujours cloisonné
+
+
+def test_proces_verbal_de_destruction(app, db, world, alert, settings, tmp_path):
+    """PRIS VI.8.d : le procès-verbal identifie les tickets et les pièces détruits, la date et le mode."""
+    import json as _json
+
+    from keryx import cli
+    ingest(app, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE))
+    acme = db.scalars(select(Tenant).where(Tenant.key == "ACME")).one()
+    restitution.export_bytes(db, settings, acme, "manager")
+    db.commit()
+    pv = restitution.proces_verbal(db, acme)
+    assert [t["ref"] for t in pv["tickets"]] == ["ACME-1"] and pv["client"] == "ACME"
+    sortie = tmp_path / "pv.json"
+    import os
+    os.environ["KERYX_DATABASE_URL"] = settings.database_url
+    os.environ["KERYX_SECRET_KEY"] = settings.secret_key
+    os.environ["KERYX_ATTACHMENTS_DIR"] = settings.attachments_dir
+    try:
+        code = cli.main(["destroy-client", "ACME", "--confirm", "ACME", "--pv", str(sortie)])
+    finally:
+        for k in ("KERYX_DATABASE_URL", "KERYX_SECRET_KEY", "KERYX_ATTACHMENTS_DIR"):
+            os.environ.pop(k, None)
+    assert code == 0
+    doc = _json.loads(sortie.read_text())
+    assert doc["detruit"] is True and doc["date"] and doc["tickets"][0]["ref"] == "ACME-1" and "fichiers" in doc["mode"]

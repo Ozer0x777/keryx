@@ -32,10 +32,15 @@ class CrisisEntryIn(BaseModel):
     body: str = Field(min_length=1, max_length=5000)
     owner: str | None = Field(default=None, max_length=120)
     due_at: datetime | None = None
+    parent_id: str | None = Field(default=None, max_length=36)
+    decision_id: str | None = Field(default=None, max_length=36)
+    entite: str | None = Field(default=None, max_length=200)
+    risque: str | None = Field(default=None, max_length=5000)
 
 
 class CrisisPatchIn(BaseModel):
-    done: bool
+    done: bool | None = None
+    valide_par: str | None = Field(default=None, max_length=200)
 
 
 class RetentionIn(BaseModel):
@@ -56,7 +61,9 @@ def register(app, ctx) -> None:
     # ---------------------------------------------------------------- mode crise
     def entry_view(e: CrisisEntry) -> dict:
         return {"id": e.id, "kind": e.kind, "body": e.body, "owner": e.owner, "due_at": rfc3339(e.due_at),
-                "done": e.done, "created_by": e.created_by, "created_at": rfc3339(e.created_at)}
+                "done": e.done, "created_by": e.created_by, "created_at": rfc3339(e.created_at),
+                "parent_id": e.parent_id, "decision_id": e.decision_id, "entite": e.entite, "risque": e.risque,
+                "valide_par": e.valide_par, "valide_le": rfc3339(e.valide_le)}
 
     def crisis_view(db: DbSession, t: Ticket) -> dict:
         rows = db.scalars(select(CrisisEntry).where(CrisisEntry.ticket_id == t.id).order_by(CrisisEntry.created_at)).all()
@@ -103,8 +110,17 @@ def register(app, ctx) -> None:
         if body.kind not in CRISIS_KINDS:
             raise HTTPException(422, f"Type attendu parmi : {', '.join(CRISIS_KINDS)}.")
         due = ctx.input_date(body.due_at, "Échéance", future_days=3660)
+        # Rattachements (PRIS VI.5.5.1.e, j) : une action à son objectif stratégique et à l'arbitrage qui l'a permise.
+        for champ, attendu in (("parent_id", "objectif"), ("decision_id", "decision")):
+            ident = getattr(body, champ)
+            if ident:
+                cible = db.get(CrisisEntry, ident[:36])
+                if cible is None or cible.ticket_id != t.id or cible.kind != attendu:
+                    raise HTTPException(422, f"{champ} : entrée « {attendu} » de ce ticket attendue.")
         e = CrisisEntry(ticket_id=t.id, tenant_id=t.tenant_id, kind=body.kind, body=body.body.strip(),
-                        owner=body.owner, due_at=due, created_by=user.username)
+                        owner=body.owner, due_at=due, created_by=user.username, parent_id=body.parent_id,
+                        decision_id=body.decision_id, entite=(body.entite or "").strip() or None,
+                        risque=(body.risque or "").strip() or None)
         db.add(e)
         db.flush()
         event(db, t, user, "crise_" + body.kind, {"id": e.id})
@@ -120,10 +136,19 @@ def register(app, ctx) -> None:
         e = db.get(CrisisEntry, entry_id[:36])
         if e is None or e.ticket_id != t.id:
             raise HTTPException(404, "Entrée introuvable.")
-        if e.kind != "action":
-            raise HTTPException(422, "Seules les actions du plan d'action se cochent.")
-        e.done = body.done
-        event(db, t, user, "crise_action_faite" if body.done else "crise_action_rouverte", {"id": e.id})
+        if body.valide_par is not None:
+            # Validation itérative du plan d'action par la cellule de crise stratégique (PRIS VI.5.5.1.e).
+            if e.kind not in ("objectif", "action"):
+                raise HTTPException(422, "Seuls les objectifs et les actions du plan d'action se valident.")
+            e.valide_par, e.valide_le = body.valide_par.strip() or None, utcnow() if body.valide_par.strip() else None
+            event(db, t, user, "crise_validation", {"id": e.id, "valide_par": e.valide_par})
+        if body.done is not None:
+            if e.kind not in ("action", "objectif", "critere_sortie"):
+                raise HTTPException(422, "Seuls les objectifs, les actions et les critères de sortie se cochent.")
+            e.done = body.done
+            nom = {"critere_sortie": "crise_critere_atteint" if body.done else "crise_critere_non_atteint"}.get(
+                e.kind, "crise_action_faite" if body.done else "crise_action_rouverte")
+            event(db, t, user, nom, {"id": e.id})
         commit(db)
         return crisis_view(db, t)
 

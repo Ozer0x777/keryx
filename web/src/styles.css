@@ -519,3 +519,4 @@ form.row > .action-status.ok, .retention-actions > .action-status.ok { align-sel
   .vt-detail .kv { grid-template-columns: 1fr; gap: 0; }
   .vt-detail .kv dd { margin-bottom: 8px; }
 }
+.prewrap { white-space: pre-wrap; }
