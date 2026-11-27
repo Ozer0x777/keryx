@@ -4,6 +4,10 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+### Ajouté
+- Indicateurs PDIS (IV.2.1.cc, IV.2.3.k, IV.5.1.e) : taille de la base des tickets et des notifications, remplissage
+  du disque des pièces, réussite de l'envoi des notifications par mois.
+
 ## [0.10.0] : 2026-11-27
 
 **À lire avant la mise à jour** : deux comportements par défaut changent. Le contexte des incidents (alertes brutes)

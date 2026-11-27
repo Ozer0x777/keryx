@@ -41,5 +41,10 @@ def test_indicateurs(app, db, world, alert, settings, monkeypatch):
     assert ind["portail"]["comptes_actifs"] == 1
     assert ind["portail"]["authentifications_par_mois"][-1]["reussies"] >= 1
     assert "non classé" in ind["qualification_par_typologie_h"]
+    # capacité du stockage et disponibilité de l'envoi des notifications (IV.2.1.cc, IV.2.3.k, IV.5.1.e)
+    cap = ind["capacite"]
+    assert cap["base_octets"] > 0 and cap["disque_pieces"]["total_octets"] > 0
+    assert 0 <= cap["disque_pieces"]["remplissage_pourcent"] <= 100 and cap["stockage_objet"] is False
+    assert ind["notifications_par_mois"][-1]["envoyees"] >= 1 and ind["notifications_par_mois"][-1]["reussite_pourcent"] == 100.0
     # pas dans le rapport remis au client
     assert "indicateurs_pdis" not in m.get("/api/v1/reports/period", params={"client": "ACME"}).json()

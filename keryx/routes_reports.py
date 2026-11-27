@@ -120,7 +120,17 @@ def indicateurs_pdis(db, tenants: dict, tickets: list[Ticket], start: datetime, 
     auth = Counter((e.action, e.ts[:7]) for e in db.scalars(select(AuditEntry).where(
         AuditEntry.action.in_(("auth.login_success", "auth.login_failed")), AuditEntry.actor.in_(noms),
         AuditEntry.ts >= rfc3339(start), AuditEntry.ts < rfc3339(end)))) if noms else Counter()
+    # e, g) disponibilité du système d'envoi des notifications : part des envois réussis, par mois
+    envois = Counter((as_utc(n.ts).strftime("%Y-%m"), n.status == "envoye") for n in db.scalars(select(Notification).where(
+        Notification.tenant_id.in_(ids), Notification.ts >= start, Notification.ts < end,
+        Notification.status.in_(("envoye", "echec")))))
+    notifications_par_mois = [{"mois": m, "envoyees": envois.get((m, True), 0), "echecs": envois.get((m, False), 0),
+                               "reussite_pourcent": round(100 * envois.get((m, True), 0)
+                                                          / (envois.get((m, True), 0) + envois.get((m, False), 0)), 1)
+                               if envois.get((m, True), 0) + envois.get((m, False), 0) else None}
+                              for m, _, _ in _mois(start, end)]
     return {
+        "notifications_par_mois": notifications_par_mois,
         "resolution_h": _stats([_hours(t.created_at, t.closed_at) for t in clos]),
         "qualification_par_typologie_h": {k: {g: _mean(v) for g, v in d.items()} for k, d in qualif.items()},
         "detection_notification_min": {c: _stats(v) for c, v in notif.items()},
@@ -133,6 +143,30 @@ def indicateurs_pdis(db, tenants: dict, tickets: list[Ticket], start: datetime, 
                                                     "echouees": auth.get(("auth.login_failed", m), 0)}
                                                    for m, _, _ in _mois(start, end)]},
     }
+
+
+def capacite(db, settings) -> dict:
+    """Stockage des incidents et des notifications (PDIS IV.2.1.cc, IV.2.3.k, IV.5.1.e) : taille de la base, espace
+    du disque des pièces (stockage objet : capacité suivie par son propre outil)."""
+    import os
+    import shutil
+    from sqlalchemy import text
+    base = None
+    try:
+        if db.bind.dialect.name == "sqlite":
+            base = db.execute(text("PRAGMA page_count")).scalar() * db.execute(text("PRAGMA page_size")).scalar()
+        elif db.bind.dialect.name == "postgresql":
+            base = db.execute(text("SELECT pg_database_size(current_database())")).scalar()
+    except Exception:  # noqa: BLE001 - indicateur facultatif : jamais d'erreur du pilotage pour lui
+        base = None
+    disque = None
+    if settings.storage_backend != "s3":
+        os.makedirs(settings.attachments_dir, exist_ok=True)
+        u = shutil.disk_usage(settings.attachments_dir)
+        disque = {"total_octets": u.total, "libre_octets": u.free,
+                  "remplissage_pourcent": round(100 * (u.total - u.free) / u.total, 1) if u.total else None}
+    return {"base_octets": base, "disque_pieces": disque,
+            "stockage_objet": settings.storage_backend == "s3"}
 
 
 def csv_cell(value) -> str:
@@ -217,7 +251,7 @@ def register(app, ctx) -> None:
                        "resolution_hours_avg": _mean([_hours(t.created_at, t.closed_at) for t in closed]),
                        "qualified_count": len(qualified), "closed_count": len(closed)},
             "acquittement": acquittement(created),
-            "indicateurs_pdis": indicateurs_pdis(db, tenants, tickets, start, end),
+            "indicateurs_pdis": {**indicateurs_pdis(db, tenants, tickets, start, end), "capacite": capacite(db, ctx.settings)},
             "sla": {"resolution_within_target": within, "closed": len(closed),
                     "rate_percent": round(100 * within / len(closed)) if closed else None},
             "trend": list(per_day.values()),

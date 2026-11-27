@@ -5,6 +5,7 @@ import { t as tr } from '../i18n.js'
 const h = (v) => (v == null ? '—' : `${v} h`)
 const mn = (v) => (v == null ? '—' : v < 120 ? `${Math.round(v)} min` : `${Math.round(v / 6) / 10} h`)
 const CRIT = ['Critique', 'Élevée', 'Moyenne', 'Faible']
+const mo = (o) => (o == null ? '—' : o < 1048576 ? `${Math.round(o / 1024)} Kio` : o < 1073741824 ? `${Math.round(o / 104857.6) / 10} Mio` : `${Math.round(o / 107374182.4) / 10} Gio`)
 
 function Tableau({ label, head, rows }) {
   return (
@@ -37,6 +38,16 @@ export default function IndicateursPdis({ d }) {
       <h3>{tr('Les 20 règles les plus déclenchées')}</h3>
       <Tableau label={tr('Règles les plus déclenchées')} head={[tr('Règle'), tr('Description'), tr('Alertes')]}
         rows={d.regles_les_plus_declenchees.map((x) => [x.regle, x.description, x.alertes])} />
+      <h3>{tr('Envoi des notifications')}</h3>
+      <Tableau label={tr('Envoi des notifications par mois')} head={[tr('Mois'), tr('Envoyées'), tr('Échecs'), tr('Réussite')]}
+        rows={(d.notifications_par_mois || []).map((m) => [m.mois, m.envoyees, m.echecs, m.reussite_pourcent == null ? '—' : `${m.reussite_pourcent} %`])} />
+      {d.capacite && <>
+        <h3>{tr('Capacité du stockage')}</h3>
+        <p>{tr('Base des tickets et des notifications : {b}.', { b: mo(d.capacite.base_octets) })}{' '}
+          {d.capacite.disque_pieces
+            ? tr('Disque des pièces : {p} % rempli, {l} libres sur {t}.', { p: d.capacite.disque_pieces.remplissage_pourcent, l: mo(d.capacite.disque_pieces.libre_octets), t: mo(d.capacite.disque_pieces.total_octets) })
+            : tr('Pièces en stockage objet : capacité suivie par son propre outil.')}</p>
+      </>}
       <h3>{tr('Portail des clients')}</h3>
       <p>{tr('{n} compte(s) Client actif(s).', { n: d.portail.comptes_actifs })}</p>
       <Tableau label={tr('Comptes et authentifications du portail')} head={[tr('Mois'), tr('Comptes créés'), tr('Connexions réussies'), tr('Connexions échouées')]}
