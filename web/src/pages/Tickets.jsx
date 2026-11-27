@@ -5,9 +5,9 @@ import { useAuth } from '../App.jsx'
 import { Severity, Status, Tlp } from '../components/Badges.jsx'
 import { useConfirm } from '../components/Confirm.jsx'
 import Pager from '../components/Pager.jsx'
-import { utcClock } from '../dates.js'
+import { dureeLisible, utcClock } from '../dates.js'
 import { t as tr } from '../i18n.js'
-import { MITRE_SOURCE, STATUS } from '../labels.js'
+import { STATUS } from '../labels.js'
 import {
   cardActive, cardPatch, DEFAULTS, filtersFromSearch, filtersToSearch, OPEN_STATUSES, pageInfo, PER_PAGE, rememberQueue,
   SEVERITIES, TO_QUALIFY,
@@ -20,22 +20,53 @@ const VIEWS = [['Tous', ''], ['Mes tickets', 'me'], ['Non assignés', 'none']]
 // Les nombres viennent du point d'API de comptage (/tickets/counts), calculés par le serveur sur tous les tickets
 // visibles : le relevé de la file ne recharge plus 500 tickets pour les compter.
 const CARDS = [
+  { label: 'Critiques non assignés', hint: 'ouverts, personne dessus', patch: { critical_unassigned: true }, count: (c) => c.critical_unassigned, hot: true },
+  { label: 'En retard', hint: 'échéance dépassée', patch: { overdue: true }, count: (c) => c.overdue, hot: true },
   { label: 'À qualifier', hint: 'nouveaux ou en évaluation', patch: { status: TO_QUALIFY }, count: (c) => c.by_status.nouveau + c.by_status.en_evaluation },
   { label: 'En réponse', hint: 'confinement / éradication', patch: { status: 'en_reponse' }, count: (c) => c.by_status.en_reponse },
   { label: 'Critiques ouverts', hint: 'gravité ou criticité', patch: { status: OPEN_STATUSES, severity: 'Critique' }, count: (c) => c.open_by_severity.Critique },
-  { label: 'En retard', hint: 'échéance dépassée', patch: { overdue: true }, count: (c) => c.overdue },
   { label: 'REX en attente', hint: 'obligatoire si Élevée ou Critique', patch: { rex_en_attente: true }, count: (c) => c.rex_en_attente },
 ]
 // Vues de priorisation (ADR-0025) : ce qui demande une action de l'équipe. Chacune a son propre critère, calculé par le
 // serveur ; aucune ne modifie la vue d'assigné (Tous, Mes tickets, Non assignés).
 const PRIORITIES = [
-  { label: 'Critiques non assignés', hint: 'ouverts, personne dessus', patch: { critical_unassigned: true }, count: (c) => c.critical_unassigned },
   { label: 'En attente du client', hint: 'sa réponse n\'est pas arrivée', patch: { awaiting_client: true }, count: (c) => c.awaiting_client },
   { label: 'Dossiers incomplets', hint: 'gravité, assigné ou synthèse manquants', patch: { incomplete: true }, count: (c) => c.incomplete },
 ]
 
 // Date de détection sans le suffixe « UTC » (il est dans l'en-tête de colonne) : la colonne reste étroite.
 const utcShort = (iso) => (iso ? iso.replace('T', ' ').slice(0, 16) : '—')
+const ago = (iso) => (iso ? tr('il y a {d}', { d: dureeLisible((Date.now() - new Date(iso).getTime()) / 1000) }) : '')
+const DEFAULT_TLP = 'TLP:AMBER'          // marquage d'un client sans plancher
+
+// Échéance la plus proche (qualification ou résolution) : temps restant, en couleur ; dépassée en rouge.
+export function Echeance({ t }) {
+  const cands = [['qualifier', t.due_qualification], ['résoudre', t.due_resolution]].filter(([, d]) => d)
+  if (!cands.length) return <span className="sla none">—</span>
+  const [what, due] = cands.reduce((a, b) => (a[1] <= b[1] ? a : b))
+  const left = (new Date(due).getTime() - Date.now()) / 1000
+  const cls = left < 0 ? 'late' : left < 2 * 3600 ? 'warn' : 'ok'
+  const text = left < 0 ? tr('{w} : dépassée de {d}', { w: tr(what), d: dureeLisible(-left) }) : tr('{w} : {d}', { w: tr(what), d: dureeLisible(left) })
+  return <span className={`sla ${cls}`} title={`${tr(what)} ${tr('avant')} ${due.replace('T', ' ').slice(0, 16)} UTC`}>{text}</span>
+}
+
+// Assigné en initiales (nom complet en infobulle et pour les lecteurs d'écran) ; cercle en pointillé si personne.
+function Avatar({ name }) {
+  if (!name) return <span className="av empty" title={tr('Non assigné')}><span aria-hidden="true">?</span><span className="sr-only">{tr('Non assigné')}</span></span>
+  const ini = name.split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase()
+  return <span className="av" title={name}><span aria-hidden="true">{ini}</span><span className="sr-only">{name}</span></span>
+}
+
+// Contexte sous le titre : agent, adresse, client (si plusieurs) ; TLP seulement s'il diffère du plancher du client.
+function Contexte({ t, multi }) {
+  const tlpDiff = t.tlp !== (t.tlp_plancher || DEFAULT_TLP)
+  return (
+    <span className="ctx">
+      {[t.agent_name, t.agent_ip, multi ? t.client : null].filter(Boolean).join(' · ')}
+      {tlpDiff && <> <Tlp value={t.tlp} /></>}
+    </span>
+  )
+}
 
 function SortHeader({ label, col, filters, set, className }) {
   const on = filters.sort === col
@@ -53,7 +84,7 @@ function SortHeader({ label, col, filters, set, className }) {
 function StatCard({ c, counts, filters, set }) {
   const on = cardActive(filters, c.patch)
   return (
-    <button type="button" className={`card stat stat-filter${on ? ' on' : ''}`} aria-pressed={on}
+    <button type="button" className={`card stat stat-filter${on ? ' on' : ''}${c.hot && counts && c.count(counts) > 0 ? ' hot' : ''}`} aria-pressed={on}
       onClick={() => set(cardPatch(on ? {} : c.patch))}>
       <span className="stat-label">{tr(c.label)}</span>
       <strong>{counts ? c.count(counts) : '…'}</strong>
@@ -66,7 +97,11 @@ export default function Tickets() {
   const { me } = useAuth()
   const isClient = me.role === 'client'
   const [search, setSearch] = useSearchParams()
-  const filters = useMemo(() => filtersFromSearch(search), [search])
+  // Équipe : la file est triée par échéance tant qu'aucun tri n'est choisi ; le client garde le tri par date.
+  const filters = useMemo(() => {
+    const f = filtersFromSearch(search)
+    return !isClient && !search.has('sort') ? { ...f, sort: 'echeance', order: 'asc' } : f
+  }, [search, isClient])
   const [items, setItems] = useState(null)
   const [counts, setCounts] = useState(null) // synthèse : compteurs de tous les tickets visibles, indépendants des filtres
   const [total, setTotal] = useState(0)
@@ -91,10 +126,11 @@ export default function Tickets() {
   const key = search.toString()
   const params = useMemo(() => {
     const f = filtersFromSearch(key)
+    if (!isClient && !new URLSearchParams(key).has('sort')) { f.sort = 'echeance'; f.order = 'asc' }   // tri par défaut de l'équipe
     return { ...f, rex_en_attente: f.rex_en_attente || undefined, overdue: f.overdue || undefined,
       critical_unassigned: f.critical_unassigned || undefined, awaiting_client: f.awaiting_client || undefined,
       incomplete: f.incomplete || undefined, limit: Number(f.per_page), offset: (Number(f.page) - 1) * Number(f.per_page) }
-  }, [key])
+  }, [key, isClient])
 
   // Relevé de la liste (premier affichage, changement de filtre, bouton, minuterie). La liste affichée reste en place
   // pendant le relevé et la sélection est conservée ; une réponse dépassée par une plus récente est ignorée.
@@ -195,7 +231,7 @@ export default function Tickets() {
     ...Object.entries(STATUS).map(([k, v]) => [k, v.label]),
   ]
   const multi = me.clients.length > 1
-  const cols = (isClient ? 9 : 11) + (multi ? 1 : 0)
+  const cols = isClient ? 9 + (multi ? 1 : 0) : 10
   return (
     <>
       <header className="page-head">
@@ -215,11 +251,8 @@ export default function Tickets() {
 
       {!isClient && (
         <>
-          <section className="stats" aria-label={tr('Synthèse : filtres rapides')}>
-            {CARDS.map((c) => <StatCard key={c.label} c={c} counts={counts} filters={filters} set={set} />)}
-          </section>
-          <section className="stats stats-priority" aria-label={tr('À traiter en priorité')}>
-            {PRIORITIES.map((c) => <StatCard key={c.label} c={c} counts={counts} filters={filters} set={set} />)}
+          <section className="stats stats-row" aria-label={tr('Synthèse : filtres rapides')}>
+            {[...CARDS, ...PRIORITIES].map((c) => <StatCard key={c.label} c={c} counts={counts} filters={filters} set={set} />)}
           </section>
         </>
       )}
@@ -304,36 +337,61 @@ export default function Tickets() {
         <table className="grid queue">
           <thead>
             <tr>
-              {!isClient && <th scope="col" className="pick"><input ref={selectAll} type="checkbox" aria-label={tr('Sélectionner tous les tickets affichés')} checked={allPicked} disabled={pageRefs.length === 0} onChange={toggleAll} /></th>}
-              <SortHeader label={tr('Réf.')} col="ref" filters={filters} set={set} /><th scope="col">{tr('Titre')}</th>
-              {multi && <th scope="col">{tr('Client')}</th>}
-              <SortHeader label={tr('Criticité')} col="criticite" filters={filters} set={set} />
-              <SortHeader label={tr('Gravité')} col="gravite" filters={filters} set={set} />
-              <SortHeader label={tr('Statut')} col="status" filters={filters} set={set} />
-              <th scope="col">{tr('MITRE')}</th>
-              {!isClient && <th scope="col">{tr('Assigné')}</th>}
-              <SortHeader label={tr('Détecté (UTC)')} col="detected" filters={filters} set={set} /><th scope="col">{tr("TLP")}</th>
-              <SortHeader label={tr('Occur.')} col="occurrences" filters={filters} set={set} className="num" />
+              {isClient ? (<>
+                <SortHeader label={tr('Réf.')} col="ref" filters={filters} set={set} /><th scope="col">{tr('Titre')}</th>
+                {multi && <th scope="col">{tr('Client')}</th>}
+                <SortHeader label={tr('Criticité')} col="criticite" filters={filters} set={set} />
+                <SortHeader label={tr('Gravité')} col="gravite" filters={filters} set={set} />
+                <SortHeader label={tr('Statut')} col="status" filters={filters} set={set} />
+                <th scope="col">{tr('MITRE')}</th>
+                <SortHeader label={tr('Détecté (UTC)')} col="detected" filters={filters} set={set} /><th scope="col">{tr("TLP")}</th>
+                <SortHeader label={tr('Occur.')} col="occurrences" filters={filters} set={set} className="num" />
+              </>) : (<>
+                {/* Équipe : contexte sous le titre, règle, criticité, gravité, occurrences, statut, échéance, assigné. */}
+                <th scope="col" className="pick"><input ref={selectAll} type="checkbox" aria-label={tr('Sélectionner tous les tickets affichés')} checked={allPicked} disabled={pageRefs.length === 0} onChange={toggleAll} /></th>
+                <SortHeader label={tr('Réf.')} col="ref" filters={filters} set={set} /><th scope="col">{tr('Incident')}</th>
+                <th scope="col">{tr('Règle')}</th>
+                <SortHeader label={tr('Criticité')} col="criticite" filters={filters} set={set} />
+                <SortHeader label={tr('Gravité')} col="gravite" filters={filters} set={set} />
+                <SortHeader label={tr('Occur.')} col="occurrences" filters={filters} set={set} className="num" />
+                <SortHeader label={tr('Statut')} col="status" filters={filters} set={set} />
+                <SortHeader label={tr('Échéance')} col="echeance" filters={filters} set={set} />
+                <th scope="col"><span className="sr-only">{tr('Assigné')}</span></th>
+              </>)}
             </tr>
           </thead>
           <tbody>
             {items === null && <tr><td colSpan={cols} className="muted">{tr('Chargement…')}</td></tr>}
             {items?.length === 0 && <tr><td colSpan={cols} className="muted">{tr('Aucun ticket ne correspond.')} <button type="button" className="link" onClick={() => apply(DEFAULTS)}>{tr('Retirer tous les filtres')}</button></td></tr>}
             {items?.map((t) => (
-              <tr key={t.ref} className={t.overdue ? 'overdue' : ''}>
-                {!isClient && <td className="pick"><input type="checkbox" aria-label={tr('Sélectionner {ref}', { ref: t.ref })} checked={picked.has(t.ref)} onChange={() => toggle(t.ref)} /></td>}
+              isClient ? (
+              <tr key={t.ref}>
                 <td className="mono"><Link to={`/tickets/${encodeURIComponent(t.ref)}`}>{t.ref}</Link></td>
-                <td className="strong title-cell">{t.title}{t.overdue && <span className="pill danger" style={{ marginLeft: 8 }}>{tr('En retard')}</span>}{t.crisis && <span className="pill danger" style={{ marginLeft: 8 }}>{tr("CRISE")}</span>}</td>
+                <td className="strong title-cell">{t.title}</td>
                 {multi && <td className="mono small" title={t.client}>{t.client_key}</td>}
                 <td><Severity value={t.criticite_initiale} /></td>
                 <td><Severity value={t.gravite} /></td>
-                <td><Status value={t.status} />{t.rex_en_attente && <span className="pill warn">{tr("REX")}</span>}</td>
-                <td title={`${tr('Source')} : ${MITRE_SOURCE[t.mitre_source]}`}><span className="mono">{t.mitre.join(', ') || '—'}</span></td>
-                {!isClient && <td>{t.assignee || '—'}</td>}
+                <td><Status value={t.status} /></td>
+                <td><span className="mono">{t.mitre.join(', ') || '—'}</span></td>
                 <td className="mono small">{utcShort(t.detected_at)}</td>
                 <td><Tlp value={t.tlp} /></td>
                 <td className="num mono">{t.occurrences}</td>
               </tr>
+              ) : (
+              <tr key={t.ref} className={t.overdue ? 'overdue' : ''}>
+                <td className="pick"><input type="checkbox" aria-label={tr('Sélectionner {ref}', { ref: t.ref })} checked={picked.has(t.ref)} onChange={() => toggle(t.ref)} /></td>
+                <td className="mono"><Link to={`/tickets/${encodeURIComponent(t.ref)}`}>{t.ref}</Link></td>
+                <td className="title-cell"><span className="strong">{t.title}</span>{t.crisis && <> <span className="pill danger">{tr("CRISE")}</span></>}{t.rex_en_attente && <> <span className="pill warn">{tr("REX")}</span></>}
+                  <Contexte t={t} multi={multi} /></td>
+                <td><span className="rule-chip mono">{t.rule_id || '—'}</span></td>
+                <td><Severity value={t.criticite_initiale} /></td>
+                <td>{t.gravite ? <Severity value={t.gravite} /> : <span className="muted">—</span>}</td>
+                <td className="num"><span className="mono">{t.occurrences}</span><span className="occ-last">{ago(t.last_seen_at)}</span></td>
+                <td><Status value={t.status} /></td>
+                <td><Echeance t={t} /></td>
+                <td><Avatar name={t.assignee} /></td>
+              </tr>
+              )
             ))}
           </tbody>
         </table>

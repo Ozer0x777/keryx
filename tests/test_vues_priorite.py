@@ -84,3 +84,16 @@ def test_vues_reservees_a_l_equipe(app, db, world, alert):
     assert c.get("/api/v1/tickets", params={"incomplete": "true"}).status_code == 403
     assert c.get("/api/v1/tickets", params={"critical_unassigned": "true"}).status_code == 403
     assert c.get("/api/v1/tickets").status_code == 200
+
+
+def test_tri_par_echeance_et_contexte(app, db, world, alert):
+    """File de l'équipe triée par échéance : le critique (cible la plus courte) d'abord ; règle, agent et plancher TLP
+    renvoyés pour la ligne de contexte ; tri refusé au client (échéances internes)."""
+    trois_tickets(app, world, alert)
+    a = login(app, db, "analyst_acme")
+    items = a.get("/api/v1/tickets", params={"sort": "echeance", "order": "asc"}).json()["items"]
+    assert items[0]["ref"] == "ACME-3"
+    dues = [min(d for d in (i["due_qualification"], i["due_resolution"]) if d) for i in items]
+    assert dues == sorted(dues)
+    assert {"rule_id", "agent_name", "agent_ip", "tlp_plancher"} <= set(items[0])
+    assert login(app, db, "client_acme").get("/api/v1/tickets", params={"sort": "echeance"}).status_code == 403

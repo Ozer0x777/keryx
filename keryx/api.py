@@ -733,8 +733,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def ticket_summary(t: Ticket, tenants: dict[str, Tenant], users: dict[str, User] | None = None,
                        with_sla: bool = True) -> dict[str, Any]:
         out = _ticket_summary(t, tenants, users)
-        if with_sla:  # échéances internes : jamais montrées au client
+        if with_sla:  # échéances et politique internes : jamais montrées au client
             out.update(sla_state(t, tenants.get(t.tenant_id)))
+            # Plancher TLP du client : la file de l'équipe ne montre le marquage que s'il en diffère.
+            out["tlp_plancher"] = tenants[t.tenant_id].tlp_plancher if t.tenant_id in tenants else None
         return out
 
     def _ticket_summary(t: Ticket, tenants: dict[str, Tenant], users: dict[str, User] | None = None) -> dict[str, Any]:
@@ -746,6 +748,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "tlp": t.tlp, "mitre": [m["id"] for m in t.mitre], "mitre_source": t.mitre_source,
             "occurrences": t.occurrences, "detected_at": rfc3339(t.detected_at),
             "last_seen_at": rfc3339(t.last_seen_at),
+            # Contexte affiché sous le titre dans la file.
+            "rule_id": t.rule_id, "agent_name": t.agent_name, "agent_ip": t.agent_ip,
             "assignee": (users or {}).get(t.assignee_id).display_name if users and t.assignee_id in users else None,
             "rex_en_attente": rex_pending(t.status, t.rex_required), "crisis": t.crisis,
         }
@@ -789,11 +793,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         en évaluation) ; `severity` filtre sur la gravité qualifiée ou, à défaut, sur la criticité initiale ; les tris
         `criticite` et `gravite` suivent l'ordre métier Critique > Élevée > Moyenne > Faible, pas l'ordre alphabétique.
         `critical_unassigned`, `awaiting_client` et `incomplete` : vues de priorisation de l'équipe (ADR-0025), refusées
-        au client."""
+        au client. Tri `echeance` (équipe seulement) : échéance de qualification ou de résolution la plus proche d'abord,
+        dépassées en tête, tickets sans échéance (clos) à la fin."""
         limit, offset = max(1, min(limit, 500)), max(0, offset)
         if user.role == "admin":
             raise HTTPException(403, "Le rôle Admin n'a pas accès au contenu des tickets.")
-        if (awaiting_client or incomplete or critical_unassigned) and user.role == "client":
+        if (awaiting_client or incomplete or critical_unassigned or sort == "echeance") and user.role == "client":
             raise HTTPException(403, "Ces vues sont réservées à l'équipe du SOC.")
         tenants = {t.id: t for t in user.tenants}
         ids = list(tenants)
@@ -804,11 +809,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         sort_cols = {"created": Ticket.created_at, "updated": Ticket.updated_at, "detected": Ticket.detected_at,
                      "ref": Ticket.seq, "status": Ticket.status, "occurrences": Ticket.occurrences,
                      "criticite": rank(Ticket.criticite_initiale), "gravite": rank(Ticket.gravite)}
-        if sort not in sort_cols or order not in ("asc", "desc"):
-            raise HTTPException(422, f"Tri attendu parmi : {', '.join(sort_cols)} ; ordre asc ou desc.")
+        if (sort not in sort_cols and sort != "echeance") or order not in ("asc", "desc"):
+            raise HTTPException(422, f"Tri attendu parmi : {', '.join([*sort_cols, 'echeance'])} ; ordre asc ou desc.")
         if severity and severity not in SEVERITIES:
             raise HTTPException(422, f"Gravité attendue parmi : {', '.join(SEVERITIES)}.")
-        col = sort_cols[sort]
+        col = sort_cols.get(sort, Ticket.created_at)
         query = select(Ticket).where(Ticket.tenant_id.in_(ids)).order_by(col.asc() if order == "asc" else col.desc(),
                                                                        Ticket.id.desc())
         statuses = [s.strip() for s in (status or "").split(",") if s.strip()]
@@ -843,9 +848,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 cq = cq.where(Comment.visible_client.is_(True))
             conds.append(Ticket.id.in_(cq))
             query = query.where(or_(*conds))
-        if overdue and user.role != "client":
-            open_t = [t for t in db.scalars(query).all() if sla_state(t, tenants.get(t.tenant_id))["overdue"]]
-            total, tickets = len(open_t), open_t[offset:offset + limit]
+        if sort == "echeance" or (overdue and user.role != "client"):
+            # Échéances calculées par client (cibles propres à chacun) : tri et filtre faits ici, puis la page.
+            rows = []
+            for t in db.scalars(query).all():
+                st = sla_state(t, tenants.get(t.tenant_id))
+                if overdue and not st["overdue"]:
+                    continue
+                dues = [d for d in (st["due_qualification"], st["due_resolution"]) if d]
+                rows.append((min(dues) if dues else None, t))
+            if sort == "echeance":
+                pending = sorted((r for r in rows if r[0]), key=lambda r: r[0], reverse=(order == "desc"))
+                rows = pending + [r for r in rows if not r[0]]
+            total, tickets = len(rows), [t for _, t in rows[offset:offset + limit]]
         else:
             total = db.scalar(select(func.count()).select_from(query.order_by(None).subquery()))
             tickets = db.scalars(query.limit(limit).offset(offset)).all()
