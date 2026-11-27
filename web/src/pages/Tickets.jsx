@@ -182,8 +182,16 @@ export default function Tickets() {
   }, [isClient])
 
   // Un filtre, un tri ou une vue qui change ramène à la première page ; changer de page garde l'historique (Précédent).
-  const apply = (next) => { setPicked(new Set()); setMsg(''); setSearch(filtersToSearch({ ...next, page: '1' }), { replace: true }) }
-  const goPage = (page) => { setPicked(new Set()); setMsg(''); setSearch(filtersToSearch({ ...filters, page: String(page) })) }
+  // Le tri par défaut de l'équipe (échéance, ordre croissant) n'est pas écrit dans l'URL : sans filtre, l'URL reste vide.
+  const base = isClient ? DEFAULTS : { ...DEFAULTS, sort: 'echeance', order: 'asc' }
+  const toSearch = (f) => {
+    const out = filtersToSearch(f)
+    if (!isClient && f.sort === 'echeance' && f.order === 'asc') { delete out.sort; delete out.order }
+    else if (!isClient && f.sort === DEFAULTS.sort && f.order === DEFAULTS.order) { out.sort = f.sort }   // choix explicite
+    return out
+  }
+  const apply = (next) => { setPicked(new Set()); setMsg(''); setSearch(toSearch({ ...next, page: '1' }), { replace: true }) }
+  const goPage = (page) => { setPicked(new Set()); setMsg(''); setSearch(toSearch({ ...filters, page: String(page) })) }
   const pages = pageInfo(total, filters.page, filters.per_page)
   const set = (patch) => apply({ ...filters, ...patch })
 
@@ -266,7 +274,7 @@ export default function Tickets() {
           {saved.length > 0 && <span className="muted small">{tr('Filtres :')}</span>}
           {saved.map((f) => (
             <span key={f.id} className="vchip saved">
-              <button type="button" className="link" onClick={() => apply({ ...DEFAULTS, ...f.params })}>{f.name}</button>
+              <button type="button" className="link" onClick={() => apply({ ...base, ...f.params })}>{f.name}</button>
               <button type="button" className="x" aria-label={tr('Supprimer le filtre {name}', { name: f.name })} onClick={() => dropFilter(f)}>×</button>
             </span>
           ))}
@@ -300,7 +308,7 @@ export default function Tickets() {
           </label>
         )}
         <div className="row gap">
-          <button type="button" onClick={() => apply(DEFAULTS)}>{tr('Réinitialiser')}</button>
+          <button type="button" onClick={() => apply(base)}>{tr('Réinitialiser')}</button>
           {!isClient && <button type="button" onClick={saveFilter}>{tr('Enregistrer ce filtre')}</button>}
         </div>
       </section>
@@ -362,7 +370,7 @@ export default function Tickets() {
           </thead>
           <tbody>
             {items === null && <tr><td colSpan={cols} className="muted">{tr('Chargement…')}</td></tr>}
-            {items?.length === 0 && <tr><td colSpan={cols} className="muted">{tr('Aucun ticket ne correspond.')} <button type="button" className="link" onClick={() => apply(DEFAULTS)}>{tr('Retirer tous les filtres')}</button></td></tr>}
+            {items?.length === 0 && <tr><td colSpan={cols} className="muted">{tr('Aucun ticket ne correspond.')} <button type="button" className="link" onClick={() => apply(base)}>{tr('Retirer tous les filtres')}</button></td></tr>}
             {items?.map((t) => (
               isClient ? (
               <tr key={t.ref}>

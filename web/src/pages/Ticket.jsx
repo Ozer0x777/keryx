@@ -79,17 +79,61 @@ function ClockNote({ delay }) {
 }
 
 // Échéance de l'en-tête : la date (UTC) et le temps restant ou dépassé, recalculé chaque minute.
-function Deadline({ label, iso }) {
+function Deadline({ label, iso, start }) {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(id) }, [])
   const d = untilUtc(iso, now)
   const span = d.days ? tr('{d} j {h} h', { d: d.days, h: d.hours }) : d.hours ? tr('{h} h {m} min', { h: d.hours, m: String(d.minutes).padStart(2, '0') }) : tr('{m} min', { m: d.minutes })
+  // Barre : part du délai déjà écoulée depuis la réception du ticket ; orange au dernier quart, rouge une fois dépassée.
+  const total = start ? new Date(iso).getTime() - new Date(start).getTime() : 0
+  const used = total > 0 ? Math.min(1, Math.max(0, (now - new Date(start).getTime()) / total)) : null
   return (
-    <div className={d.late ? 'late' : ''}>
+    <div className={`deadline${d.late ? ' late' : used !== null && used > 0.75 ? ' near' : ''}`}>
       <dt>{label}</dt>
       <dd><span className="mono">{formatUtc(iso)}</span>{' '}
-        {d.late ? <span className="pill danger">{tr('Dépassée depuis {d}', { d: span })}</span> : <span className="muted">{tr('dans {d}', { d: span })}</span>}</dd>
+        {d.late ? <span className="pill danger">{tr('Dépassée depuis {d}', { d: span })}</span> : <span className="muted">{tr('dans {d}', { d: span })}</span>}
+        {used !== null && <span className="dl-bar" aria-hidden="true"><i style={{ width: `${Math.round(used * 100)}%` }} /></span>}</dd>
     </div>
+  )
+}
+
+// « Pour avancer » : ce qui manque pour l'étape suivante, d'après les règles déjà vérifiées par le serveur (cycle de vie
+// et dossiers incomplets). Chaque point mène au champ. Rien n'est inventé : un ticket clos n'affiche rien.
+const VRAI_POSITIF = ['vrai_positif_avere', 'vrai_positif_non_avere']
+function NextSteps({ t, goTo }) {
+  const s = t.synthese || {}
+  const items = []
+  const add = (ok, label, tab, section, action) => items.push({ ok, label, tab, section, action })
+  if (['nouveau', 'en_evaluation', 'en_reponse'].includes(t.status)) add(Boolean(t.assignee), tr('Ticket assigné'), 'general', 'Affectation', tr('Assigner'))
+  if (t.status === 'en_evaluation' || t.status === 'nouveau') {
+    add(Boolean(t.verdict), tr('Verdict qualifié'), 'general', 'Qualification', tr('Qualifier'))
+    if (!t.verdict || VRAI_POSITIF.includes(t.verdict)) add(Boolean(t.gravite), tr('Gravité retenue'), 'general', 'Qualification', tr('Retenir'))
+    add(t.mitre.length > 0, tr('Technique MITRE'), 'investigation', 'MITRE ATT&CK', tr('Ajouter'))
+  }
+  if (t.status === 'en_reponse') {
+    add(Boolean(t.gravite), tr('Gravité retenue'), 'general', 'Qualification', tr('Retenir'))
+    add(Boolean(s.chronologie && s.mode_operatoire && s.perimetre), tr('Synthèse : chronologie, mode opératoire, périmètre'), 'rex', "Synthèse de l'incident et retour d'expérience", tr('Rédiger'))
+  }
+  if (t.status === 'cloture' && t.rex_required) add(Boolean(s.rex_html), tr("Retour d'expérience (obligatoire)"), 'rex', "Synthèse de l'incident et retour d'expérience", tr('Rédiger'))
+  if (!items.length) return null
+  const rule = { nouveau: tr("Passer en évaluation ne demande rien d'autre."),
+    en_evaluation: tr('Passer en réponse exige un vrai positif ; clore en faux positif exige le verdict faux positif et un motif.'),
+    en_reponse: tr('Dossier complet : gravité, assigné et synthèse (liste « Dossiers incomplets »).'),
+    cloture: tr("Le retour d'expérience est obligatoire pour un incident Élevé ou Critique.") }[t.status]
+  return (
+    <section className="card section next-steps" aria-label={tr('Pour avancer')}>
+      <h2>{tr('Pour avancer')}</h2>
+      <ul className="check-list">
+        {items.map((x) => (
+          <li key={x.label} className={x.ok ? 'ok' : ''}>
+            <span className="mark" aria-hidden="true">{x.ok ? '✓' : '○'}</span>
+            <span>{x.label}<span className="sr-only"> : {x.ok ? tr('fait') : tr('à faire')}</span></span>
+            {!x.ok && <button type="button" className="link strong" onClick={() => goTo(x.tab, x.section)}>{x.action}</button>}
+          </li>
+        ))}
+      </ul>
+      {rule && <p className="field-hint">{rule}</p>}
+    </section>
   )
 }
 
@@ -133,6 +177,17 @@ export default function Ticket() {
     setParams((p) => { const n = new URLSearchParams(p); if (id === 'general') n.delete('onglet'); else n.set('onglet', id); return n }, { replace: true })
     if (window.scrollY > 0) window.scrollTo({ top: 0 })   // le nouvel onglet se lit depuis son début
   }, [setParams])
+  // Mène à un panneau : son onglet, puis le panneau déplié, amené à l'écran et son premier champ en focus.
+  const goTo = useCallback((tabId, label) => {
+    selectTab(tabId)
+    setTimeout(() => {
+      const sec = document.querySelector(`section[aria-label="${label}"]`)
+      if (!sec) return
+      const det = sec.querySelector(':scope > details'); if (det && !det.open) det.open = true
+      sec.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      sec.querySelector('select, input, textarea, [contenteditable=true], button:not(summary *)')?.focus({ preventScroll: true })
+    }, 60)
+  }, [selectTab])
 
   // Saisies non enregistrées : indicateur de l'en-tête et garde-fou de sortie (ADR-0024).
   const unsaved = useUnsavedRegistry()
@@ -198,31 +253,46 @@ export default function Ticket() {
       <header className="ticket-head">
         <div className="grow">
           <h1>{t.title}</h1>
-          <div className="row wrap gap">
+          {/* Ligne 2 : étiquettes ; ligne 3 : faits (détection, réception, règle qui a créé le ticket, occurrences, agent). */}
+          <div className="row wrap gap head-tags">
             <Status value={t.status} />
             <Severity value={t.criticite_initiale} prefix={tr("Criticité initiale : ")} />
-            {t.gravite && <Severity value={t.gravite} prefix={tr("Gravité : ")} />}
+            {t.gravite ? <Severity value={t.gravite} prefix={tr("Gravité : ")} /> : isTeam && <span className="pill">{tr('Gravité : à qualifier')}</span>}
             <Tlp value={t.tlp} />
-            <span className="muted small">{tr('Détecté {when} · règle Wazuh {rule} (niveau {level}) · {n} occurrence(s)', { when: formatUtc(t.detected_at), rule: t.rule.id, level: t.rule.level, n: t.occurrences })}</span>
-            <ClockNote delay={t.reception_delay_s} />
+            {t.crisis && <span className="pill danger strong">{tr('CRISE')}</span>}
           </div>
+          <p className="head-facts muted small">
+            <span>{tr('Détecté {when}', { when: formatUtc(t.detected_at) })}</span>
+            <span>{tr('créé par la règle {rule} (niveau {level})', { rule: t.rule.id, level: t.rule.level })}</span>
+            <span>{tr('{n} occurrence(s)', { n: t.occurrences })}{t.occurrences > 1 && t.last_seen_at ? `, ${tr('la dernière {when}', { when: formatUtc(t.last_seen_at) })}` : ''}</span>
+            {t.agent?.name && <span>{tr('agent')} <span className="mono">{[t.agent.id, t.agent.name, t.agent.ip].filter(Boolean).join(' ')}</span></span>}
+            <ClockNote delay={t.reception_delay_s} />
+          </p>
         </div>
         {isTeam && (
-          <div className="row wrap gap ticket-actions">
-            <Link to={`/tickets/${enc}/rapport`} className="btn-link">{tr("Rapport imprimable")}</Link>
-            {/* Lien calculé par le serveur pour l'équipe seulement (absent pour le client) ; HTTPS exigé ici aussi. */}
-            {t.wazuh?.alert_url?.startsWith('https://') && (
-              <a className="btn-link" href={t.wazuh.alert_url} target="_blank" rel="noopener noreferrer">
-                {tr("Ouvrir l'alerte dans Wazuh")}<span aria-hidden="true"> ↗</span><span className="sr-only"> {tr("(nouvel onglet)")}</span>
-              </a>
-            )}
-            <button type="button" onClick={exportIodef}>{tr("Exporter (IODEF JSON)")}</button>
+          <div className="ticket-actions">
+            {/* Rapports, Wazuh et IODEF dans un menu : le seul bouton bleu de la fiche reste l'étape suivante. */}
+            <details className="menu">
+              <summary className="btn-link">{tr('Actions')} <span aria-hidden="true">▾</span></summary>
+              <div className="menu-list">
+                <Link to={`/tickets/${enc}/rapport`} className="menu-item">{tr("Rapport imprimable")}</Link>
+                <Link to={`/tickets/${enc}/rapport-analyse`} className="menu-item">{tr("Rapport d'analyse")}</Link>
+                <Link to={`/tickets/${enc}/point-situation`} className="menu-item">{tr('Point de situation')}</Link>
+                {/* Lien calculé par le serveur pour l'équipe seulement (absent pour le client) ; HTTPS exigé ici aussi. */}
+                {t.wazuh?.alert_url?.startsWith('https://') && (
+                  <a className="menu-item" href={t.wazuh.alert_url} target="_blank" rel="noopener noreferrer">
+                    {tr("Ouvrir l'alerte dans Wazuh")}<span aria-hidden="true"> ↗</span><span className="sr-only"> {tr("(nouvel onglet)")}</span>
+                  </a>
+                )}
+                <button type="button" onClick={exportIodef}>{tr("Exporter (IODEF JSON)")}</button>
+              </div>
+            </details>
           </div>
         )}
         {isTeam && (
           <dl className="ticket-facts">
-            {t.due_qualification && <Deadline label={tr("Qualifier avant")} iso={t.due_qualification} />}
-            {t.due_resolution && <Deadline label={tr("Résoudre avant")} iso={t.due_resolution} />}
+            {t.due_qualification && <Deadline label={tr("Qualifier avant")} iso={t.due_qualification} start={t.received_at} />}
+            {t.due_resolution && <Deadline label={tr("Résoudre avant")} iso={t.due_resolution} start={t.received_at} />}
             <div>
               <dt>{tr('Assigné à')}</dt>
               <dd>{t.assignee
@@ -245,7 +315,7 @@ export default function Ticket() {
       {dialog}
       {t.rex_en_attente && <p className="banner warn">{tr("Incident {sev} clôturé : le retour d'expérience est obligatoire (section Synthèse).", { sev: tr(t.gravite || t.criticite_initiale) })}</p>}
 
-      {t.crisis && <p className="banner danger" role="status">{tr("MODE CRISE actif sur ce ticket : toute décision et toute action sont consignées dans le registre de crise.")}</p>}
+      {t.crisis && <p className="sr-only" role="status">{tr("MODE CRISE actif sur ce ticket : toute décision et toute action sont consignées dans le registre de crise.")}</p>}
       <PhaseContext.Provider value={phase}>
       <UnsavedProvider value={unsaved.report}>
       {isTeam ? (
@@ -283,6 +353,7 @@ export default function Ticket() {
                 <Description t={t} enc={enc} canEdit={open} run={run} onImage={uploadImage} alertMerged={alertMerged} />
               </div>
               <aside className="ticket-aside" aria-label={tr("Pilotage du ticket")}>
+                <NextSteps t={t} goTo={goTo} />
                 <Qualification t={t} enc={enc} run={run} open={open} />
                 <Assignment t={t} enc={enc} run={run} open={open} />
                 <Links t={t} enc={enc} run={run} open={open} />
@@ -793,7 +864,10 @@ function Qualification({ t, enc, run, open }) {
         </label>
       </div>
       {t.severity_hint && open && (
-        <p className="muted small" data-testid="severity-hint">{tr("Selon l'importance « {imp} » de l'équipement : dommages limités → {a}, significatifs → {b}, graves → {c} (grille du client). La gravité est fixée par votre qualification.", { imp: IMPORTANCES[v.importance], a: tr(t.severity_hint.limites), b: tr(t.severity_hint.significatifs), c: tr(t.severity_hint.graves) })}</p>
+        // Explication repliée : la grille reste consultable sans occuper le panneau en permanence (S10).
+        <details className="hint-fold"><summary className="small">{tr('Comment la gravité est calculée ?')}</summary>
+          <p className="muted small" data-testid="severity-hint">{tr("Selon l'importance « {imp} » de l'équipement : dommages limités → {a}, significatifs → {b}, graves → {c} (grille du client). La gravité est fixée par votre qualification.", { imp: IMPORTANCES[v.importance], a: tr(t.severity_hint.limites), b: tr(t.severity_hint.significatifs), c: tr(t.severity_hint.graves) })}</p>
+        </details>
       )}
       {t.proposition && open && !t.dommages && (
         // Gravité proposée (ADR-0028) : jamais appliquée seule ; un clic la retient, et le registre dit qu'elle venait

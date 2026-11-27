@@ -12,6 +12,7 @@ export default async ({ stack, BASE, check, login }) => {
   const [dl] = await Promise.all([m.waitForEvent('download'), m.getByRole('button', { name: 'Exporter le registre (CSV)' }).click()])
   check(dl.suggestedFilename().startsWith('registre-ACME'), 'export CSV du registre')
   await m.goto(`${BASE}/tickets/ACME-1`)
+  await m.locator('.ticket-actions details.menu > summary').click()   // rapports, Wazuh et IODEF : menu « Actions »
   await m.getByRole('link', { name: 'Rapport imprimable' }).click()
   await m.waitForSelector("text=Rapport d'incident ACME-1")
   check(await m.locator('text=Registre des actions').count() > 0, 'rapport d\'incident imprimable')

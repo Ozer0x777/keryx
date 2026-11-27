@@ -68,6 +68,7 @@ export default async ({ stack, BASE, check, login }) => {
   // 3. Fiche du ticket pour l'équipe : lien, lecture, conservation
   await m.reload()
   await m.waitForSelector(section, { state: 'attached' })
+  await m.locator('.ticket-actions details.menu > summary').click()   // le lien de tête de fiche est dans le menu « Actions »
   const link = m.getByRole('link', { name: /Ouvrir l'alerte dans Wazuh/ })
   const href = await link.getAttribute('href')
   check(href.startsWith('https://wazuh.exemple/') && href.includes(`id:%22${WAZUH_ALERT_ID}%22`) && href.includes("from:'2026-11-20T14%3A36%3A02.118Z'"), "lien vers l'alerte : identifiant et fenêtre de temps de l'alerte d'origine")
@@ -122,6 +123,7 @@ export default async ({ stack, BASE, check, login }) => {
   await until(async () => await en.locator('.wz-list li').count() === 11, 'liste en anglais')
   const labels = await en.evaluate((e) => { const c = e.cloneNode(true); c.querySelectorAll('.wz-log, .wz-meta > span:last-child').forEach((x) => x.remove()); return c.innerText })
   check(!/[àâçéèêëîïôûùüœÀÂÇÉÈÊËÎÏÔÛÙÜŒ]/.test(labels) && labels.includes('Events before the alert') && labels.includes('Ticket alert') && labels.includes('Keep as evidence'), `traduction anglaise de la section « Contexte Wazuh »${/[àâçéèêëîïôûùüœ]/i.test(labels) ? ' — reste : ' + labels.split('\n').filter((l) => /[àâçéèêëîïôûùüœ]/i.test(l)).slice(0, 3).join(' | ') : ''}`)
+  await m.locator('.ticket-actions details.menu > summary').click()   // le lien de tête de fiche est dans le menu « Actions »
   check(await m.getByRole('link', { name: /Open the alert in Wazuh/ }).count() === 1, 'traduction anglaise du lien vers l\'alerte')
   await m.evaluate(() => localStorage.setItem('keryx_lang', 'fr'))
   await m.reload()

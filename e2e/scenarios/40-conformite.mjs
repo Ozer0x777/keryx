@@ -6,8 +6,8 @@ export default async ({ stack, BASE, check, login }) => {
   await m.goto(`${BASE}/tickets/ACME-1`)
   await m.getByRole('button', { name: 'Ouvrir le mode crise' }).click()
   await answerDialog(m, { reason: 'exfiltration suspectée' })
-  await m.waitForSelector('.banner.danger >> text=MODE CRISE')
-  check(true, 'mode crise ouvert, bandeau visible')
+  await m.waitForSelector('.head-tags .pill.danger >> text=CRISE')   // étiquette « CRISE » dans l'en-tête de la fiche
+  check(true, 'mode crise ouvert, étiquette CRISE visible')
   await m.fill('textarea[name=body]', 'Isoler srv-web-01 du réseau <script>alert(1)</script>')
   await m.getByRole('button', { name: 'Ajouter au registre' }).click()
   await m.waitForSelector('.crisis-text')
