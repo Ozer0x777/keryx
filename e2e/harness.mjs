@@ -110,13 +110,14 @@ export async function login(browser, stack, name) {
   await page.locator('input').first().fill(name)
   await page.locator('input[type=password]').fill(PASSWORD)
   await page.getByRole('button').first().click()
-  await page.waitForTimeout(1200)
+  // Attendre l'étape 2 plutôt qu'un délai fixe : sur un runner lent, le code partait dans le formulaire de l'étape 1.
+  await page.locator('#otp').waitFor({ timeout: 15000 })
   // Un code TOTP ne sert qu'une fois par pas de 30 s : attendre le pas suivant si ce compte vient de l'utiliser.
   const cur = Math.floor(Date.now() / 30000)
   if (lastStep[name] >= cur) await new Promise((r) => setTimeout(r, (lastStep[name] + 1) * 30000 - Date.now() + 500))
   const code = totp(stack.seeds[name].secret)                 // génération (≈ 0,2 s) AVANT de noter le pas : jamais en dessous du pas réel
   lastStep[name] = Math.floor(Date.now() / 30000)
-  await page.locator('input').first().fill(code)
+  await page.locator('#otp').fill(code)
   await page.getByRole('button').first().click()
   try { await page.waitForSelector('.sidebar', { timeout: 8000 }) } catch (e) {
     console.error(`connexion de « ${name} » impossible. Page : ${(await page.locator('body').innerText()).replace(/\s+/g, ' ').slice(0, 300)}`)
