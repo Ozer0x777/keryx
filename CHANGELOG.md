@@ -4,6 +4,11 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+## [0.11.1] : 2026-11-27
+
+**À lire avant la mise à jour** : version corrective, sans migration. La recherche VirusTotal est désormais refusée
+pour tout un client tant qu'un de ses tickets ouverts est en discrétion élevée (et non plus pour ce seul ticket).
+
 ### Corrigé
 - Procès-verbal de destruction : son fichier est créé avant la destruction ; si le chemin est inutilisable (fichier
   déjà présent, dossier absent, droits), rien n'est détruit. Il pouvait auparavant manquer après une destruction
