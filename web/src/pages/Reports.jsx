@@ -35,7 +35,7 @@ export default function Reports() {
         <label className="filter">{tr("Client")}<select value={f.client} onChange={set('client')} required>{me.clients.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}</select></label>
         <label className="filter">{tr("Du")}<input type="date" value={f.from} onChange={set('from')} /></label>
         <label className="filter">{tr("Au")}<input type="date" value={f.to} onChange={set('to')} /></label>
-        <div className="row gap">
+        <div className="row wrap gap">
           <button className="primary">{tr("Générer")}</button>
           <button type="button" onClick={csv}>{tr("Exporter le registre (CSV)")}</button>
           <button type="button" onClick={notifCsv}>{tr("Exporter le registre des notifications (CSV)")}</button>

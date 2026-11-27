@@ -486,6 +486,7 @@ export default {
   "Voir les {n} autres dans la liste": "See the {n} others in the list",
   "Agents {from} à {to} sur {n} ({total} au total)": "Agents {from} to {to} of {n} ({total} in total)",
   "Rechercher": "Search",
+  "non classé": "unclassified",
   "Aucune donnée sur la période.": "No data for the period.",
   "Indicateurs PDIS": "PDIS indicators",
   "Indicateurs PDIS (IV.5.1)": "PDIS indicators (IV.5.1)",

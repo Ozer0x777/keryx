@@ -789,7 +789,7 @@ function Qualification({ t, enc, run, open }) {
         ? tr('TLP plancher de ce client : {p}. Descendre en dessous demande un motif, inscrit au registre.', { p: t.tlp_plancher })
         : tr('TLP plancher de ce client : {p}. On peut monter, pas descendre en dessous (politique fixée par le manager).', { p: t.tlp_plancher })}</p>}
       <label>{tr('Niveau de classification (IGI 1300 / II 901)')}<select value={v.niveau} disabled={!open} onChange={(e) => setV({ ...v, niveau: e.target.value })}>
-        {NIVEAUX_CLASSIFICATION.map((x, i) => <option key={x} disabled={me.role !== 'manager' && i < NIVEAUX_CLASSIFICATION.indexOf(t.niveau_classification)}>{x}</option>)}
+        {NIVEAUX_CLASSIFICATION.map((x, i) => <option key={x} value={x} disabled={me.role !== 'manager' && i < NIVEAUX_CLASSIFICATION.indexOf(t.niveau_classification)}>{tr(x)}</option>)}
       </select></label>
       {sousPlancher && me.role === 'manager' && (
         <label>{tr('Motif du passage sous le TLP plancher (10 caractères au moins)')}

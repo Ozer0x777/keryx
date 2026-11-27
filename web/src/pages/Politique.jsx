@@ -66,7 +66,7 @@ function Client({ c, canaux, onSaved }) {
         <div className="grid2">
           <label>{tr('Niveau de classification par défaut des incidents')}
             <select value={niveau} onChange={(e) => setNiveau(e.target.value)}>
-              {['Non protégé', 'Diffusion Restreinte'].map((x) => <option key={x}>{x}</option>)}
+              {['Non protégé', 'Diffusion Restreinte'].map((x) => <option key={x} value={x}>{tr(x)}</option>)}
             </select></label>
           <label>{tr('Version du jeu de règles de détection en service')}
             <input value={versionRegles} maxLength={120} placeholder={tr('ex. wazuh-4.9.1 + règles locales 2026-11-20')} onChange={(e) => setVersionRegles(e.target.value)} /></label>

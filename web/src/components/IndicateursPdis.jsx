@@ -33,7 +33,7 @@ export default function IndicateursPdis({ d }) {
         rows={d.par_mois.map((m) => [m.mois, m.crees, m.clos, m.averes, m.alertes, CRIT.map((c) => m.ouverts_cumules[c]).join(' / '), h(m.resolution_moyenne_h)])} />
       <h3>{tr('Durée moyenne de qualification, par typologie et gravité')}</h3>
       <Tableau label={tr('Durée moyenne de qualification')} head={[tr('Typologie'), ...CRIT.map((c) => tr(c))]}
-        rows={Object.entries(d.qualification_par_typologie_h).map(([k, v]) => [k, ...CRIT.map((c) => h(v[c]))])} />
+        rows={Object.entries(d.qualification_par_typologie_h).map(([k, v]) => [tr(k), ...CRIT.map((c) => h(v[c]))])} />
       <h3>{tr('Les 20 règles les plus déclenchées')}</h3>
       <Tableau label={tr('Règles les plus déclenchées')} head={[tr('Règle'), tr('Description'), tr('Alertes')]}
         rows={d.regles_les_plus_declenchees.map((x) => [x.regle, x.description, x.alertes])} />
