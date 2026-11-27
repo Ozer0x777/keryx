@@ -35,7 +35,7 @@ Statuts :
 | IV.2.1.z | Outil de gestion des tickets dans la zone d'analyse | Couvert | Keryx |
 | IV.2.1.aa | Contexte stocké avec le ticket, quel que soit son état | Couvert | Alertes brutes avec empreinte, pièces, synthèse, retour d'expérience ; conservés toute la prestation par défaut (IV.5.3.6) |
 | IV.2.1.bb | Registre centralisé et chronologique par client | Couvert | `GET /api/v1/registre` (CSV), `test_reports.py` |
-| IV.2.1.cc | Capacité de stockage des tickets suivie | Partiel | Espace disque des pièces dans l'état du système ; pas de suivi du remplissage de la base |
+| IV.2.1.cc | Capacité de stockage des tickets suivie | Couvert | Taille de la base et remplissage du disque des pièces dans le pilotage ; stockage objet : suivi par son outil |
 | IV.2.1.dd, ee | Analyse a posteriori, recherche d'indicateurs sur 6 mois | Wazuh | Indexeur Wazuh ; Keryx lit le contexte d'un agent (ADR-0021), il ne cherche pas dans tout l'historique |
 | IV.2.2 (sauf r, s) | Stratégie et capacité de collecte, collecteurs, indexation | Wazuh | |
 | IV.2.2.r | Le collecteur détecte une perte de communication | Partiel | Battement de cœur de la chaîne (ADR-0032) : complément de bout en bout, la détection au collecteur reste à Wazuh |
@@ -45,7 +45,7 @@ Statuts :
 | IV.2.3.g (option A) | La notification ne contient que le numéro du ticket | Couvert | Objet et corps : référence et lien authentifié (`notify.message_for`), `test_notifications.py` |
 | IV.2.3.h, j | Registre centralisé et chronologique des notifications par client | Couvert | Registre des notifications par client (date, mode, destinataire, objet, statut, tentatives, code de réponse), JSON et CSV (« Rapports ») |
 | IV.2.3.i | Remonter d'une notification au ticket et à son contexte | Couvert | Référence du ticket dans chaque ligne du registre |
-| IV.2.3.k | Capacité de stockage des notifications | Partiel | Conservées sans purge ; pas d'indicateur |
+| IV.2.3.k | Capacité de stockage des notifications | Couvert | Conservées sans purge ; taille de la base dans le pilotage |
 | IV.2.3.l | Portail : voir les tickets et leur statut, suivre et modifier leur état, voir les actions ; récupérer le contexte, déposer des informations | Couvert | État du ticket côté client et demande de clôture ou de réouverture, actions demandées au client, pièces, commentaires ; `test_suivi_client.py`, `99-suivi-client.mjs` |
 | IV.3.6 | Plan de sauvegarde et de restauration testé | Partiel | Sauvegarde chiffrée et restauration (`keryx backup`, `keryx restore`) ; plan et tests annuels : organisation |
 | IV.3.7.k | Analyses utilisant Internet faites hors du SI du service | Couvert | Keryx n'envoie jamais de fichier à un service en ligne (VirusTotal : empreintes seulement) |
@@ -82,9 +82,9 @@ et clôture ; délai entre détection et notification par gravité ; par mois, c
 reçues, ouverts cumulés par criticité et résolution moyenne ; qualification moyenne par typologie et gravité ; 20
 règles les plus déclenchées ; comptes et authentifications du portail.
 
-Encore manquants : remplissage et capacité restante du stockage des incidents et des notifications ; disponibilité
-du portail et du système d'envoi des notifications (à mesurer par la supervision de l'infrastructure, ou par la
-console en mode portail, ADR-0027).
+Ajoutés le 27/11/2026 : taille de la base et remplissage du disque des pièces ; réussite de l'envoi des notifications
+par mois (disponibilité du système d'envoi). Encore manquant : la disponibilité du portail lui-même, à mesurer par
+la supervision de l'infrastructure, ou par la console en mode portail (ADR-0027).
 
 Les indicateurs d'évènements, de collecteurs et de règles relèvent de Wazuh.
 
@@ -120,5 +120,4 @@ Restent, dans l'ordre du découpage de l'ADR-0027 :
    l'antivirus, après lecture du chapitre « Système d'échange » de [NT_ADMIN].
 2. **Portail par client (IV.3.13.b, c)** : une machine par client, authentification mutuelle console et portail.
 3. **Pare-feu applicatif (IV.3.13.g)** : Coraza et l'OWASP CRS devant chaque portail.
-4. **Indicateurs de capacité et de disponibilité** (IV.2.1.cc, IV.2.3.k, IV.5.1.e) : remplissage du stockage,
-   disponibilité du portail et de l'envoi des notifications.
+4. **Disponibilité du portail** (IV.5.1.e, g) : mesurée par la console en mode portail (ADR-0027).
