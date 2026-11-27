@@ -632,3 +632,28 @@ form.row > button, form.row > .btn-link { white-space: nowrap; }
   .queue td:nth-child(8) { grid-area: 4 / 1 / 5 / 3; }
   .queue td:nth-child(9) { grid-area: 4 / 3; justify-self: end; }
 }
+
+/* ---------- Fiche ticket de l'équipe (S05 à S11) ---------- */
+.head-tags { margin-top: 6px; }
+.head-facts { display: flex; flex-wrap: wrap; gap: 2px 0; margin: 6px 0 0; }
+.head-facts > span:not(:last-child)::after { content: "·"; margin: 0 8px; color: var(--border); }
+.ticket-actions details.menu > summary { display: inline-flex; align-items: center; gap: 6px; }
+details.menu .menu-list .menu-item { display: flex; align-items: center; padding: 8px 10px; border-radius: 6px; min-height: 40px; color: var(--text); text-decoration: none; }
+details.menu .menu-list .menu-item:hover { background: var(--bg); }
+.dl-bar { display: block; height: 5px; border-radius: 3px; background: var(--border); overflow: hidden; margin-top: 5px; max-width: 260px; }
+.dl-bar i { display: block; height: 100%; background: #1E7A46; }
+.deadline.near .dl-bar i { background: #C98A00; }
+.deadline.late .dl-bar i { background: #B3261E; }
+.next-steps { box-shadow: inset 4px 0 0 var(--accent); }
+.next-steps h2 { font-size: 15px; margin: 0 0 8px; }
+.check-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13.5px; }
+.check-list li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.check-list .mark { color: var(--muted); }
+.check-list li.ok { color: var(--muted); }
+.check-list li.ok .mark { color: #1E7A46; font-weight: 700; }
+.hint-fold > summary { cursor: pointer; color: var(--accent); margin-top: 6px; }
+/* Panneaux de pilotage : libellés plus lisibles (13 px, gras) dans la colonne de droite. */
+.ticket-aside label { font-size: 13px; font-weight: 600; }
+/* Écran étroit : « Pour avancer » et la qualification avant la description (l'action d'abord). */
+@media (max-width: 1100px) { .ticket-layout > .ticket-aside { order: -1; } }
+.ticket-bar-id .mono { white-space: nowrap; }

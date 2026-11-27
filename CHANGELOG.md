@@ -5,6 +5,15 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 ## [Non publié]
 
 ### Modifié
+- File des tickets de l'équipe : triée par échéance par défaut, échéance restante en couleur (dépassée en rouge),
+  ligne de contexte sous le titre (agent, adresse, client), règle, criticité, gravité et occurrences avec la
+  dernière en colonnes, assigné en initiales ; marquage TLP affiché seulement s'il diffère du plancher du client ;
+  tuiles sur une seule rangée, celles qui demandent une action en premier ; cartes sur téléphone. API : tri
+  `echeance` (équipe), champs `rule_id`, `agent_name`, `agent_ip` et, pour l'équipe, `tlp_plancher`.
+- Fiche ticket de l'équipe : en-tête en trois lignes (titre et menu « Actions » ; statut, criticité, gravité, TLP,
+  CRISE ; détection, règle qui a créé le ticket, occurrences, agent), échéances en barres de progression, bloc
+  « Pour avancer » qui dit ce qui manque pour l'étape suivante d'après les règles du serveur et mène au champ,
+  explication de la grille de gravité repliée.
 - Interface, après une revue de toutes les pages (tous les rôles, ordinateur et téléphone) :
   - téléphone : navigation repliée derrière un bouton « Menu », onglets sur une ligne qui défile, cibles de 44 px,
     plus aucune page qui défile de côté (Kanban, rapports, point de situation, Politique des clients) ;
