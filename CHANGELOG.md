@@ -14,6 +14,10 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
   client qui partagent une valeur. Migration 0033 (avec reprise des alertes déjà conservées).
 
 ### Modifié
+- Confort de l'équipe : registre des actions avec un fil d'activité au choix (« Tout » : actions et commentaires dans
+  le même fil, occurrences d'alerte regroupées) ; journal brut avec adresses IP et comptes mis en évidence ; file
+  compacte au choix ; raccourcis clavier (file : j, k, Entrée, /, ? ; fiche : a, c, ?) ; titre de la barre collante
+  masqué tant que l'en-tête de la fiche est visible ; « Réponse aux incidents » sans cadres imbriqués.
 - File des tickets de l'équipe : triée par échéance par défaut, échéance restante en couleur (dépassée en rouge),
   ligne de contexte sous le titre (agent, adresse, client), règle, criticité, gravité et occurrences avec la
   dernière en colonnes, assigné en initiales ; marquage TLP affiché seulement s'il diffère du plancher du client ;

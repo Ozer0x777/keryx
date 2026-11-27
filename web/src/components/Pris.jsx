@@ -172,7 +172,7 @@ export function Mesures({ t, enc, run, isClient, open }) {
 export default function Pris({ t, enc, run, open }) {
   const editable = t.status !== 'faux_positif'
   return (
-    <section className="card section" aria-label={tr('Réponse aux incidents')}>
+    <section className="card section pris-panel" aria-label={tr('Réponse aux incidents')}>
       <header className="section-head"><h2>{tr('Réponse aux incidents')}</h2>
         <div className="row wrap gap">
           <Link to={`/tickets/${enc}/point-situation`}>{tr('Point de situation')}</Link>

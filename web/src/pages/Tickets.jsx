@@ -5,6 +5,8 @@ import { useAuth } from '../App.jsx'
 import { Severity, Status, Tlp } from '../components/Badges.jsx'
 import { useConfirm } from '../components/Confirm.jsx'
 import Pager from '../components/Pager.jsx'
+import ShortcutsHelp from '../components/ShortcutsHelp.jsx'
+import { useShortcuts } from '../shortcuts.js'
 import { dureeLisible, utcClock } from '../dates.js'
 import { t as tr } from '../i18n.js'
 import { STATUS } from '../labels.js'
@@ -190,6 +192,21 @@ export default function Tickets() {
     else if (!isClient && f.sort === DEFAULTS.sort && f.order === DEFAULTS.order) { out.sort = f.sort }   // choix explicite
     return out
   }
+  // Densité de la file (S12), mémorisée par navigateur ; raccourcis clavier (S13).
+  const [compact, setCompact] = useState(() => { try { return localStorage.getItem('keryx_densite') === 'compacte' } catch { return false } })
+  const toggleDensite = () => { const v = !compact; setCompact(v); try { localStorage.setItem('keryx_densite', v ? 'compacte' : 'confortable') } catch { /* stockage indisponible */ } }
+  const [aide, setAide] = useState(false)
+  const shortcuts = useMemo(() => {
+    const liens = () => [...document.querySelectorAll('table.queue tbody tr td.mono a')]
+    const bouger = (pas) => {
+      const l = liens(); if (!l.length) return
+      const i = l.indexOf(document.activeElement)
+      const n = l[Math.min(l.length - 1, Math.max(0, i < 0 ? 0 : i + pas))]
+      n.focus(); n.closest('tr')?.scrollIntoView({ block: 'nearest' })
+    }
+    return { j: () => bouger(1), k: () => bouger(-1), '/': () => document.querySelector('.filters input[type=search]')?.focus(), '?': () => setAide(true) }
+  }, [])
+  useShortcuts(shortcuts, !isClient)
   const apply = (next) => { setPicked(new Set()); setMsg(''); setSearch(toSearch({ ...next, page: '1' }), { replace: true }) }
   const goPage = (page) => { setPicked(new Set()); setMsg(''); setSearch(toSearch({ ...filters, page: String(page) })) }
   const pages = pageInfo(total, filters.page, filters.per_page)
@@ -323,6 +340,8 @@ export default function Tickets() {
           ? tr('Tickets {from} à {to} sur {total}', { from: pages.from, to: pages.to, total })
           : tr('{n} ticket(s)', { n: items.length })}</p>
         <div className="row gap refresh">
+          {!isClient && <button type="button" className="small-btn" aria-pressed={compact} onClick={toggleDensite} title={tr('Lignes plus serrées, pour les écrans de supervision')}>{compact ? tr('Affichage compact') : tr('Affichage confortable')}</button>}
+          {!isClient && <button type="button" className="small-btn" onClick={() => setAide(true)} aria-label={tr('Raccourcis clavier')}>?</button>}
           <span className="muted small">{updatedAt ? tr('Mis à jour à {h}', { h: utcClock(updatedAt) }) : ''}</span>
           <button type="button" className="small-btn" onClick={reload} disabled={refreshing} title={tr('Relevé automatique toutes les 45 s quand cet onglet est affiché')}>{tr('Actualiser')}</button>
         </div>
@@ -344,7 +363,8 @@ export default function Tickets() {
       )}
 
       <div className="table-wrap card">
-        <table className="grid queue">
+        {aide && <ShortcutsHelp onClose={() => setAide(false)} keys={[['j', tr('Ticket suivant')], ['k', tr('Ticket précédent')], ['Entrée', tr('Ouvrir le ticket')], ['/', tr('Rechercher')], ['?', tr('Cette aide')]]} />}
+        <table className={`grid queue${compact ? ' compact' : ''}`}>
           <thead>
             <tr>
               {isClient ? (<>

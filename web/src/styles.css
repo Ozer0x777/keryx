@@ -689,3 +689,24 @@ details.menu .menu-list .menu-item:hover { background: var(--bg); }
   .link-results .lr-title { grid-column: 2 / -1; }
   .link-results .lr-why { grid-column: 2 / -1; }
 }
+
+/* Journal brut : adresses IP et comptes mis en évidence ; fil d'activité. */
+.rich-content pre mark, pre mark { padding: 0 2px; border-radius: 2px; }
+mark.hl-ip { background: #FFE58A; color: #16191F; }
+mark.hl-user { background: #BFD8FF; color: #16191F; }
+pre .hl-ip, pre .hl-user { font-weight: 600; }
+.rich-content pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.activity-filter { margin-bottom: 8px; }
+.activity-comment .comment-snippet { display: block; color: var(--text); }
+/* File compacte (S12) : lignes serrées, contexte sur la même ligne ; raccourcis : touches dessinées. */
+.queue.compact td { padding-top: 4px; padding-bottom: 4px; }
+.queue.compact .title-cell .ctx { display: inline; margin-left: 8px; }
+.queue.compact .occ-last { display: none; }
+.queue.compact .av { width: 22px; height: 22px; font-size: 10px; }
+kbd { font-family: var(--mono); font-size: 12px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 1px 6px; background: var(--surface); }
+.shortcuts .contents { display: contents; }
+/* Barre collante : identité du ticket masquée tant que l'en-tête est à l'écran (elle reste lue par les lecteurs d'écran). */
+.ticket-sticky.head-visible .ticket-bar-id { visibility: hidden; height: 0; overflow: hidden; }
+/* Réponse aux incidents : sous-sections à plat, séparées par un filet (pas de cadre dans le cadre). */
+.pris-panel .section-body > .fold, .pris-panel .fold.card { border: 0; box-shadow: none; border-radius: 0; border-top: 1px solid var(--border); margin: 0; background: transparent; }
+.pris-panel .fold.card > details > summary { padding-left: 0; padding-right: 0; }
