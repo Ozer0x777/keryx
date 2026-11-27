@@ -91,3 +91,43 @@ def test_proces_verbal_de_destruction(app, db, world, alert, settings, tmp_path)
     assert code == 0
     doc = _json.loads(sortie.read_text())
     assert doc["detruit"] is True and doc["date"] and doc["tickets"][0]["ref"] == "ACME-1" and "fichiers" in doc["mode"]
+
+
+def test_mesures_exportees_detruites_et_au_proces_verbal(app, db, world, alert, settings):
+    """Revue : les mesures d'endiguement (décisions du client) sont dans l'export, les comptes et le procès-verbal."""
+    ref = ingest(app, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE)).json()["ticket"]
+    login(app, db, "analyst_acme").post(f"/api/v1/tickets/{ref}/mesures", json={"libelle": "Isoler le poste"})
+    db.rollback()
+    acme = db.scalars(select(Tenant).where(Tenant.key == "ACME")).one()
+    buf = io.BytesIO()
+    comptes = restitution.export_client(db, settings, acme, buf)
+    assert comptes["mesures-endiguement.json"] == 1
+    with zipfile.ZipFile(io.BytesIO(buf.getvalue())) as z:
+        assert json.loads(z.read("mesures-endiguement.json"))[0]["libelle"] == "Isoler le poste"
+    assert restitution.proces_verbal(db, acme)["mesures_endiguement"][0]["ticket"] == ref
+    restitution.export_bytes(db, settings, acme, "manager")
+    assert restitution.destroy_client(db, settings, acme, "manager", dry_run=True)["mesures_endiguement"] == 1
+
+
+def test_proces_verbal_impossible_rien_n_est_detruit(app, db, world, alert, settings, tmp_path):
+    """Revue : si le fichier du procès-verbal ne peut être créé, la destruction n'a pas lieu."""
+    import os
+
+    from keryx import cli
+    ingest(app, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE))
+    acme = db.scalars(select(Tenant).where(Tenant.key == "ACME")).one()
+    restitution.export_bytes(db, settings, acme, "manager")
+    db.commit()
+    deja = tmp_path / "pv.json"
+    deja.write_text("{}")                     # écrit par la simulation, par exemple
+    os.environ.update(KERYX_DATABASE_URL=settings.database_url, KERYX_SECRET_KEY=settings.secret_key,
+                      KERYX_ATTACHMENTS_DIR=settings.attachments_dir)
+    try:
+        code = cli.main(["destroy-client", "ACME", "--confirm", "ACME", "--pv", str(deja)])
+        code_absent = cli.main(["destroy-client", "ACME", "--confirm", "ACME", "--pv", str(tmp_path / "nulle" / "pv.json")])
+    finally:
+        for k in ("KERYX_DATABASE_URL", "KERYX_SECRET_KEY", "KERYX_ATTACHMENTS_DIR"):
+            os.environ.pop(k, None)
+    assert code == 1 and code_absent == 1 and deja.read_text() == "{}"
+    db.rollback()
+    assert db.scalar(select(func.count()).select_from(Ticket).where(Ticket.tenant_id == acme.id)) == 1

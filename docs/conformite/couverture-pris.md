@@ -30,7 +30,7 @@ outils d'analyse, organisation).
 | VI.3.e, g | [CRISE] Impacts, enjeux ; critères et indicateurs de suivi et de sortie de crise | Couvert | Critères de sortie de crise au registre de crise, cochés quand ils sont atteints |
 | VI.4.2 | Note de cadrage (marquage, conservation, registres…) | Hors Keryx | Document du prestataire ; peut être déposée comme pièce du ticket |
 | VI.5.2.1.b | Respect du marquage des indicateurs (TLP, PAP) | Hors Keryx | Base d'indicateurs (par exemple MISP) |
-| VI.5.2.4 | [ELEVE] Méthode de recherche en sources ouvertes selon le niveau de discrétion | Couvert | En discrétion élevée, recherche VirusTotal refusée depuis Keryx ; recherches journalisées ; la méthode elle-même : document du prestataire |
+| VI.5.2.4 | [ELEVE] Méthode de recherche en sources ouvertes selon le niveau de discrétion | Couvert | En discrétion élevée, recherche VirusTotal refusée depuis Keryx pour tout le client tant que le ticket est ouvert ; recherches journalisées ; la méthode elle-même : document du prestataire |
 | VI.5.3.a | [ELEVE, PCI] Suivi régulier du commanditaire | Couvert | Point de situation imprimable (24 h, 3 ou 7 jours), commentaires visibles |
 | VI.5.3.c | [ELEVE] Registre des informations et supports collectés : description, date et heure, méthode, sensibilité | Couvert | Registre des preuves (`Attachment`), chaîne de possession, horodatage qualifié, `test_attachments.py` |
 | VI.5.3.d | [ELEVE, REC, INV, PCI] Registre des actions : date et heure, description, objet (information, support ou ressource du SI cible) | Partiel | Chaîne de possession des pièces et registre du ticket ; pas d'inscription structurée d'une action sur une ressource du SI cible |
@@ -45,7 +45,7 @@ outils d'analyse, organisation).
 | VI.7 | Rapport : qualification, cadre, synthèse managériale, résultats, annexes | Couvert | Rapport d'analyse imprimable en cinq parties (VI.7.1 à VI.7.5) : cadre saisi dans « Cadre du rapport d'analyse », reste repris du ticket ; champ non renseigné signalé |
 | VI.7.5.b, c, d | [ELEVE] Annexes : registres des informations collectées et des actions, plan et registre de crise | Couvert | Annexes du rapport d'analyse : registre des informations et supports collectés, registre des actions, plan d'action et registre de crise, critères de sortie, retour d'expérience ; note de cadrage : pièce du ticket |
 | VI.8.b, c | Restitution, effacement ou destruction ; conservation hors ligne | Couvert | Export complet puis `keryx destroy-client` |
-| VI.8.d | [ELEVE] Recommandé : procès-verbal de destruction | Couvert | `keryx destroy-client --pv` : tickets et pièces (empreintes) identifiés, date et mode de destruction |
+| VI.8.d | [ELEVE] Recommandé : procès-verbal de destruction | Couvert | `keryx destroy-client --pv` : tickets, pièces (empreintes) et mesures d'endiguement identifiés, date et mode de destruction ; fichier créé avant la destruction, qui n'a pas lieu s'il ne peut l'être |
 
 ## Hors du logiciel
 

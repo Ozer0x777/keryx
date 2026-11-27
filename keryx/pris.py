@@ -21,9 +21,11 @@ from sqlalchemy.orm import Session as DbSession
 
 from . import audit
 from .ids import rfc3339, utcnow
-from .models import Attachment, Comment, CrisisEntry, MesureEndiguement, Ticket, TicketEvent, User
+from . import inbox
+from .models import TERMINAL_STATUSES, Attachment, Comment, CrisisEntry, MesureEndiguement, Ticket, TicketEvent, User
 
 TEXTE = 20_000
+MAX_ACTIONS_POINT = 500      # actions détaillées au point de situation ; les occurrences d'alerte sont comptées à part
 ACTIVITES = ("REC", "INV", "CODE", "PCI", "CRISE")
 ROLES_EQUIPE = ("responsable_equipe", "pilote_investigation", "analyste_reseau", "analyste_systeme",
                 "analyste_codes", "gestionnaire_crise", "expert")
@@ -140,6 +142,21 @@ def discretion_elevee(t: Ticket) -> bool:
     return ((t.pris or {}).get("posture") or {}).get("discretion") == "eleve"
 
 
+def ticket_discret(db: DbSession, t: Ticket) -> Ticket | None:
+    """Ticket ouvert du même client en discrétion élevée (celui-ci d'abord), ou None.
+
+    L'attaquant observe le SI du client, pas un ticket : un même incident se répartit souvent sur plusieurs tickets
+    (autre agent, autre règle). Tant qu'un ticket ouvert du client est en discrétion élevée, aucune recherche en source
+    ouverte ne part de Keryx pour ce client (PRIS VI.5.2.4)."""
+    if discretion_elevee(t):
+        return t
+    for autre in db.scalars(select(Ticket).where(Ticket.tenant_id == t.tenant_id, Ticket.pris.isnot(None),
+                                                 Ticket.status.not_in(TERMINAL_STATUSES))):
+        if discretion_elevee(autre):
+            return autre
+    return None
+
+
 def mesure_vue(m: MesureEndiguement) -> dict:
     return {"id": m.id, "type": m.type, "libelle": m.libelle, "etat": m.etat, "decision_par": m.decision_par,
             "commentaire": m.commentaire, "cree_par": m.cree_par, "cree_le": rfc3339(m.cree_le),
@@ -203,6 +220,9 @@ def register(app, ctx) -> None:
             raise HTTPException(422, f"État attendu parmi : {', '.join(ETATS_MESURE)}.")
         if user.role == "client" and body.etat not in DECISION_CLIENT:
             raise HTTPException(403, "Le client accepte ou refuse une mesure proposée.")
+        # Ticket clos : plus de décision ni d'application ; l'équipe peut seulement lever une mesure encore en place.
+        if not (user.role != "client" and body.etat == "levee"):
+            ctx.require_open(t)
         if body.etat not in TRANSITIONS[m.etat]:
             raise HTTPException(409, f"Mesure « {m.etat} » : passage possible vers "
                                      f"{', '.join(TRANSITIONS[m.etat]) or 'aucun état'} seulement.")
@@ -221,6 +241,14 @@ def register(app, ctx) -> None:
         event(db, t, user, f"mesure_{m.etat}", {"id": m.id, "libelle": m.libelle, "decision_par": m.decision_par,
                                                  **({"commentaire": m.commentaire} if m.commentaire else {})},
               visible_client=True)
+        if user.role == "client":
+            # Décision du commanditaire : l'assigné, sinon l'équipe du client, est prévenu (mesure à appliquer).
+            assignee = db.get(User, t.assignee_id) if t.assignee_id else None
+            cibles = [assignee] if assignee is not None and assignee.active else [
+                u for u in db.scalars(select(User).where(User.role.in_(("analyst", "manager")), User.active.is_(True)))
+                if t.tenant_id in [x.id for x in u.tenants]]
+            for u in cibles:
+                inbox.push(db, u, "reponse_client", t.ref, actor=user.username)
         commit(db)
         return {"mesures": mesures(db, t)}
 
@@ -231,8 +259,15 @@ def register(app, ctx) -> None:
         require_role(user, "analyst", "manager")
         t = load_ticket(db, user, ref)
         depuis = utcnow() - timedelta(hours=heures)
-        ev = db.scalars(select(TicketEvent).where(TicketEvent.ticket_id == t.id, TicketEvent.ts >= depuis)
-                        .order_by(TicketEvent.ts)).all()
+        # Les occurrences d'alerte fusionnées (une par alerte répétée) sont comptées, pas listées ; le reste est borné.
+        from sqlalchemy import func
+        periode = (TicketEvent.ticket_id == t.id, TicketEvent.ts >= depuis)
+        occurrences = db.scalar(select(func.count()).select_from(TicketEvent)
+                                .where(*periode, TicketEvent.action == "occurrence")) or 0
+        autres = db.scalar(select(func.count()).select_from(TicketEvent)
+                           .where(*periode, TicketEvent.action != "occurrence")) or 0
+        ev = db.scalars(select(TicketEvent).where(*periode, TicketEvent.action != "occurrence")
+                        .order_by(TicketEvent.ts.desc()).limit(MAX_ACTIONS_POINT)).all()[::-1]
         com = db.scalars(select(Comment).where(Comment.ticket_id == t.id, Comment.created_at >= depuis)
                          .order_by(Comment.created_at)).all()
         pcs = db.scalars(select(Attachment).where(Attachment.ticket_id == t.id, Attachment.created_at >= depuis)
@@ -244,6 +279,7 @@ def register(app, ctx) -> None:
         return {
             "ref": t.ref, "titre": t.title, "statut": t.status, "depuis": rfc3339(depuis), "genere_le": rfc3339(utcnow()),
             "actions": [{"ts": rfc3339(e.ts), "acteur": e.actor, "action": e.action, "details": e.details} for e in ev],
+            "actions_omises": max(0, autres - len(ev)), "occurrences": occurrences,
             "commentaires": [{"ts": rfc3339(c.created_at), "visible_client": c.visible_client} for c in com],
             "pieces": [{"ts": rfc3339(a.created_at), "fichier": a.filename, "sha256": a.sha256,
                         "sensibilite": a.sensitivity} for a in pcs],

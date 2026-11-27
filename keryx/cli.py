@@ -415,22 +415,34 @@ def _main(argv: list[str] | None = None) -> int:
             return 0
         execute = args.confirm == tenant.key
         pv = restitution.proces_verbal(db, tenant)
+        # Le fichier du procès-verbal est créé AVANT la destruction : si le chemin est inutilisable (fichier déjà
+        # présent, dossier absent, droits), rien n'est détruit ; après coup, le relevé ne pourrait plus être refait.
+        fd_pv = None
+        if args.pv:
+            try:
+                fd_pv = os.open(args.pv, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            except OSError as exc:
+                print(f"Procès-verbal impossible à créer ({args.pv} : {exc.strerror}) : rien n'a été détruit.",
+                      file=sys.stderr)
+                return 1
         try:
             comptes = restitution.destroy_client(db, settings, tenant, actor, dry_run=not execute)
         except ValueError as exc:
+            if fd_pv is not None:
+                os.close(fd_pv)
+                os.unlink(args.pv)
             print(str(exc), file=sys.stderr)
             return 1
         if execute:
             db.commit()
-        if args.pv:
+        if fd_pv is not None:
             import json as _json
             from .ids import rfc3339 as _rfc, utcnow as _now
             pv.update({"detruit": execute, "date": _rfc(_now()) if execute else None, "par": actor, "comptes": comptes,
                        "mode": ("suppression en base des données du client et des fichiers des pièces (disque ou "
                                 "stockage objet) ; comptes Client désactivés ; journal d'audit conservé (références "
                                 "seulement)") if execute else "simulation : rien n'a été détruit"})
-            fd = os.open(args.pv, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
+            with os.fdopen(fd_pv, "w", encoding="utf-8") as f:
                 _json.dump(pv, f, ensure_ascii=False, indent=1)
             print(f"Procès-verbal : {args.pv}")
         for k, v in comptes.items():
