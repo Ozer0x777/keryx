@@ -19,15 +19,15 @@ from .observables import normaliser
 PREFIXES = {"ip": "ip", "hote": "hote", "host": "hote", "agent": "agent", "regle": "regle", "rule": "regle",
             "compte": "compte", "user": "compte", "hash": "hash", "domaine": "domaine", "domain": "domaine",
             "ref": "ref"}
-_PREFIXE = re.compile(r"^\s*([A-Za-zé]+)\s*:\s*(.+?)\s*$")
-
-
 def analyser(q: str) -> tuple[str | None, str]:
-    """(« champ », valeur) pour « champ:valeur » quand le champ est connu ; sinon (None, texte)."""
-    m = _PREFIXE.match(q or "")
-    if m and m.group(1).lower() in PREFIXES:
-        return PREFIXES[m.group(1).lower()], m.group(2)[:200]
-    return None, (q or "").strip()[:200]
+    """(« champ », valeur) pour « champ:valeur » quand le champ est connu ; sinon (None, texte). Découpage au premier
+    deux-points, sans expression régulière (saisie non fiable : aucun retour arrière coûteux possible)."""
+    texte = (q or "").strip()[:200]
+    avant, sep, apres = texte.partition(":")
+    champ = avant.strip().lower()
+    if sep and champ in PREFIXES and apres.strip():
+        return PREFIXES[champ], apres.strip()
+    return None, texte
 
 
 def _like(v: str) -> str:
