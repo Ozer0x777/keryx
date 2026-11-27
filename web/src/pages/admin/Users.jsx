@@ -241,7 +241,7 @@ export default function Users() {
                   {/* Actions moins courantes dans un menu « Plus » ; chacune ouvre son dialogue de confirmation. Le menu reste
                       ouvert pendant le dialogue : Échap rend le focus au bouton qui l'a ouvert. */}
                   <details className="menu" onToggle={(e) => { if (e.currentTarget.open) e.currentTarget.querySelector('button')?.focus() }}>
-                    <summary className="small-btn" aria-label={tr('Autres actions pour {u}', { u: u.username })}>{tr("Plus")} ▾</summary>
+                    <summary className="small-btn">{tr("Plus")}<span className="sr-only"> {tr("d'actions pour {u}", { u: u.username })}</span> <span aria-hidden="true">▾</span></summary>
                     <div className="menu-list">
                       <button type="button" onClick={() => reset2fa(u)}>{tr("Réinitialiser la double authentification")}</button>
                       <button type="button" onClick={() => resetPwd(u)}>{tr("Nouveau mot de passe")}</button>
