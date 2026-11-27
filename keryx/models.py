@@ -522,7 +522,10 @@ class AuditEntry(Base):
 
 
 LINK_KINDS = ("parent", "lie", "doublon")
-INBOX_KINDS = ("assignation", "mention", "echeance", "reponse_client")
+INBOX_KINDS_EQUIPE = ("assignation", "mention", "echeance", "reponse_client")
+# Portail client (C13) : décision attendue de lui, réponse du SOC, incident résolu ; chacun désactivable dans son profil.
+INBOX_KINDS_CLIENT = ("decision_attendue", "reponse_soc", "incident_resolu")
+INBOX_KINDS = INBOX_KINDS_EQUIPE + INBOX_KINDS_CLIENT
 
 
 class Observable(Base):

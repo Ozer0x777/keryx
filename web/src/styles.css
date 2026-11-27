@@ -754,3 +754,11 @@ kbd { font-family: var(--mono); font-size: 12px; border: 1px solid var(--border)
   .queue-client td:nth-child(3) { grid-area: 3 / 1; }
   .queue-client td:nth-child(5) { grid-area: 3 / 2; justify-self: end; color: var(--muted); }
 }
+/* Accueil du client : fil des nouvelles du SOC ; période en un clic. */
+.feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.feed li { display: grid; grid-template-columns: 9.5em minmax(0, 1fr); gap: 10px; font-size: 14px; }
+.periodes { margin: 0 0 10px; }
+a.card.stat { text-decoration: none; color: inherit; }
+a.card.stat:hover { border-color: var(--accent); }
+.banner.ok { background: #E4F4EA; color: #1E7A46; border-radius: 8px; padding: 10px 14px; }
+@media (max-width: 600px) { .feed li { grid-template-columns: minmax(0, 1fr); gap: 2px; } }

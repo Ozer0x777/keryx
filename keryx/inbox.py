@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession
 
-from .models import InboxItem, User
+from .models import InboxItem, Ticket, User
 
 
 def push(db: DbSession, user: User, kind: str, ticket_ref: str, actor: str | None = None,
@@ -25,3 +25,10 @@ def push(db: DbSession, user: User, kind: str, ticket_ref: str, actor: str | Non
     except IntegrityError:
         return False  # déposée entre-temps par une requête concurrente
     return True
+
+
+def prevenir_clients(db: DbSession, t: Ticket, kind: str, actor: str | None = None) -> None:
+    """Prévient les comptes Client actifs du client du ticket (cloche), selon leurs préférences."""
+    for u in db.scalars(select(User).where(User.role == "client", User.active.is_(True))).all():
+        if t.tenant_id in [x.id for x in u.tenants]:
+            push(db, u, kind, t.ref, actor=actor)

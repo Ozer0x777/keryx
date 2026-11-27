@@ -14,7 +14,7 @@ function Shield() {
 // Titre de page propre à chaque écran (RGAA 8.5) : « Écran — Keryx ».
 const TITLES = [
   [/^\/tickets\/[^/]+\/rapport-analyse/, "Rapport d'analyse"], [/^\/tickets\/[^/]+\/point-situation/, 'Point de situation'], [/^\/tickets\/[^/]+\/rapport/, "Rapport d'incident"], [/^\/tickets\/[^/]+/, 'Ticket'], [/^\/tickets/, 'Tickets'], [/^\/kanban/, 'Kanban'],
-  [/^\/pilotage/, 'Pilotage'], [/^\/rapports/, 'Rapports'], [/^\/politique/, 'Politique des clients'], [/^\/mitre/, 'Table MITRE'], [/^\/audit/, "Journal d'audit"], [/^\/profil/, 'Mon profil'],
+  [/^\/accueil/, 'Accueil'], [/^\/pilotage/, 'Pilotage'], [/^\/rapports/, 'Rapports'], [/^\/politique/, 'Politique des clients'], [/^\/mitre/, 'Table MITRE'], [/^\/audit/, "Journal d'audit"], [/^\/profil/, 'Mon profil'],
   [/^\/admin\/comptes/, 'Comptes'], [/^\/admin\/clients/, 'Clients'], [/^\/admin\/cles/, "Clés d'API"], [/^\/admin\/astreinte/, "Canaux d'astreinte"], [/^\/admin\/mitre/, 'MITRE'],
   [/^\/admin\/revue/, 'Revue des comptes'], [/^\/admin\/audit/, "Journal d'audit"], [/^\/admin\/systeme/, 'État du système'], [/^\/admin/, 'Administration'],
 ]
@@ -33,7 +33,7 @@ export default function Layout() {
   const links = me.role === 'admin'
     ? [['/admin', t('Administration')]]
     : me.role === 'client'
-      ? [['/tickets', t('Mes incidents')], ['/parc', t('Mon parc')]]
+      ? [['/accueil', t('Accueil')], ['/tickets', t('Mes incidents')], ['/parc', t('Mon parc')], ['/rapports', t('Rapports')]]
       : [['/tickets', t('Tickets')], ['/kanban', t('Kanban')], ['/parc', t('Parc Wazuh')], ['/pilotage', t('Pilotage')], ['/rapports', t('Rapports')], ...(me.role === 'manager' ? [['/politique', t('Politique des clients')], ['/mitre', t('Table MITRE')], ['/audit', t("Journal d'audit")]] : [])]
   return (
     <div className="shell">

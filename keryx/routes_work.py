@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session as DbSession
 from . import audit, observables, recherche, sla
 from .ids import rfc3339, utcnow
 from .inbox import push
-from .models import (INBOX_KINDS, LINK_KINDS, InboxItem, RawAlert, SavedFilter, Template, Ticket, TicketEvent,
+from .models import (INBOX_KINDS_CLIENT, INBOX_KINDS_EQUIPE, LINK_KINDS, InboxItem, RawAlert, SavedFilter, Template, Ticket, TicketEvent,
                      TicketLink, User, Comment)
 from .sanitize import clean_html
 
@@ -310,14 +310,19 @@ def register(app, ctx) -> None:
         db.commit()
         return {"status": "ok"}
 
+    def kinds_of(user: User) -> tuple[str, ...]:
+        return INBOX_KINDS_CLIENT if user.role == "client" else INBOX_KINDS_EQUIPE
+
     @app.get("/api/v1/me/preferences")
     def prefs_get(user: User = Depends(current_user)):
-        return {"kinds": list(INBOX_KINDS), "prefs": {k: (user.notif_prefs or {}).get(k, True) for k in INBOX_KINDS}}
+        kinds = kinds_of(user)
+        return {"kinds": list(kinds), "prefs": {k: (user.notif_prefs or {}).get(k, True) for k in kinds}}
 
     @app.put("/api/v1/me/preferences")
     def prefs_put(body: PrefsIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
-        if any(k not in INBOX_KINDS for k in body.prefs):
-            raise HTTPException(422, f"Types attendus parmi : {', '.join(INBOX_KINDS)}.")
+        kinds = kinds_of(user)
+        if any(k not in kinds for k in body.prefs):
+            raise HTTPException(422, f"Types attendus parmi : {', '.join(kinds)}.")
         user.notif_prefs = {k: bool(v) for k, v in body.prefs.items()}
         db.commit()
         return {"prefs": user.notif_prefs}

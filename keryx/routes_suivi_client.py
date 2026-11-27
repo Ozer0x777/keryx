@@ -13,9 +13,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
-from . import inbox
-from .ids import rfc3339, utcnow
-from .models import TERMINAL_STATUSES, ActionClient, Ticket, User
+from . import audit, inbox
+from .ids import as_utc, rfc3339, utcnow
+from .models import TERMINAL_STATUSES, ActionClient, MesureEndiguement, Ticket, TicketEvent, User, WazuhAgent
 
 ETATS_CLIENT = ("pris_en_compte", "en_cours", "traite")
 DEMANDES = ("cloture", "reouverture")
@@ -59,6 +59,49 @@ class VueClientIn(BaseModel):
 def register(app, ctx) -> None:
     get_db, current_user, require_role, commit = ctx.get_db, ctx.current_user, ctx.require_role, ctx.commit
     load_ticket, event = ctx.load_ticket, ctx.event
+
+    @app.get("/api/v1/client/accueil")
+    def accueil_client(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        """Accueil du portail client (C01) : ce qui attend sa réponse, quelques chiffres, les dernières actions visibles
+        du SOC, l'état de son parc. Clients de l'utilisateur seulement ; jamais les échéances internes de l'équipe."""
+        require_role(user, "client")
+        ids = [x.id for x in user.tenants]
+        if not ids:
+            return {"a_faire": [], "chiffres": {}, "nouvelles": [], "parc": {"total": 0, "hors_ligne": []}}
+        tickets = {t.id: t for t in db.scalars(select(Ticket).where(Ticket.tenant_id.in_(ids))).all()}
+        a_faire = []
+        for m in db.scalars(select(MesureEndiguement).where(MesureEndiguement.tenant_id.in_(ids), MesureEndiguement.etat == "proposee")
+                            .order_by(MesureEndiguement.cree_le.desc())):
+            t = tickets.get(m.ticket_id)
+            if t:
+                a_faire.append({"kind": "mesure", "id": m.id, "type": m.type, "libelle": m.libelle, "cree_le": rfc3339(m.cree_le),
+                                "ref": t.ref, "titre": t.titre_client or t.title})
+        for a in db.scalars(select(ActionClient).where(ActionClient.tenant_id.in_(ids), ActionClient.etat == "a_faire")
+                            .order_by(ActionClient.cree_le.desc())):
+            t = tickets.get(a.ticket_id)
+            if t:
+                a_faire.append({"kind": "action", "id": a.id, "libelle": a.libelle, "cree_le": rfc3339(a.cree_le),
+                                "ref": t.ref, "titre": t.titre_client or t.title})
+        maintenant = utcnow()
+        debut_mois = maintenant.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        ouverts = [t for t in tickets.values() if t.status not in TERMINAL_STATUSES and t.status != "cloture"]
+        resolus = [t for t in tickets.values() if t.closed_at and as_utc(t.closed_at) >= debut_mois]
+        delais = [(as_utc(t.closed_at) - as_utc(t.detected_at)).total_seconds() / 3600 for t in resolus if t.status != "faux_positif"]
+        attente = {x["ref"] for x in a_faire}
+        chiffres = {"attente": len(attente), "en_cours": len(ouverts),
+                    "critiques": sum(1 for t in ouverts if (t.gravite or t.criticite_initiale) == "Critique"),
+                    "resolus_mois": len(resolus), "delai_moyen_h": round(sum(delais) / len(delais), 1) if delais else None}
+        evs = db.scalars(select(TicketEvent).where(TicketEvent.ticket_id.in_(list(tickets)), TicketEvent.visible_client.is_(True),
+                                                   TicketEvent.action != "creation").order_by(TicketEvent.ts.desc()).limit(8)).all()
+        nouvelles = [{"ts": rfc3339(e.ts), "ref": tickets[e.ticket_id].ref, "titre": tickets[e.ticket_id].titre_client or tickets[e.ticket_id].title,
+                      "action": e.action, "details": {k: v for k, v in (e.details or {}).items() if k in ("to", "libelle", "etat")}}
+                     for e in evs]
+        agents = db.scalars(select(WazuhAgent).where(WazuhAgent.tenant_id.in_(ids))).all()
+        parc = {"total": sum(1 for a in agents if a.status != "removed"),
+                "hors_ligne": [a.name for a in agents if a.status == "disconnected"][:10]}
+        audit.record(db, user.username, "client.accueil", None, None, ids[0] if len(ids) == 1 else None, {"a_faire": len(a_faire)})
+        commit(db)
+        return {"a_faire": a_faire, "chiffres": chiffres, "nouvelles": nouvelles, "parc": parc}
 
     @app.put("/api/v1/tickets/{ref}/vue-client")
     def maj_vue_client(ref: str, body: VueClientIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
@@ -140,6 +183,7 @@ def register(app, ctx) -> None:
         db.add(a)
         db.flush()
         event(db, t, user, "action_client_demandee", {"id": a.id, "libelle": a.libelle}, visible_client=True)
+        inbox.prevenir_clients(db, t, "decision_attendue", actor=None)
         commit(db)
         return vue_suivi(db, t)
 

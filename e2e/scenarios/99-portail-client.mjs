@@ -19,6 +19,11 @@ export default async ({ BASE, check, login, stack }) => {
   await a.waitForSelector('section[aria-label="Mesures d\'endiguement et procédures d\'urgence"] >> text=Isoler le serveur du réseau')
 
   const c = await login('client')
+  check(await eventually(async () => c.url().endsWith('/accueil')), 'client : arrivée sur son accueil')
+  const todoAccueil = c.locator('section[aria-label="À faire de votre côté"]')
+  check(await eventually(async () => (await todoAccueil.count()) === 1 && (await todoAccueil.innerText()).includes('Isoler le serveur du réseau')), 'accueil : la mesure attend sa décision')
+  await c.locator('.bell-btn').click()
+  check(await eventually(async () => (await c.locator('.bell-panel').innerText()).includes('Décision attendue de votre part')), 'cloche du client : « Décision attendue de votre part »')
   await c.goto(`${BASE}/tickets`)
   const ligne = c.locator('table.queue-client tbody tr', { hasText: ref })
   await ligne.waitFor()

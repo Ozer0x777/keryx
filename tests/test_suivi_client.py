@@ -80,3 +80,30 @@ def test_vue_client_titre_resume_et_reponse_attendue(app, db, world, alert):
     a.post(f"/api/v1/tickets/{ref}/mesures", json={"libelle": "Isoler le serveur"})
     assert [x["ref"] for x in c.get("/api/v1/tickets", params={"a_decider": "true"}).json()["items"]] == [ref]
     assert c.get("/api/v1/tickets").json()["items"][0]["a_decider"] is True
+
+
+def test_accueil_client_notifications_et_rapport(app, db, world, alert):
+    """Accueil du client (ce qui attend sa réponse, chiffres, nouvelles du SOC), notifications propres au client
+    (décision attendue, réponse du SOC, incident résolu), rapport périodique de son seul client."""
+    from keryx.models import InboxItem, User
+    ref = ingest(app, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE)).json()["ticket"]
+    a, c = login(app, db, "analyst_acme"), login(app, db, "client_acme")
+    a.post(f"/api/v1/tickets/{ref}/mesures", json={"libelle": "Isoler le serveur"})
+    a.post(f"/api/v1/tickets/{ref}/comments", json={"body_html": "<p>Nous analysons.</p>", "visible_client": True})
+    acc = c.get("/api/v1/client/accueil").json()
+    assert acc["a_faire"][0]["ref"] == ref and acc["a_faire"][0]["kind"] == "mesure" and acc["chiffres"]["attente"] == 1
+    assert acc["chiffres"]["en_cours"] == 1 and any(n["action"] == "mesure_proposee" for n in acc["nouvelles"])
+    assert a.get("/api/v1/client/accueil").status_code == 403
+    db.rollback()
+    client = db.scalars(select(User).where(User.username == "client_acme")).one()
+    kinds = {i.kind for i in db.scalars(select(InboxItem).where(InboxItem.user_id == client.id))}
+    assert {"decision_attendue", "reponse_soc"} <= kinds
+    # préférences du client : ses trois types seulement
+    p = c.get("/api/v1/me/preferences").json()
+    assert p["kinds"] == ["decision_attendue", "reponse_soc", "incident_resolu"]
+    assert c.put("/api/v1/me/preferences", json={"prefs": {"assignation": False}}).status_code == 422
+    assert c.put("/api/v1/me/preferences", json={"prefs": {"reponse_soc": False}}).status_code == 200
+    # rapport périodique : le sien, jamais celui d'un autre client
+    rap = c.get("/api/v1/reports/period", params={"client": "ACME"})
+    assert rap.status_code == 200 and "workload" not in rap.json() and "sla" not in rap.json()
+    assert c.get("/api/v1/reports/period", params={"client": "DELTA"}).status_code in (403, 404)
