@@ -220,7 +220,9 @@ def fetch(cfg: ApiConfig) -> Snapshot:
             query = {"limit": PAGE, "offset": offset, "select": SELECT, "sort": "+id"}
             if cfg.group:
                 query["group"] = cfg.group
-            status, data = call("GET", "/agents?" + urlencode(query, safe=",+"), bearer)
+            # « + » encodé (%2B) : non encodé, il vaut un espace dans une chaîne de requête, et le vrai manager refuse
+            # alors le tri (400, « Not a valid sort field »). La virgule de `select` peut rester telle quelle.
+            status, data = call("GET", "/agents?" + urlencode(query, safe=","), bearer)
             if status in (401, 403):
                 raise ApiError("Le compte de lecture n'a pas le droit de lister les agents (permission agent:read).", "droits")
             if status != 200:

@@ -51,6 +51,30 @@ l'environnement du service `wazuh-manager`.
 Puis : `sudo systemctl restart wazuh-manager`. Les traces de l'intégration sont dans
 `/var/ossec/logs/integrations.log`.
 
+### Limites observées côté Wazuh (préproduction, Wazuh 4.14.10, 27/11/2026)
+
+Constats tirés des données d'un essai de quatre jours (24 568 alertes de niveau 7 ou plus), **non lus dans le code de
+Wazuh** : à vérifier pour votre version.
+
+- **Alertes de plus de 64 Kio jamais transmises.** Les 22 alertes de plus de 65 536 octets de la période n'ont été
+  envoyées à aucune intégration, sans aucune trace dans les journaux du manager ; toutes les autres sont arrivées.
+  Une alerte volumineuse (script PowerShell long, évènement chargé) peut donc ne jamais atteindre Keryx. À surveiller
+  sur le manager, par exemple chaque jour :
+
+  ```bash
+  LC_ALL=C awk 'length($0) > 65536' /var/ossec/logs/alerts/alerts.json \
+    | jq -c 'select(.rule.level >= 7) | {id, regle: .rule.id, agent: .agent.name}'
+  ```
+
+  Et réduire la taille de ces alertes à la source (champs repris en double dans le décodeur ou la règle).
+- **Débit : une alerte à la fois.** Le manager lance le script une fois par alerte (environ 0,26 s chacune, soit
+  quelque 14 000 alertes par heure au plus, Keryx en traitant une en 0,025 s). Une rafale plus rapide (campagne de
+  tests, attaque bruyante) est mise en file puis livrée dans l'ordre, sans perte : 30 minutes de retard ont été
+  mesurées après une rafale de 9 640 alertes en 3 minutes. Pour les règles très bavardes, regrouper côté Wazuh ou
+  relever leur niveau ; une seconde intégration sur les mêmes alertes ralentit aussi la file.
+- **Horloge.** Le délai entre la production d'une alerte et sa réception se lit avec les heures du manager : mettre
+  le manager à l'heure (NTP), sinon les délais affichés sont faussés.
+
 ## 4. (Optionnel) Importance des équipements
 
 Pour pré-remplir l'importance (standard / sensible / vital) utilisée dans la gravité,
@@ -77,6 +101,8 @@ en lecture seule (ADR-0030). Créer côté Wazuh un utilisateur d'API dédié, l
 une politique RBAC avec l'action `agent:read` sur la ressource `agent:group:<groupe du client>` (ou `agent:id:*` si
 le manager ne sert qu'un client), rattachée à un rôle donné à cet utilisateur. Les noms exacts des actions et des
 ressources dépendent de la version de Wazuh : **à vérifier dans sa documentation RBAC** avant de créer le compte.
+Essayé le 27/11/2026 contre un manager Wazuh 4.14.10 avec un utilisateur portant le rôle prédéfini
+`agents_readonly` (lecture des agents et des groupes) : relevé complet des agents.
 
 Puis, dans Keryx (Admin, Administration > Clients > Paramétrer > Parc d'agents Wazuh) : adresse de l'API, groupe
 Wazuh des agents du client (obligatoire si le manager sert plusieurs clients), identifiant et mot de passe. La même

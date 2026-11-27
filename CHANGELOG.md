@@ -4,6 +4,16 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+### Corrigé
+- Parc d'agents Wazuh : le relevé échouait contre un vrai manager (erreur 400 sur la liste des agents). Le « + » du
+  tri `sort=+id` n'était pas encodé dans l'URL et se lisait comme un espace. Trouvé sur la préproduction (Wazuh
+  4.14.10), où le relevé complet fonctionne désormais ; le faux manager des tests refuse maintenant un tri mal formé.
+
+### Documentation
+- Intégration Wazuh : limites observées en préproduction (alertes de plus de 64 Kio jamais transmises par le
+  manager, avec une commande pour les repérer ; débit d'une alerte à la fois et retard après une rafale ; horloge du
+  manager).
+
 ## [0.11.1] : 2026-11-27
 
 **À lire avant la mise à jour** : version corrective, sans migration. La recherche VirusTotal est désormais refusée

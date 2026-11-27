@@ -46,6 +46,8 @@
   de détection ; l'exigence PDIS précise n'a pas été relue pour cet ADR : **à vérifier**.
 - **Conséquences** : une sortie réseau de Keryx vers chaque manager (port de l'API, souvent 55000) ; un compte
   d'API par client à créer côté Wazuh ; avec plusieurs processus Keryx, un seul doit avoir le relevé actif.
-- **Non essayé** : contre un vrai manager Wazuh. Noms de champs, permissions du compte et forme des réponses ne sont
-  vérifiés que contre le faux manager des tests (`tests/fake_wazuh_api.py`). À valider sur la préproduction.
+- **Essayé contre un vrai manager** le 27/11/2026 (préproduction, Wazuh 4.14.10, compte au rôle `agents_readonly`) :
+  authentification, version et liste des agents conformes après correction d'un défaut. Le « + » du tri `sort=+id`
+  n'était pas encodé et valait un espace : le manager répondait 400 (« Not a valid sort field »). Il est désormais
+  encodé (`%2B`) et le faux manager des tests (`tests/fake_wazuh_api.py`) refuse, comme le vrai, un tri mal formé.
 - **Tests** : `tests/test_parc.py`, `e2e/scenarios/04-parc.mjs`, `e2e/scenarios/97-parc-ticket.mjs`.

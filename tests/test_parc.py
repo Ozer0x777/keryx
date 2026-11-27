@@ -104,6 +104,8 @@ def test_releve_etats_versions_et_vue_equipe(papp, db, world, wapi):
     assert all(x["path"].split("?")[0] in ("/security/user/authenticate", "/", "/agents") for x in wapi.requests)
     agents_req = [x for x in wapi.requests if x["path"].startswith("/agents")]
     assert "group=acme" in agents_req[0]["path"] and "select=" in agents_req[0]["path"]
+    # Tri croissant encodé : « sort=+id » non encodé vaut « sort= id », refusé par un vrai manager (préprod, 27/11/2026)
+    assert all("sort=%2Bid" in x["path"] and "sort=+" not in x["path"] for x in agents_req)
 
 
 def test_filtre_de_groupe_non_cru_sur_parole(papp, db, world, wapi):
