@@ -61,3 +61,22 @@ def test_actions_demandees_au_client(app, db, world, alert):
     assert ev.visible_client and ev.details["etat"] == "faite"
     # cloisonnement : un client d'un autre périmètre ne voit pas le ticket
     assert login(app, db, "manager").get(f"/api/v1/tickets/{ref}").status_code == 200
+
+
+def test_vue_client_titre_resume_et_reponse_attendue(app, db, world, alert):
+    """Portail client : titre et résumé écrits par l'équipe ; filtre « réponse attendue » (mesure à décider, action à
+    faire) ; le client ne modifie pas ces champs."""
+    ref = ingest(app, world["keys"]["ACME"], alert(ALERT_SSH_BRUTEFORCE)).json()["ticket"]
+    a, c = login(app, db, "analyst_acme"), login(app, db, "client_acme")
+    r = a.put(f"/api/v1/tickets/{ref}/vue-client", json={"titre_client": "Tentatives de connexion répétées",
+                                                         "resume_client": "Un serveur reçoit des essais de mot de passe."})
+    assert r.status_code == 200 and r.json()["resume_client_le"]
+    assert c.put(f"/api/v1/tickets/{ref}/vue-client", json={"titre_client": "x"}).status_code == 403
+    fiche = c.get(f"/api/v1/tickets/{ref}").json()
+    assert fiche["titre_client"] == "Tentatives de connexion répétées" and fiche["resume_client"].startswith("Un serveur")
+    item = c.get("/api/v1/tickets").json()["items"][0]
+    assert item["titre_client"] == "Tentatives de connexion répétées" and item["a_decider"] is False
+    assert c.get("/api/v1/tickets", params={"a_decider": "true"}).json()["items"] == []
+    a.post(f"/api/v1/tickets/{ref}/mesures", json={"libelle": "Isoler le serveur"})
+    assert [x["ref"] for x in c.get("/api/v1/tickets", params={"a_decider": "true"}).json()["items"]] == [ref]
+    assert c.get("/api/v1/tickets").json()["items"][0]["a_decider"] is True

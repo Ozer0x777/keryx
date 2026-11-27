@@ -710,3 +710,47 @@ kbd { font-family: var(--mono); font-size: 12px; border: 1px solid var(--border)
 /* Réponse aux incidents : sous-sections à plat, séparées par un filet (pas de cadre dans le cadre). */
 .pris-panel .section-body > .fold, .pris-panel .fold.card { border: 0; box-shadow: none; border-radius: 0; border-top: 1px solid var(--border); margin: 0; background: transparent; }
 .pris-panel .fold.card > details > summary { padding-left: 0; padding-right: 0; }
+
+/* ---------- Portail client ---------- */
+.st-client { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+.st-client::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.st-client.analyse { background: #E8EFFC; color: #1F5FD1; }
+.st-client.vous { background: #FCE8E6; color: #B3261E; }
+.st-client.reponse { background: #FCF1D6; color: #8A5A00; }
+.st-client.resolu { background: #E4F4EA; color: #1E7A46; }
+.st-client.clos { background: #E4E8EE; color: #3A4350; }
+.client-todo { box-shadow: inset 4px 0 0 #B3261E; border-color: #F1B9B4; }
+.client-todo h2 { margin: 0 0 8px; font-size: 16px; }
+.todo-list { list-style: none; margin: 0; padding: 0; }
+.todo-list li { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); }
+.todo-list li:first-child { border-top: 0; }
+.todo-list li > div { display: grid; gap: 2px; min-width: 0; flex: 1 1 260px; }
+.frise { list-style: none; margin: 0 0 14px; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.frise li { border-top: 3px solid var(--border); padding-top: 6px; font-size: 13px; color: var(--muted); display: grid; }
+.frise li.done { border-color: var(--accent); color: var(--text); }
+.frise li.now { border-color: var(--accent); color: var(--accent); }
+.frise li span { font-size: 12px; }
+.ce-qui-se-passe h2 { margin: 0 0 6px; font-size: 16px; }
+.tech-details > summary { cursor: pointer; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.tech-details > summary h2 { display: inline; font-size: 15px; margin: 0; }
+/* Texte un peu plus grand côté client (C14) ; l'interface de l'équipe garde sa densité. */
+.ticket-page-client, .queue-client { font-size: 15px; }
+/* Échanges avec le SOC en conversation (C10) : vos messages à droite, ceux du SOC à gauche. */
+.ticket-page-client .comment { max-width: 88%; border-radius: 10px; padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); }
+.ticket-page-client .comment.mine { margin-left: auto; background: #EEF3FD; border-color: #D3E0FA; }
+@media (max-width: 600px) { .frise li span { display: none; } }
+/* Liste du client : ligne qui attend sa réponse soulignée ; cartes sur téléphone. */
+.queue-client tr.a-decider td:first-child { box-shadow: inset 3px 0 0 #B3261E; }
+.queue-client .title-cell .ctx { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; }
+.marking-note { margin: 0 0 6px; }
+@media (max-width: 600px) {
+  .queue-client thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .queue-client, .queue-client tbody { display: block; }
+  .queue-client tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; padding: 12px 4px; border-bottom: 1px solid var(--border); }
+  .queue-client td { display: block; padding: 0; border: 0; }
+  .queue-client td:nth-child(1) { grid-area: 1 / 1; }
+  .queue-client td:nth-child(4) { grid-area: 1 / 2; justify-self: end; }
+  .queue-client td.title-cell { grid-area: 2 / 1 / 3 / 3; }
+  .queue-client td:nth-child(3) { grid-area: 3 / 1; }
+  .queue-client td:nth-child(5) { grid-area: 3 / 2; justify-self: end; color: var(--muted); }
+}

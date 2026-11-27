@@ -279,6 +279,11 @@ class Ticket(Base):
     # Réponse aux incidents (PRIS) : compréhension structurée de l'incident (VI.5.3.e), posture et niveau de
     # discrétion vis-à-vis de l'attaquant (VI.3.b), cadre du rapport d'analyse (VI.7). Voir keryx/pris.py.
     pris: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Ce que le client lit en premier (portail client) : un titre en mots de client et le résumé « Ce qui se passe »,
+    # écrits par l'équipe ; à défaut, le titre Wazuh. Distincts de la description technique.
+    titre_client: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    resume_client: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resume_client_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     demande_client: Mapped[str | None] = mapped_column(String(16), nullable=True)
     etat_client_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     occurrences: Mapped[int] = mapped_column(Integer, default=1)

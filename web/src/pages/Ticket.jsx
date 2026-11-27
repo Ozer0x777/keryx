@@ -7,6 +7,7 @@ import { tlpAuMoins, tlpSous } from '../tlp.js'
 import { fmtMin } from '../components/Acquittement.jsx'
 import SuiviClient from '../components/SuiviClient.jsx'
 import Html from '../components/Html.jsx'
+import { aFaire, CeQuiSePasse, ClientTodo, Frise, StatutClient, VueClientEditor } from '../components/ClientVue.jsx'
 import LinkDialog from '../components/LinkDialog.jsx'
 import ShortcutsHelp from '../components/ShortcutsHelp.jsx'
 import { useShortcuts } from '../shortcuts.js'
@@ -274,8 +275,15 @@ export default function Ticket() {
       </nav>
       <header className="ticket-head">
         <div className="grow">
-          <h1>{t.title}</h1>
+          <h1>{isClient ? (t.titre_client || t.title) : t.title}</h1>
           {/* Ligne 2 : étiquettes ; ligne 3 : faits (détection, réception, règle qui a créé le ticket, occurrences, agent). */}
+          {isClient ? (
+            <div className="row wrap gap head-tags">
+              <StatutClient t={t} aDecider={aFaire(t).length > 0} />
+              <Severity value={t.gravite || t.criticite_initiale} prefix={tr('Priorité : ')} />
+              <Tlp value={t.tlp} />
+            </div>
+          ) : (
           <div className="row wrap gap head-tags">
             <Status value={t.status} />
             <Severity value={t.criticite_initiale} prefix={tr("Criticité initiale : ")} />
@@ -283,11 +291,12 @@ export default function Ticket() {
             <Tlp value={t.tlp} />
             {t.crisis && <span className="pill danger strong">{tr('CRISE')}</span>}
           </div>
+          )}
           <p className="head-facts muted small">
             <span>{tr('Détecté {when}', { when: formatUtc(t.detected_at) })}</span>
-            <span>{tr('créé par la règle {rule} (niveau {level})', { rule: t.rule.id, level: t.rule.level })}</span>
+            {isTeam && <span>{tr('créé par la règle {rule} (niveau {level})', { rule: t.rule.id, level: t.rule.level })}</span>}
             <span>{tr('{n} occurrence(s)', { n: t.occurrences })}{t.occurrences > 1 && t.last_seen_at ? `, ${tr('la dernière {when}', { when: formatUtc(t.last_seen_at) })}` : ''}</span>
-            {t.agent?.name && <span>{tr('agent')} <span className="mono">{[t.agent.id, t.agent.name, t.agent.ip].filter(Boolean).join(' ')}</span></span>}
+            {t.agent?.name && <span>{isTeam ? tr('agent') : tr('machine')} <span className="mono">{isTeam ? [t.agent.id, t.agent.name, t.agent.ip].filter(Boolean).join(' ') : t.agent.name}</span></span>}
             <ClockNote delay={t.reception_delay_s} />
           </p>
         </div>
@@ -398,6 +407,7 @@ export default function Ticket() {
             <Events t={t} />
           </TabPanel>
           <TabPanel id="communication" idBase="ticket" active={tab === 'communication'}>
+            <VueClientEditor t={t} enc={enc} run={run} open={open} />
             <SuiviClient t={t} enc={enc} isClient={false} run={run} open={open} />
             <Comments t={t} enc={enc} isClient={isClient} me={me} run={run} onImage={uploadImage} templates={templates('commentaire')} />
           </TabPanel>
@@ -409,14 +419,22 @@ export default function Ticket() {
         // Portail client : peu de contenu, une seule page, sans onglets.
         <>
         <div className="head-status"><UnsavedSummary labels={unsaved.labels} /></div>
+        {/* Ordre du portail client : ce qu'on attend de lui, l'avancement, ce qui se passe, les échanges ; la technique
+            (alerte, journal brut, registre) en fin de page, repliée (C05 à C11). */}
         <div className="ticket-layout ticket-client">
           <div className="ticket-main">
-            <Description t={t} enc={enc} canEdit={false} run={run} onImage={uploadImage} alertMerged={false} />
-            <SuiviClient t={t} enc={enc} isClient run={run} open={open} />
+            <ClientTodo t={t} enc={enc} run={run} open={open} />
+            <Frise t={t} />
+            <CeQuiSePasse t={t} />
             <Mesures t={t} enc={enc} run={run} isClient open={open} />
-            <Attachments t={t} enc={enc} me={me} run={run} vt={vt} />
-            <Events t={t} />
+            <SuiviClient t={t} enc={enc} isClient run={run} open={open} />
             <Comments t={t} enc={enc} isClient={isClient} me={me} run={run} onImage={uploadImage} templates={templates('commentaire')} />
+            <Attachments t={t} enc={enc} me={me} run={run} vt={vt} />
+            <details className="card section tech-details">
+              <summary><h2>{tr("Détails techniques de l'alerte")}</h2><span className="fold-summary">{tr('règle, machine, journal brut, registre des actions')}</span></summary>
+              <Description t={t} enc={enc} canEdit={false} run={run} onImage={uploadImage} alertMerged={false} />
+              <Events t={t} />
+            </details>
           </div>
         </div>
         </>
@@ -859,11 +877,11 @@ function Comments({ t, enc, isClient, me, run, onImage, templates }) {
     if (r) setStatus({ ok: tr('Modèle enregistré à {h}', { h: utcClock() }) })
   }
   return (
-    <Section id="commentaires" filled={(cm.total || 0) > 0} title={isClient ? tr('Échanges avec le SOC') : tr('Commentaires')} summary={cm.total || null}>
+    <Section id="commentaires" filled={isClient || (cm.total || 0) > 0} title={isClient ? tr('Échanges avec le SOC') : tr('Commentaires')} summary={cm.total || null}>
       {cm.total === 0 && <p className="muted">{tr("Aucun commentaire.")}</p>}
       {cm.button}
       {cm.all.map((c, i) => (
-        <div key={c.id || i} className={`comment ${c.visible_client ? 'public' : 'internal'}`}>
+        <div key={c.id || i} className={`comment ${c.visible_client ? 'public' : 'internal'}${isClient && c.author === me.display_name ? ' mine' : ''}`}>
           <div className="comment-head">{c.visible_client ? (isClient ? '' : tr('VISIBLE CLIENT · ')) : tr('INTERNE · ')}{c.author} · {formatUtc(c.created_at)}</div>
           <Html html={c.body_html} />
         </div>
