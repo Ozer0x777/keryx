@@ -4,6 +4,12 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+## [0.11.0] : 2026-11-27
+
+**À lire avant la mise à jour** : aucun comportement par défaut ne change. Migrations 0031 et 0032, appliquées
+par l'image au démarrage. Un fichier joint que l'antivirus ne peut pas analyser (archive ZIP chiffrée ou
+endommagée) est désormais isolé comme un fichier en quarantaine.
+
 ### Ajouté
 - Réponse aux incidents (référentiel PRIS v3.2), onglet Investigation de la fiche : posture et niveau de discrétion
   vis-à-vis de l'attaquant (en discrétion élevée, recherche VirusTotal refusée) ; compréhension structurée de
