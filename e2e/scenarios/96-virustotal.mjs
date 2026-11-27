@@ -33,8 +33,8 @@ export default async ({ stack, BASE, check, login }) => {
   // 1. Sans clé : la fonction est là (disponible par défaut), mais elle renvoie au profil et rien ne part
   const m = await login('manager')
   // Accord du client à la recherche d'empreintes chez VirusTotal (PDIS IV.1.g), refusée par défaut
-  const csrf = (await m.context().cookies()).find((c) => c.name === 'keryx_csrf').value
-  const accord = await m.request.put(`${BASE}/api/v1/politique/ACME`, { data: { virustotal_autorise: true }, headers: { 'X-CSRF-Token': csrf } })
+  const jeton = (await m.context().cookies()).find((c) => c.name === 'keryx_csrf').value
+  const accord = await m.request.put(`${BASE}/api/v1/politique/ACME`, { data: { virustotal_autorise: true }, headers: { 'X-CSRF-Token': jeton } })
   check(accord.ok() && (await accord.json()).virustotal_autorise === true, 'accord du client enregistré par le manager')
   await m.goto(`${BASE}/tickets/${ref}`)
   await m.waitForSelector(section, { state: 'attached' })
