@@ -83,8 +83,9 @@ reçues, ouverts cumulés par criticité et résolution moyenne ; qualification 
 règles les plus déclenchées ; comptes et authentifications du portail.
 
 Ajoutés le 27/11/2026 : taille de la base et remplissage du disque des pièces ; réussite de l'envoi des notifications
-par mois (disponibilité du système d'envoi). Encore manquant : la disponibilité du portail lui-même, à mesurer par
-la supervision de l'infrastructure, ou par la console en mode portail (ADR-0027).
+par mois (disponibilité du système d'envoi). La disponibilité du portail lui-même se mesure hors de Keryx, par une
+sonde extérieure sur `/healthz` chaque minute (`docs/deploiement-docker.md`, matrice des flux, ligne 21), ou plus
+tard par la console en mode portail (ADR-0027).
 
 Les indicateurs d'évènements, de collecteurs et de règles relèvent de Wazuh.
 

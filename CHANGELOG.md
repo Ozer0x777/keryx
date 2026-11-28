@@ -4,6 +4,10 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+### Documentation
+- Feuille de route et couverture PDIS mises à jour : fichiers non analysables et indicateurs de capacité faits
+  depuis la 0.11.0, parc d'agents validé sur la préproduction, sonde de disponibilité documentée.
+
 ## [0.12.0] : 2026-11-28
 
 **À lire avant la mise à jour** : migrations 0033 et 0034, appliquées par l'image au démarrage. La 0033 relit les
