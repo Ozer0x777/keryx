@@ -39,9 +39,7 @@ le manager de la préproduction (Wazuh 4.14.10), corrigé dans la 0.12.0.
 
 ## 4. Robustesse et exploitation
 
-- Déconnexion initiée par Keycloak (aujourd'hui, une session fermée dans Keycloak reste valable dans Keryx jusqu'à
-  son expiration, ADR-0017).
-- Validation de l'export IODEF contre le schéma officiel complet ; PDF des rapports produit côté serveur.
+- PDF des rapports produit côté serveur.
 
 ## 5. Portail par client, pare-feu applicatif, disponibilité (mis de côté le 27/11/2026)
 

@@ -11,14 +11,16 @@ import secrets
 from datetime import timedelta
 from urllib.parse import quote
 
-from fastapi import Depends, HTTPException, Request
-from fastapi.responses import RedirectResponse
+import time
+
+from fastapi import Depends, Form, HTTPException, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 
 from . import audit, security
 from .ids import as_utc, utcnow
-from .models import OidcFlow, User
+from .models import OidcFlow, Session, User
 from .oidc import Discovery, OidcError, pkce_pair
 
 FLOW_MINUTES = 10
@@ -134,9 +136,60 @@ def register(app, ctx) -> None:
             s = db.get(Session, security.sha256(old))
             if s is not None:
                 db.delete(s)
-        ctx.open_session(db, user, resp, ip, "sso", sso=(name, id_token))
+        sid = claims.get("sid")
+        ctx.open_session(db, user, resp, ip, "sso", sso=(name, id_token, str(sid)[:255] if isinstance(sid, str) else None))
         resp.delete_cookie(FLOW_COOKIE, path=FLOW_COOKIE_PATH)
         return resp
+
+    # Jetons de déconnexion déjà reçus (« jti ») : un rejeu ne ferme pas une session ouverte depuis. Mémoire du processus,
+    # 10 minutes, ce qui couvre la tolérance d'horloge et la durée de vie courte de ces jetons.
+    seen_jti: dict[str, float] = {}
+
+    @app.post("/api/v1/auth/oidc/{name}/backchannel-logout")
+    def backchannel_logout(name: str, request: Request, logout_token: str = Form(default="", max_length=8192),
+                           db: DbSession = Depends(get_db)):
+        """Déconnexion demandée par le fournisseur (OpenID Connect Back-Channel Logout 1.0) : quand une session est
+        fermée dans Keycloak, il l'annonce ici, de serveur à serveur ; les sessions Keryx ouvertes par cette session du
+        fournisseur (« sid ») ou, à défaut, pour cette identité (« sub ») sont fermées."""
+        no_store = {"Cache-Control": "no-store"}
+        if name not in providers:
+            return JSONResponse({"error": "invalid_request"}, status_code=400, headers=no_store)
+        ip = ctx.client_ip(request)
+        if not ctx.login_ip_limiter.allow(ip, db):
+            return JSONResponse({"error": "invalid_request"}, status_code=429, headers=no_store)
+        try:
+            claims = discoveries[name].verify_logout(logout_token)
+        except OidcError as exc:
+            audit.record(db, "anonyme", "auth.sso_backchannel_refused", None, None, None,
+                         {"provider": name, "reason": audit._neutralize(str(exc))[:200], "ip": ip})
+            commit(db)
+            return JSONResponse({"error": "invalid_request"}, status_code=400, headers=no_store)
+        now = time.monotonic()
+        for k in [k for k, t in seen_jti.items() if now - t > 600]:
+            del seen_jti[k]
+        jti = str(claims["jti"])[:200]
+        if jti in seen_jti:
+            return JSONResponse({}, status_code=200, headers=no_store)   # déjà traité : réponse identique, rien de plus
+        seen_jti[jti] = now
+        sid, sub = claims.get("sid"), claims.get("sub")
+        q = select(Session).where(Session.sso_provider == name)
+        if isinstance(sid, str) and sid:
+            q = q.where(Session.sso_sid == sid[:255])
+        if isinstance(sub, str) and sub:
+            q = q.join(User, User.id == Session.user_id).where(User.oidc_issuer == providers[name].issuer,
+                                                                User.oidc_sub == sub)
+        rows = db.scalars(q).all()
+        users = {s.user_id for s in rows}
+        for s in rows:
+            db.delete(s)
+        for uid in users:
+            u = db.get(User, uid)
+            audit.record(db, u.username if u else "inconnu", "auth.sso_backchannel_logout", "user", uid, None,
+                         {"provider": name, "sessions": sum(1 for s in rows if s.user_id == uid)})
+        if not rows:
+            audit.record(db, "anonyme", "auth.sso_backchannel_logout", None, None, None, {"provider": name, "sessions": 0})
+        commit(db)
+        return JSONResponse({}, status_code=200, headers=no_store)
 
     @app.post("/api/v1/admin/users/{username}/unlink-sso", dependencies=[Depends(ctx.admin_guard)])
     def unlink(username: str, user: User = Depends(ctx.current_user), db: DbSession = Depends(get_db)):

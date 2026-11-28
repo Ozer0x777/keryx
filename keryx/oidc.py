@@ -123,6 +123,9 @@ class Discovery:
         return f"{endpoint}?" + urlencode({"id_token_hint": id_token_hint, "client_id": self.p.client_id,
                                            "post_logout_redirect_uri": post_logout_redirect_uri})
 
+    def verify_logout(self, logout_token: str) -> dict:
+        return verify_logout_token(logout_token, self.keys, self.p.issuer, self.p.client_id, now=time.time())
+
     def exchange(self, code: str, redirect_uri: str, verifier: str) -> str:
         data = {"grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri,
                 "client_id": self.p.client_id, "code_verifier": verifier}
@@ -183,4 +186,46 @@ def verify_id_token(token: str, get_keys, issuer: str, client_id: str, nonce: st
         raise OidcError("Nonce invalide.")
     if required_acr and str(claims.get("acr", "")) != required_acr:
         raise OidcError("Niveau d'authentification insuffisant (double authentification exigée).")
+    return claims
+
+
+BACKCHANNEL_EVENT = "http://schemas.openid.net/event/backchannel-logout"
+
+
+def verify_logout_token(token: str, get_keys, issuer: str, client_id: str, now: float | None = None) -> dict:
+    """Jeton de déconnexion (OpenID Connect Back-Channel Logout 1.0, section 2.6) : signature et algorithme comme un jeton
+    d'identité, émetteur, audience, « iat » et « jti » présents, événement de déconnexion, « sid » ou « sub », et
+    jamais de « nonce » (un jeton d'identité ne doit pas pouvoir servir de jeton de déconnexion)."""
+    try:
+        header = jwt.get_unverified_header(token)
+    except jwt.PyJWTError as exc:
+        raise OidcError("Jeton de déconnexion illisible.") from exc
+    alg = header.get("alg")
+    if alg not in ALLOWED_ALGS:
+        raise OidcError("Algorithme de signature refusé.")
+    kid = header.get("kid")
+
+    def find(force: bool):
+        keys = [k for k in get_keys(force) if (kid is None or k.get("kid") == kid) and k.get("use", "sig") == "sig"]
+        return keys[0] if keys else None
+    jwk = find(False) or find(True)
+    if jwk is None:
+        raise OidcError("Clé de signature inconnue.")
+    try:
+        claims = jwt.decode(token, _public_key(jwk), algorithms=[alg], audience=client_id, issuer=issuer, leeway=60,
+                            options={"require": ["iat", "iss", "aud", "jti"], "verify_exp": True})
+    except jwt.PyJWTError as exc:
+        raise OidcError("Jeton de déconnexion invalide.") from exc
+    if now is not None and "exp" in claims and claims["exp"] < now:
+        raise OidcError("Jeton de déconnexion expiré.")
+    if now is not None and claims["iat"] > now + 60:
+        raise OidcError("Jeton de déconnexion émis dans le futur.")
+    events = claims.get("events")
+    if not isinstance(events, dict) or not isinstance(events.get(BACKCHANNEL_EVENT), dict):
+        raise OidcError("Événement de déconnexion absent.")
+    if "nonce" in claims:
+        raise OidcError("Un jeton de déconnexion ne porte pas de nonce.")
+    sid, sub = claims.get("sid"), claims.get("sub")
+    if not (isinstance(sid, str) and sid) and not (isinstance(sub, str) and sub):
+        raise OidcError("Ni « sid » ni « sub » dans le jeton de déconnexion.")
     return claims

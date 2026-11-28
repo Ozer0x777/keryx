@@ -9,6 +9,7 @@ Trois axes sont obligatoires pour un incident : qui/pourquoi, quoi, statut, et t
 from __future__ import annotations
 
 from .ids import rfc3339
+from .iodef import STATUT
 
 CATEGORIES = {"IEX": "Intrusions et attaques externes", "IMF": "Dysfonctionnements", "IDB": "Comportements internes déviants"}
 
@@ -143,9 +144,10 @@ def to_iodef(ticket, tenant_name: str, isi: dict, ref_time) -> dict:
     if "category" in isi:
         extra.append({"dtype": "string", "meaning": "ETSI-ISI:category", "value": f"{isi['category']} — {CATEGORIES[isi['category']]}"})
     return {
-        "version": "2.00", "lang": "fr", "formatid": "ETSI ISI",
+        # « format-id » : nom de l'attribut formatid de l'IODEF dans la liaison JSON (RFC 8727).
+        "version": "2.00", "lang": "fr", "format-id": "ETSI ISI",
         "Incident": [{
-            "purpose": "reporting", "restriction": "private", "status": ticket.status,
+            "purpose": "reporting", "restriction": "private", "status": STATUT.get(ticket.status, "in-progress"),
             "IncidentID": {"id": ticket.ref, "name": "keryx"},
             "ReportTime": rfc3339(ref_time), "GenerationTime": rfc3339(ref_time),
             "DetectTime": rfc3339(ticket.detected_at),

@@ -42,7 +42,9 @@ def test_classification_droits_cloisonnement_et_export(app, db, world, alert):
     r = a.put("/api/v1/tickets/ACME-1/isi", json=GOOD)
     assert r.status_code == 200 and r.json()["missing"] == []
     doc = a.get("/api/v1/tickets/ACME-1/isi/iodef").json()
-    assert validate(doc) == [] and doc["version"] == "2.00" and doc["formatid"] == "ETSI ISI"
+    assert validate(doc) == [] and doc["version"] == "2.00" and doc["format-id"] == "ETSI ISI"
+    from .test_iodef_schema import erreurs
+    assert erreurs(doc) == []                                     # schéma officiel de la RFC 8727
     inc = doc["Incident"][0]
     assert inc["purpose"] == "reporting" and inc["restriction"] == "private" and inc["IncidentID"] == {"id": "ACME-1", "name": "keryx"}
     assert inc["ReportTime"] and inc["GenerationTime"] and inc["DetectTime"]

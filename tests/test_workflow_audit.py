@@ -81,7 +81,9 @@ def test_export_iodef(app, db, world, alert):
     doc = a.get("/api/v1/tickets/DELTA-1/iodef").json()
     inc = doc["Incident"][0]
     assert inc["IncidentID"]["id"] == "DELTA-1" and inc["DetectTime"].endswith("Z")
-    assert inc["Method"][0]["Reference"][0]["ReferenceName"]["ID"] == "T1048"
+    assert inc["Method"][0]["Reference"][0]["Description"] == ["MITRE ATT&CK T1048"]
+    assert inc["Method"][0]["Reference"][0]["URL"] == ["https://attack.mitre.org/techniques/T1048/"]
+    assert inc["status"] == "new" and {"dtype": "string", "meaning": "statut-keryx", "value": "nouveau"} in inc["AdditionalData"]
 
 
 def test_journal_audit_chaine_et_infalsifiable(app, db, world, alert):

@@ -17,6 +17,7 @@ PUBLIC = {
     "/api/v1/auth/enroll/start", "/api/v1/auth/enroll/finish",   # session « mot de passe » requise (contrôlée dans la route)
     "/api/v1/auth/webauthn/begin", "/api/v1/auth/webauthn/finish",
     "/api/v1/auth/oidc/{name}/start", "/api/v1/auth/oidc/{name}/callback",
+    "/api/v1/auth/oidc/{name}/backchannel-logout",   # appel de serveur à serveur du fournisseur : jeton signé vérifié
     "/api/v1/ingest/wazuh",                   # clé d'API
     "/api/openapi.json",
 }

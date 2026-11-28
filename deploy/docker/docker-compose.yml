@@ -198,6 +198,7 @@ services:
       keryx-clamav: {}
       keryx-garage: {}
       keryx-sortie: {}
+      keycloak-keryx: {}                  # profil sso : déconnexion annoncée par Keycloak (canal arrière)
     depends_on:
       postgres:
         condition: service_healthy
@@ -306,6 +307,7 @@ services:
     networks:
       proxy-keycloak: {}
       keycloak-postgres: {}
+      keycloak-keryx: {}                  # déconnexion par le canal arrière vers keryx:8000 (ADR-0017)
     depends_on:
       keycloak-db:
         condition: service_healthy
@@ -440,6 +442,9 @@ networks:
         - subnet: ${KERYX_NET_PREFIX:-172.31.240}.8/29
           ip_range: ${KERYX_NET_PREFIX:-172.31.240}.12/30     # idem (caddy : .10)
   keryx-postgres:                         # keryx <-> postgres
+    driver: bridge
+    internal: true
+  keycloak-keryx:                         # keycloak -> keryx : jeton de déconnexion signé (canal arrière)
     driver: bridge
     internal: true
   sauvegarde-postgres:                    # sauvegarde <-> postgres

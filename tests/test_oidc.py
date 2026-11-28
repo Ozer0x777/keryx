@@ -255,3 +255,51 @@ def test_deconnexion_unique(sso, db, world):
     from .conftest import login
     local = login(sso, db, "manager")
     assert local.post("/api/v1/auth/logout").json() == {"status": "ok", "redirect": None}
+
+
+def logout_token(key=KEY, **over):
+    now = int(time.time())
+    claims = {"iss": ISSUER, "aud": CLIENT, "iat": now, "exp": now + 120, "jti": f"j-{time.time_ns()}", "sid": "sid-1",
+              "sub": "sub-1", "events": {"http://schemas.openid.net/event/backchannel-logout": {}}, **over}
+    claims = {k: v for k, v in claims.items() if v is not None}
+    return jwt.encode(claims, key, algorithm="RS256", headers={"kid": "k1", "typ": "logout+jwt"})
+
+
+def test_deconnexion_par_le_canal_arriere(sso, db, world):
+    """Keycloak ferme une session : il l'annonce à Keryx, qui ferme la session correspondante (Back-Channel Logout 1.0)."""
+    from keryx.models import AuditEntry, Session
+    FakeIdp.claims = {"sid": "sid-1"}
+    c = TestClient(sso)
+    q = begin(c)
+    c.get("/api/v1/auth/oidc/soc/callback", params={"code": "c", "state": q["state"][0]}, follow_redirects=False)
+    assert c.get("/api/v1/me").status_code == 200
+    db.expire_all()
+    assert db.scalars(select(Session).where(Session.stage == "full")).one().sso_sid == "sid-1"
+    from .conftest import login
+    autre = login(sso, db, "manager")                       # session locale d'un autre compte : jamais touchée
+    anonyme = TestClient(sso)                                # appel de serveur à serveur : ni cookie ni jeton CSRF
+    # Jetons refusés : nonce présent, sans événement, mauvaise audience, mauvaise clé, ni sid ni sub, fournisseur inconnu
+    for bad in (logout_token(nonce="n"), logout_token(events=None), logout_token(aud="autre"), logout_token(key=OTHER),
+                logout_token(sid=None, sub=None), "pas-un-jeton"):
+        r = anonyme.post("/api/v1/auth/oidc/soc/backchannel-logout", data={"logout_token": bad})
+        assert r.status_code == 400 and r.json() == {"error": "invalid_request"} and r.headers["cache-control"] == "no-store"
+    assert anonyme.post("/api/v1/auth/oidc/inconnu/backchannel-logout", data={"logout_token": logout_token()}).status_code == 400
+    assert c.get("/api/v1/me").status_code == 200
+    # Jeton valide : la session SSO est fermée, l'autre compte garde la sienne
+    jeton = logout_token()
+    r = anonyme.post("/api/v1/auth/oidc/soc/backchannel-logout", data={"logout_token": jeton})
+    assert r.status_code == 200 and r.headers["cache-control"] == "no-store"
+    assert c.get("/api/v1/me").status_code == 401
+    assert autre.get("/api/v1/me").status_code == 200
+    db.rollback()
+    assert db.scalars(select(AuditEntry).where(AuditEntry.action == "auth.sso_backchannel_logout")).first() is not None
+    assert db.scalars(select(AuditEntry).where(AuditEntry.action == "auth.sso_backchannel_refused")).first() is not None
+    # Rejeu du même jeton après une nouvelle connexion (même sid) : sans effet
+    c2 = TestClient(sso)
+    q2 = begin(c2)
+    c2.get("/api/v1/auth/oidc/soc/callback", params={"code": "c2", "state": q2["state"][0]}, follow_redirects=False)
+    assert anonyme.post("/api/v1/auth/oidc/soc/backchannel-logout", data={"logout_token": jeton}).status_code == 200
+    assert c2.get("/api/v1/me").status_code == 200
+    # Sans sid : toutes les sessions de cette identité ouvertes par ce fournisseur
+    assert anonyme.post("/api/v1/auth/oidc/soc/backchannel-logout", data={"logout_token": logout_token(sid=None)}).status_code == 200
+    assert c2.get("/api/v1/me").status_code == 401
