@@ -42,21 +42,21 @@ export function TrendChart({ data }) {
       <div ref={box}>
       <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label={tr("Tickets créés et clos par jour")}>
         {marks.map((v) => (
-          <g key={v}><line x1={pad.l} x2={W - pad.r} y1={y(v)} y2={y(v)} stroke="#E3E6EB" /><text x={pad.l - 6} y={y(v) + 4} textAnchor="end" fontSize="12" fill="#5B6472">{v}</text></g>
+          <g key={v}><line x1={pad.l} x2={W - pad.r} y1={y(v)} y2={y(v)} style={{ stroke: 'var(--border)' }} /><text x={pad.l - 6} y={y(v) + 4} textAnchor="end" fontSize="12" style={{ fill: 'var(--muted)' }}>{v}</text></g>
         ))}
         {data.map((d, i) => {
           const x = pad.l + i * step + step / 2
           return (
             <g key={d.date}>
-              {d.created > 0 && <rect x={x - bw} y={y(d.created)} width={bw} height={pad.t + ih - y(d.created)} fill="#1F5FD1"><title>{`${d.date} : ${d.created} créé(s)`}</title></rect>}
-              {d.closed > 0 && <rect x={x} y={y(d.closed)} width={bw} height={pad.t + ih - y(d.closed)} fill="#1B6B3A"><title>{`${d.date} : ${d.closed} clos`}</title></rect>}
-              {i % tick === 0 && <text x={x} y={H - 8} textAnchor="middle" fontSize="12" fill="#5B6472">{d.date.slice(5)}</text>}
+              {d.created > 0 && <rect x={x - bw} y={y(d.created)} width={bw} height={pad.t + ih - y(d.created)} style={{ fill: 'var(--accent)' }}><title>{`${d.date} : ${d.created} créé(s)`}</title></rect>}
+              {d.closed > 0 && <rect x={x} y={y(d.closed)} width={bw} height={pad.t + ih - y(d.closed)} style={{ fill: 'var(--ok)' }}><title>{`${d.date} : ${d.closed} clos`}</title></rect>}
+              {i % tick === 0 && <text x={x} y={H - 8} textAnchor="middle" fontSize="12" style={{ fill: 'var(--muted)' }}>{d.date.slice(5)}</text>}
             </g>
           )
         })}
       </svg>
       </div>
-      <figcaption className="muted small"><span className="key" style={{ background: '#1F5FD1' }} /> {tr("créés")} <span className="key" style={{ background: '#1B6B3A' }} /> {tr("clos")}</figcaption>
+      <figcaption className="muted small"><span className="key" style={{ background: 'var(--accent)' }} /> {tr("créés")} <span className="key" style={{ background: 'var(--ok)' }} /> {tr("clos")}</figcaption>
       <details><summary className="small">{tr("Voir les valeurs en tableau")}</summary>
         <table className="grid"><thead><tr><th scope="col">{tr("Jour")}</th><th scope="col" className="num">{tr("Créés")}</th><th scope="col" className="num">{tr("Clos")}</th></tr></thead>
           <tbody>{data.filter((d) => d.created || d.closed).map((d) => <tr key={d.date}><td className="mono">{d.date}</td><td className="num">{d.created}</td><td className="num">{d.closed}</td></tr>)}</tbody></table>

@@ -110,11 +110,15 @@ La fiche rappelle aussi ses risques résiduels : le démon Docker tourne sous ro
 | 17 | `keryx` | indexeur Wazuh d'un client | 9200/tcp | HTTPS, lecture seule | `keryx-sortie` | sortie ouverte, réglé par client |
 | 18 | `keryx` | manager Wazuh | 514/udp | syslog RFC 5424 (audit de Keryx) | `keryx-sortie` | sortie ouverte, `KERYX_SYSLOG_HOST` |
 | 19 | `keryx` | `www.virustotal.com` | 443/tcp | HTTPS | `keryx-sortie` | sortie ouverte **et** `KERYX_VIRUSTOTAL_ENABLED=true` |
-| 20 | Administrateur | démon Docker de l'hôte | SSH de l'hôte | hors kit | : | administration |
+| 20 | `keryx` | webhook d'astreinte (canal déclaré par l'Admin) | 443/tcp | HTTPS, certificat vérifié (magasin du système ou `KERYX_ASTREINTE_CA_FILE`) | `keryx-sortie` | sortie ouverte, canal d'astreinte déclaré |
+| 21 | Sonde de disponibilité, hors de l'hôte | `caddy`, chemin `/healthz` | 443/tcp | HTTPS, une requête par minute | `entree` | recommandé : mesure de la disponibilité (PDIS IV.5.1.e) |
+| 22 | Administrateur | démon Docker de l'hôte | SSH de l'hôte | hors kit | : | administration |
 
 Trois flux internes sont en clair (4, 10, 13) : chacun reste sur un réseau `internal` à deux conteneurs, sur la même machine. Pour le flux 13, Keryx chiffre chaque pièce avant l'envoi et signe chaque requête : ni le contenu ni le secret ne circulent (ADR-0019). Si ces services sont répartis sur plusieurs machines, ces flux doivent passer en TLS (PDIS IV.3.8.e).
 
-**Limite à connaître** : un réseau Docker ouvert laisse sortir vers **n'importe quelle** destination. `KERYX_SORTIE_FERMEE=false` n'autorise pas « SMTP et l'horodatage » : il autorise tout. La liste blanche des lignes 15 à 19 se fait au pare-feu de l'hôte (chaîne `DOCKER-USER`) ou en amont. Constaté : sortie fermée, le conteneur `keryx` ne résout aucun nom externe et ne joint aucune adresse ; sortie ouverte, il joint tout.
+**Limite à connaître** : un réseau Docker ouvert laisse sortir vers **n'importe quelle** destination. `KERYX_SORTIE_FERMEE=false` n'autorise pas « SMTP et l'horodatage » : il autorise tout. La liste blanche des lignes 15 à 20 se fait au pare-feu de l'hôte (chaîne `DOCKER-USER`) ou en amont. Constaté : sortie fermée, le conteneur `keryx` ne résout aucun nom externe et ne joint aucune adresse ; sortie ouverte, il joint tout.
+
+**Sonde de disponibilité (ligne 21)** : Keryx ne peut pas mesurer ses propres pannes. Une sonde placée hors de l'hôte (Uptime Kuma, Prometheus avec blackbox_exporter, ou l'outil de supervision en place) interroge `https://<domaine>/healthz` chaque minute et attend la réponse 200 ; le taux de réponses réussies sur le mois donne la disponibilité du service. `/healthz` ne renvoie que son état (`{"status": "ok"}`) et ne demande aucune authentification.
 
 **Après avoir changé un réglage de réseau** (`KERYX_SORTIE_FERMEE`, `KERYX_NET_PREFIX`) : `docker compose up -d` recrée le réseau. Si le sous-réseau du reverse proxy a changé, ajouter `--force-recreate` : un conteneur rebranché sur un réseau recréé perd son adresse fixe.
 
