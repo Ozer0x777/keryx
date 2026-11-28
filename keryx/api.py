@@ -40,6 +40,8 @@ from .config import Settings
 from .db import Base, make_engine, make_session_factory
 from . import __version__
 from .ids import as_utc, bounded_input_date, rfc3339, utcnow
+from .iodef import SEVERITE as IODEF_SEVERITE_MAP
+from .iodef import STATUT as IODEF_STATUT_MAP
 from .iodef import validate as iodef_validate
 from .ingest import AlertRejected, ingest_alert
 from .mitre import valid_technique
@@ -508,14 +510,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return open_session(db, user, response, ip, method)
 
     def open_session(db: DbSession, user: User, response: Response, ip: str, method: str,
-                     sso: tuple[str, str] | None = None) -> dict:
+                     sso: tuple[str, str, str | None] | None = None) -> dict:
         """Ouvre une session complète neuve (jeton neuf, CSRF neuf) et pose les cookies.
-        `sso` = (fournisseur, jeton d'identité) : conservé chiffré pour la déconnexion unique."""
+        `sso` = (fournisseur, jeton d'identité, sid) : jeton conservé chiffré pour la déconnexion unique ; « sid » pour
+        la déconnexion demandée par le fournisseur (canal arrière)."""
         token, csrf = security.new_token(), security.new_token()
         th = security.sha256(token)
         db.add(Session(token_hash=th, user_id=user.id, stage="full", csrf_token=csrf,
                        sso_provider=sso[0] if sso else None,
                        sso_id_token=box.encrypt(sso[1], f"sso:{th}") if sso else None,
+                       sso_sid=(sso[2] or None) if sso else None,
                        expires_at=utcnow() + timedelta(hours=settings.session_hours)))
         user.failed_attempts = 0
         user.last_login_at = utcnow()
@@ -1310,36 +1314,47 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/v1/tickets/{ref}/iodef")
     def export_iodef(ref: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
-        """Export inspiré d'IODEF v2 en JSON (RFC 7970 / RFC 8727). Sous-ensemble ; schéma complet à valider."""
+        """Export IODEF v2 en JSON (RFC 7970, liaison JSON RFC 8727), validé en test contre le schéma de la RFC 8727
+        (annexe B). Statut et gravité traduits dans le vocabulaire IODEF ; les valeurs de Keryx suivent en données
+        additionnelles."""
         require_role(user, "analyst", "manager")
         t = load_ticket(db, user, ref)
         tenant = db.get(Tenant, t.tenant_id)
-        node: dict[str, Any] = {"NodeName": [t.agent_name] if t.agent_name else []}
+        # Machine visée : adresse si elle est connue, nom de l'agent (DomainData) sinon en plus ; rien si ni l'un ni l'autre.
+        node: dict[str, Any] = {}
         if t.agent_ip:
             try:
                 ip = ipaddress.ip_address(t.agent_ip)
                 node["Address"] = [{"value": str(ip), "category": "ipv6-addr" if ip.version == 6 else "ipv4-addr"}]
             except ValueError:
                 pass
-        doc = {
-            "version": "2.0", "lang": "fr",
-            "Incident": [{
-                "purpose": "reporting", "status": t.status,
-                "IncidentID": {"id": t.ref, "name": "keryx"},
-                "GenerationTime": rfc3339(utcnow()), "DetectTime": rfc3339(t.detected_at),
-                "ReportTime": rfc3339(t.created_at),
-                "Description": [t.title],
-                "Assessment": [{"Impact": [{"severity": t.gravite or t.criticite_initiale,
-                                            "description": t.impact or ""}]}],
-                "Contact": [{"role": "creator", "type": "organization", "ContactName": ["Keryx"]},
-                            {"role": "cc", "type": "organization", "ContactName": [tenant.name]}],
-                "Method": [{"Reference": [{"ReferenceName": {"ID": m["id"]},
-                                           "URL": [f"https://attack.mitre.org/techniques/{m['id'].replace('.', '/')}/"]}]}
-                           for m in t.mitre],
-                "EventData": [{"System": [{"category": "target", "Node": [node]}]}],
-                "AdditionalData": [{"dtype": "string", "meaning": "tlp", "value": t.tlp}],
-            }],
+        if t.agent_name:
+            node["DomainData"] = [{"Name": t.agent_name, "system-status": "unknown", "domain-status": "unknown"}]
+        severite = t.gravite or t.criticite_initiale
+        impact: dict[str, Any] = {"type": "unknown", **IODEF_SEVERITE_MAP.get(severite, {"severity": "unknown"})}
+        if t.impact:
+            impact["Description"] = [t.impact]
+        incident: dict[str, Any] = {
+            "purpose": "reporting", "status": IODEF_STATUT_MAP.get(t.status, "in-progress"),
+            "IncidentID": {"id": t.ref, "name": "keryx"},
+            "GenerationTime": rfc3339(utcnow()), "DetectTime": rfc3339(t.detected_at),
+            "ReportTime": rfc3339(t.created_at),
+            "Description": [t.title],
+            "Assessment": [{"occurrence": "actual", "Impact": [{"BusinessImpact": impact}]}],
+            "Contact": [{"role": "creator", "type": "organization", "ContactName": ["Keryx"]},
+                        {"role": "cc", "type": "organization", "ContactName": [tenant.name]}],
+            "AdditionalData": [{"dtype": "string", "meaning": "tlp", "value": t.tlp},
+                               {"dtype": "string", "meaning": "statut-keryx", "value": t.status},
+                               *([{"dtype": "string", "meaning": "gravite-keryx", "value": severite}] if severite else [])],
         }
+        if t.mitre:
+            # Pas de ReferenceName : son « specIndex » renvoie au registre IANA des formats d'information de sécurité, où
+            # MITRE ATT&CK ne figure pas. La technique est donnée par son adresse et son identifiant.
+            incident["Method"] = [{"Reference": [{"URL": [f"https://attack.mitre.org/techniques/{m['id'].replace('.', '/')}/"],
+                                                  "Description": [f"MITRE ATT&CK {m['id']}"]}]} for m in t.mitre]
+        if node:
+            incident["EventData"] = [{"System": [{"category": "target", "Node": node}]}]
+        doc = {"version": "2.0", "lang": "fr", "Incident": [incident]}
         problems = iodef_validate(doc)
         if problems:  # ne jamais émettre un document non conforme
             log.error("Export IODEF non conforme pour %s : %s", t.ref, problems)

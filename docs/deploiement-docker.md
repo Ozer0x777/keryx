@@ -86,6 +86,7 @@ La fiche rappelle aussi ses risques résiduels : le démon Docker tourne sous ro
 | `keryx-clamav` | `keryx` ↔ `clamav` | oui |
 | `keryx-garage` | `keryx` ↔ `garage` | oui |
 | `keycloak-postgres` | `keycloak` ↔ `keycloak-db` | oui |
+| `keycloak-keryx` | `keycloak` → `keryx` (déconnexion par le canal arrière, profil `sso`) | oui |
 | `keryx-sortie` | `keryx` → extérieur | **oui par défaut** ; `KERYX_SORTIE_FERMEE=false` l'ouvre |
 | `clamav-sortie` | `clamav` → extérieur (signatures) | non ; `KERYX_CLAMAV_SORTIE_FERMEE=true` le ferme |
 
@@ -113,8 +114,9 @@ La fiche rappelle aussi ses risques résiduels : le démon Docker tourne sous ro
 | 20 | `keryx` | webhook d'astreinte (canal déclaré par l'Admin) | 443/tcp | HTTPS, certificat vérifié (magasin du système ou `KERYX_ASTREINTE_CA_FILE`) | `keryx-sortie` | sortie ouverte, canal d'astreinte déclaré |
 | 21 | Sonde de disponibilité, hors de l'hôte | `caddy`, chemin `/healthz` | 443/tcp | HTTPS, une requête par minute | `entree` | recommandé : mesure de la disponibilité (PDIS IV.5.1.e) |
 | 22 | Administrateur | démon Docker de l'hôte | SSH de l'hôte | hors kit | : | administration |
+| 23 | `keycloak` | `keryx` | 8000/tcp | HTTP, jeton de déconnexion signé (canal arrière) | `keycloak-keryx` | profil `sso` |
 
-Trois flux internes sont en clair (4, 10, 13) : chacun reste sur un réseau `internal` à deux conteneurs, sur la même machine. Pour le flux 13, Keryx chiffre chaque pièce avant l'envoi et signe chaque requête : ni le contenu ni le secret ne circulent (ADR-0019). Si ces services sont répartis sur plusieurs machines, ces flux doivent passer en TLS (PDIS IV.3.8.e).
+Quatre flux internes sont en clair (4, 10, 13, 23) : chacun reste sur un réseau `internal` à deux conteneurs, sur la même machine. Le flux 23 ne porte qu'un jeton de déconnexion signé par Keycloak, que Keryx vérifie. Pour le flux 13, Keryx chiffre chaque pièce avant l'envoi et signe chaque requête : ni le contenu ni le secret ne circulent (ADR-0019). Si ces services sont répartis sur plusieurs machines, ces flux doivent passer en TLS (PDIS IV.3.8.e).
 
 **Limite à connaître** : un réseau Docker ouvert laisse sortir vers **n'importe quelle** destination. `KERYX_SORTIE_FERMEE=false` n'autorise pas « SMTP et l'horodatage » : il autorise tout. La liste blanche des lignes 15 à 20 se fait au pare-feu de l'hôte (chaîne `DOCKER-USER`) ou en amont. Constaté : sortie fermée, le conteneur `keryx` ne résout aucun nom externe et ne joint aucune adresse ; sortie ouverte, il joint tout.
 

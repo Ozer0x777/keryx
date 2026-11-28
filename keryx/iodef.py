@@ -1,7 +1,8 @@
 """Contrôle structurel de l'export IODEF (RFC 7970, binding JSON RFC 8727).
 
-Vérifie les membres obligatoires d'un Incident et le format des dates. Ce n'est PAS une validation contre le
-schéma officiel complet : seules les règles de structure dont le texte des RFC est certain sont contrôlées.
+Vérifie, à chaque export, les membres obligatoires d'un Incident et le format des dates. La conformité au schéma
+complet de la RFC 8727 (annexe B) est vérifiée par les tests (tests/test_iodef_schema.py) : le validateur de schémas
+JSON n'est pas une dépendance de l'application.
 """
 from __future__ import annotations
 
@@ -9,6 +10,12 @@ import re
 
 RFC3339 = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$")
 PURPOSES = {"traceback", "mitigation", "reporting", "watch", "other", "ext-value"}
+
+# Vocabulaire IODEF (RFC 7970, 3.2 et 3.12.2) : statut de l'incident et gravité de l'impact, depuis ceux de Keryx.
+STATUT = {"nouveau": "new", "en_evaluation": "in-progress", "en_reponse": "in-progress",
+          "cloture": "resolved", "retour_experience": "resolved", "faux_positif": "resolved"}
+SEVERITE = {"Faible": {"severity": "low"}, "Moyenne": {"severity": "medium"}, "Élevée": {"severity": "high"},
+            "Critique": {"severity": "ext-value", "ext-severity": "critical"}}
 
 
 def validate(doc: dict) -> list[str]:

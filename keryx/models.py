@@ -214,6 +214,7 @@ class Session(Base):
     webauthn_challenge: Mapped[str | None] = mapped_column(String(200), nullable=True)  # défi en cours (base64url)
     sso_provider: Mapped[str | None] = mapped_column(String(40), nullable=True)   # session ouverte par SSO : fournisseur
     sso_id_token: Mapped[str | None] = mapped_column(Text, nullable=True)         # jeton d'identité chiffré, pour la déconnexion unique
+    sso_sid: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)  # « sid » du fournisseur : déconnexion par le canal arrière
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

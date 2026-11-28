@@ -5,6 +5,11 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 ## [Non publié]
 
 ### Ajouté
+- Déconnexion demandée par Keycloak (OpenID Connect Back-Channel Logout 1.0, ADR-0017) : une session fermée dans
+  Keycloak ferme aussi la session Keryx qu'elle avait ouverte. Jeton de déconnexion vérifié (signature, émetteur,
+  audience, événement, `sid` ou `sub`, jamais de `nonce`), rejeu sans effet, chaque déconnexion inscrite au journal
+  d'audit. Le kit déclare l'adresse dans les realms et relie Keycloak à Keryx par un réseau interne dédié. Migration
+  0035 (`sid` de la session du fournisseur).
 - Pare-feu applicatif dans le kit Docker (PDIS IV.3.13.g, ADR-0035) : Coraza et l'OWASP Core Rule Set 4 compilés dans
   Caddy (image construite par le kit, `deploy/docker/caddy-image`), en mode blocage par défaut ; `KERYX_WAF=detection`
   journalise sans bloquer, `off` pour un dépannage. Le corps des écritures qui portent du contenu de sécurité par
@@ -15,6 +20,12 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 ### Documentation
 - Feuille de route et couverture PDIS mises à jour : fichiers non analysables et indicateurs de capacité faits
   depuis la 0.11.0, parc d'agents validé sur la préproduction, sonde de disponibilité documentée.
+
+### Corrigé
+- Exports IODEF (ticket et ETSI ISI) conformes au schéma JSON de la RFC 8727, désormais vérifié en test : statut
+  traduit dans le vocabulaire IODEF (le statut de Keryx suit en donnée additionnelle), gravité portée par
+  `BusinessImpact`, machine décrite par `Node` (adresse et nom), technique MITRE par son adresse, `format-id` pour
+  l'export ETSI ISI. Les anciens exports n'étaient pas valides au regard de ce schéma.
 
 ## [0.12.0] : 2026-11-28
 

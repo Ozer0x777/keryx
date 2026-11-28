@@ -122,7 +122,10 @@
       "webOrigins": [],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "${KERYX_PUBLIC_URL}/connexion"
+        "post.logout.redirect.uris": "${KERYX_PUBLIC_URL}/connexion",
+        "backchannel.logout.url": "http://keryx:8000/api/v1/auth/oidc/clients/backchannel-logout",
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "false"
       }
     }
   ]
