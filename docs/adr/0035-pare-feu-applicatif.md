@@ -32,8 +32,15 @@
   6. **Hôte en adresse IP** : la règle 920350 est retirée, le kit permettant l'accès par adresse IP.
   7. **Corps inspectés** : en mémoire, 2,5 Mio au plus (Caddy borne déjà chaque requête) ; pièces jointes et référentiel
      ATT&CK hors inspection (chemins de l'alinéa 4 ; les pièces passent par l'antivirus). Réponses non inspectées.
-- **Limites** : le site de Keycloak (profil `sso`) n'est pas derrière le pare-feu (non essayé contre Keycloak). Le
-  portail séparé par client (ADR-0027) aura le même pare-feu devant chaque portail. Le niveau de paranoïa 2 n'a pas été
+  8. **Site de Keycloak** (profil `sso`, ajouté le 28/11/2026) : même pare-feu et même mode. Le scénario SSO joué
+     contre un vrai Keycloak 26.8.2 au travers du pare-feu, d'abord en détection, a relevé deux faux positifs : la
+     règle 934110 (SSRF) sur les adresses de retour OIDC (`redirect_uri`, `post_logout_redirect_uri`, `iss`), jamais
+     appelées par le serveur et comparées exactement aux adresses enregistrées, retirée pour ces trois paramètres et
+     les chemins OIDC ; la règle 930120 sur le nom de champ `credentials` de l'API d'administration de Keycloak, déjà
+     réservée aux adresses d'administration, dont le corps des écritures n'est plus inspecté. En blocage, le parcours
+     complet passe (connexion, déconnexion unique, déconnexion par le canal arrière) et une injection dans la
+     connexion à Keycloak est refusée.
+- **Limites** : le portail séparé par client (ADR-0027) aura le même pare-feu devant chaque portail. Le niveau de paranoïa 2 n'a pas été
   essayé. Les règles retirées le sont par chemin, jamais pour tout le site.
 - **Exigences** : PDIS IV.3.13.g ; OWASP Core Rule Set 4 ; ANSSI, recommandations pour la sécurisation des sites web
   (filtrage applicatif en frontal).
