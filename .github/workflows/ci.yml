@@ -121,7 +121,8 @@ jobs:
 
   e2e:
     # Parcours dans un navigateur (Chrome sans tête) : connexion + 2FA, administration, travail quotidien,
-    # pilotage, conformité, contrôle d'accessibilité automatisé.
+    # pilotage, conformité, contrôle d'accessibilité automatisé. Joués au travers du pare-feu applicatif du kit
+    # (Caddy, Coraza, OWASP CRS) en mode blocage : un usage normal bloqué fait échouer la suite (ADR-0035).
     runs-on: ubuntu-latest
     needs: [tests, web]
     steps:
@@ -137,11 +138,13 @@ jobs:
         working-directory: web
       - run: npm ci
         working-directory: e2e
+      - run: docker build -q -t keryx-caddy:2.11.9-coraza deploy/docker/caddy-image
       - run: node run.mjs
         working-directory: e2e
         env:
           KERYX_PYTHON: python
           CHROME_PATH: /usr/bin/google-chrome
+          E2E_WAF: blocage
 
   sbom-image:
     runs-on: ubuntu-latest

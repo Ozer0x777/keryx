@@ -2,6 +2,7 @@
 # Mode HTTPS : un des fichiers de ./tls est importé selon KERYX_HTTPS_MODE (acme, fourni, local).
 {
 	admin off # pas d'API d'administration : la configuration ne change qu'au redémarrage
+	order coraza_waf first # pare-feu applicatif avant tout autre traitement (ADR-0035)
 	persist_config off
 	# Accès par adresse IP : un navigateur n'envoie pas de SNI pour une adresse IP, Caddy prend alors ce nom.
 	default_sni {$KERYX_DOMAIN:localhost}
@@ -39,6 +40,8 @@
 {$KERYX_DOMAIN:localhost} {
 	import tls/{$KERYX_TLS:local}.caddy keryx
 	import commun
+	# Pare-feu applicatif Coraza et OWASP CRS (PDIS IV.3.13.g, ADR-0035) : waf/blocage.caddy, detection.caddy ou off.caddy.
+	import waf/{$KERYX_WAF:blocage}.caddy
 	# Taille des requêtes : les mêmes bornes que Keryx (keryx/bodylimit.py, docs/exploitation.md), appliquées ici
 	# d'abord. Au-delà, c'est Caddy qui répond 413 : Keryx refuse un corps trop gros en coupant la connexion, ce
 	# qu'un reverse proxy rapporterait comme une erreur 502.

@@ -358,9 +358,10 @@ PORT_HTTPS=${PORT_HTTPS:-443}
 # ------------------------------------------------------------------------------------------------ démarrage
 titre "Construction des autres images et démarrage"
 if [ -n "$PUBLIEE" ]; then
-    # keryx et sauvegarde viennent de l'image publiée : seules les images propres au kit sont construites.
+    # keryx et sauvegarde viennent de l'image publiée : seules les images propres au kit (caddy avec son pare-feu
+    # applicatif, keycloak, garage) sont construites.
     for svc in $(dc config --services); do
-        case "$svc" in keycloak|garage) dc build "$svc" ;; esac
+        case "$svc" in caddy|keycloak|garage) dc build "$svc" ;; esac
     done
 else
     dc build

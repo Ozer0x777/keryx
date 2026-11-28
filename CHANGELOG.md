@@ -4,6 +4,14 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+### Ajouté
+- Pare-feu applicatif dans le kit Docker (PDIS IV.3.13.g, ADR-0035) : Coraza et l'OWASP Core Rule Set 4 compilés dans
+  Caddy (image construite par le kit, `deploy/docker/caddy-image`), en mode blocage par défaut ; `KERYX_WAF=detection`
+  journalise sans bloquer, `off` pour un dépannage. Le corps des écritures qui portent du contenu de sécurité par
+  nature (alertes, tickets, administration) n'est pas inspecté, la recherche d'un indicateur reste possible ; les
+  routes de connexion restent inspectées en entier. La suite e2e passe au travers du pare-feu en CI
+  (`E2E_WAF=blocage`), avec un scénario d'attaques courantes refusées.
+
 ### Documentation
 - Feuille de route et couverture PDIS mises à jour : fichiers non analysables et indicateurs de capacité faits
   depuis la 0.11.0, parc d'agents validé sur la préproduction, sonde de disponibilité documentée.

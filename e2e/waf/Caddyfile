@@ -1,0 +1,20 @@
+# Suite e2e à travers le pare-feu applicatif du kit Docker (E2E_WAF=detection ou blocage) : mêmes fichiers de règles
+# que le kit (deploy/docker/caddy/waf, monté sur /etc/caddy), en HTTP local devant Keryx lancé par le harnais.
+{
+	admin off
+	persist_config off
+	auto_https off
+	order coraza_waf first
+	log {
+		output stdout
+		format json
+	}
+}
+
+:{$E2E_PORT} {
+	import /etc/caddy/waf/{$KERYX_WAF}.caddy
+	request_body {
+		max_size 81MiB
+	}
+	reverse_proxy 127.0.0.1:{$E2E_UPSTREAM}
+}

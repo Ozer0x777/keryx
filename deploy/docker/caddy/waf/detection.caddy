@@ -1,0 +1,14 @@
+# Pare-feu applicatif en mode détection (KERYX_WAF=detection) : les règles sont évaluées et chaque déclenchement est
+# journalisé (journal de Caddy, « http.handlers.waf »), mais rien n'est bloqué. Pour essayer de nouvelles règles ou
+# relever des faux positifs avant de passer en blocage.
+coraza_waf {
+	load_owasp_crs
+	directives `
+		Include @coraza.conf-recommended
+		Include @crs-setup.conf.example
+		Include /etc/caddy/waf/keryx-avant-crs.conf
+		Include @owasp_crs/*.conf
+		Include /etc/caddy/waf/keryx-apres-crs.conf
+		SecRuleEngine DetectionOnly
+	`
+}
