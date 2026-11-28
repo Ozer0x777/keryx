@@ -70,7 +70,11 @@ services:
   # -------------------------------------------------------------------------------------------------------
   caddy:
     <<: *durci
-    image: caddy:2.11.9-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
+    # Caddy avec le pare-feu applicatif Coraza et l'OWASP CRS (ADR-0035), construit par le kit (./caddy-image) à
+    # partir des images officielles de Caddy épinglées par empreinte.
+    image: keryx-caddy:2.11.9-coraza
+    build:
+      context: ./caddy-image
     # Pas root. install.sh y met l'utilisateur qui installe, pour qu'il lise ./certs sans droit particulier.
     user: "${KERYX_CADDY_UID:-10003}:${KERYX_CADDY_GID:-10003}"
     environment:
@@ -89,6 +93,8 @@ services:
       KERYX_SSO_DOMAIN: ${KERYX_SSO_DOMAIN:-}
       KERYX_ADMIN_CIDRS: ${KERYX_ADMIN_CIDRS:-private_ranges}
       KERYX_MAX_BODY_BYTES: ${KERYX_MAX_BODY_BYTES:-2097152}             # même borne que Keryx pour une requête ordinaire
+      # Pare-feu applicatif devant Keryx : blocage (défaut), detection (journalise sans bloquer), off (dépannage).
+      KERYX_WAF: ${KERYX_WAF:-blocage}
     # Les ports du conteneur sont ceux de l'hôte : les redirections et l'adresse de l'émetteur SSO restent
     # justes de l'intérieur comme de l'extérieur. Écouter sur 80/443 sans capability est permis par Docker
     # (net.ipv4.ip_unprivileged_port_start=0 dans l'espace réseau du conteneur, valeur par défaut depuis 20.10).

@@ -10,7 +10,7 @@
 
 | Service | Profil | Image | Utilisateur | Écrit dans |
 |---|---|---|---|---|
-| `caddy` | toujours | `caddy:2.11.9-alpine`, épinglée par empreinte | celui qui installe (jamais root) | volume `caddy_data`, tmpfs |
+| `caddy` | toujours | `deploy/docker/caddy-image/Dockerfile` : Caddy 2.11.9 avec le pare-feu applicatif Coraza et l'OWASP CRS, sur les images officielles de Caddy épinglées | celui qui installe (jamais root) | volume `caddy_data`, tmpfs |
 | `keryx` | toujours | construite par le `Dockerfile` du dépôt | 10001 | volume `keryx_data` (`/data`), tmpfs `/tmp` |
 | `postgres` | toujours | `postgres:16.16-bookworm`, épinglée par empreinte | 999 (`postgres`) | volume `postgres_data`, tmpfs |
 | `clamav` | `antivirus` | `clamav/clamav:1.4.7`, épinglée par empreinte | 100 (`clamav`) | volume `clamav_data`, tmpfs |
@@ -19,7 +19,7 @@
 | `garage` | `objets` | `deploy/docker/garage/Dockerfile` sur `dxflrs/garage:v1.3.1` épinglée | 10002 | volumes `garage_meta`, `garage_data` |
 | `sauvegarde` | `sauvegarde` | la même que `keryx` | 10001 | volume `sauvegardes` |
 
-Deux images sont reconstruites, pour une raison précise chacune. Keycloak : sa phase de construction (`kc.sh build`) est faite dans l'image, sinon il réécrit `/opt/keycloak/lib/quarkus` à chaque démarrage et ne supporte pas une racine en lecture seule. Garage : l'image officielle ne contient que le binaire ; la nôtre ajoute les deux dossiers de données au nom d'un utilisateur sans privilège, pour que les volumes montés dessus lui appartiennent sans `chown` à l'exécution. Les images de base du `Dockerfile` de Keryx (`node:22-slim`, `python:3.12-slim`) ne sont pas épinglées par empreinte : à faire avant une mise en production (voir section 7).
+Trois images sont reconstruites, pour une raison précise chacune. Caddy : le pare-feu applicatif Coraza et l'OWASP CRS (ADR-0035) sont un module compilé dans le binaire, par xcaddy depuis l'image officielle de construction ; les modules Go sont vérifiés par la base de sommes publique de Go. Keycloak : sa phase de construction (`kc.sh build`) est faite dans l'image, sinon il réécrit `/opt/keycloak/lib/quarkus` à chaque démarrage et ne supporte pas une racine en lecture seule. Garage : l'image officielle ne contient que le binaire ; la nôtre ajoute les deux dossiers de données au nom d'un utilisateur sans privilège, pour que les volumes montés dessus lui appartiennent sans `chown` à l'exécution. Les images de base du `Dockerfile` de Keryx (`node:22-slim`, `python:3.12-slim`) ne sont pas épinglées par empreinte : à faire avant une mise en production (voir section 7).
 
 **Où Keryx écrit** (vérifié en lecture seule) : `/data` (pièces, stockage `disk`), `/tmp` (corps des requêtes en cours de réception, archive de sauvegarde en préparation), et rien d'autre. Le `Dockerfile` crée aussi `/sauvegardes` au nom de l'utilisateur 10001 : c'est le point de montage du volume du profil `sauvegarde`.
 
@@ -163,7 +163,7 @@ Un conteneur de l'image de Keryx lance `keryx backup` au démarrage puis toutes 
 | IV.3.10.b | Filtrer les flux aux interconnexions avec des solutions qualifiées par l'ANSSI | Aucun équipement de filtrage dans le kit |
 | IV.3.10.c | Chiffrer les flux aux interconnexions par IPsec agréé (sauf mises à jour et notifications non sensibles) | HTTPS seul entre le manager Wazuh et Keryx |
 | IV.3.13.b | « Une machine physique ou virtuelle par commanditaire » pour une instance du portail web et du stockage | Un seul Keryx sert tous les clients, portail compris |
-| IV.3.13.g | Un pare-feu applicatif devant le portail web | Caddy borne et relaie ; ce n'est pas un pare-feu applicatif |
+| IV.3.13.g | Un pare-feu applicatif devant le portail web | Couvert dans le kit : Coraza et l'OWASP CRS dans Caddy, en blocage par défaut (ADR-0035) ; à placer aussi devant chaque portail séparé (ADR-0027) |
 | IV.3.9.a, b | Administration depuis des postes dédiés, dans la zone d'administration, par des interfaces dédiées | L'administration du démon Docker passe par l'accès SSH de la machine, sans interface dédiée |
 | IV.3.6.c | Dispositif de sauvegarde dédié, dans une zone d'administration | Volume sur la même machine |
 | IV.3.11 | Mises à jour par dépôt relais dans une zone de mise à jour, filtrage par liste blanche | Les images viennent directement des registres publics |
@@ -203,7 +203,7 @@ Ce qu'il faut pour y arriver, et que le kit ne fait pas :
 1. **Portail client séparable de la console d'analyse : Keryx ne sait pas le faire.** Aujourd'hui un seul processus sert l'équipe et les clients, sur une seule base. IV.3.13.b veut une instance du portail et de son stockage par commanditaire, dans une autre zone que l'analyse. Déployer un Keryx complet par client y mettrait aussi la console des analystes et multiplierait leurs écrans : ce n'est pas la réponse. **Écart d'architecture à traiter dans Keryx** (un composant portail qui ne détient que les données d'un client, alimenté depuis la zone d'analyse) ; non conçu, non codé.
 2. **Registre d'images interne et zone de mise à jour** (IV.3.11) : un registre relais qui seul télécharge, depuis une liste blanche de sources officielles (IV.3.11.c), avec contrôle d'authenticité et d'intégrité (IV.3.11.d : les images du kit sont épinglées par empreinte, c'est le point de départ). Les hôtes ne tirent que de ce registre ; `docker-compose.yml` ne change que par ses noms d'images. La construction de l'image de Keryx (paquets Debian, PyPI, npm) se fait dans cette zone, pas sur les hôtes. Les signatures ClamAV et le référentiel ATT&CK entrent par la même voie (IV.3.11.a, remarque sur les « référentiels »).
 3. **Administration du démon Docker depuis la zone d'administration** (IV.3.9.a, b) : pas de socket Docker exposé sur le réseau ; accès par SSH depuis les postes d'administration, sur une interface dédiée ; journalisation des accès et des actions (IV.3.9.c) ; comptes d'administration dédiés (IV.3.9.e). La console de Keycloak ne répond qu'à cette zone (`KERYX_ADMIN_CIDRS`).
-4. **Pare-feu applicatif** devant le portail (IV.3.13.g), filtrage qualifié aux interconnexions (IV.3.10.b), IPsec agréé (IV.3.10.c).
+4. Filtrage qualifié aux interconnexions (IV.3.10.b), IPsec agréé (IV.3.10.c). Le pare-feu applicatif (IV.3.13.g) est dans le kit (ADR-0035).
 5. **Sauvegardes** dans la zone d'administration (IV.3.6.c), journaux exportés (ANSSI R16), serveur de temps de référence (IV.3.9.l).
 6. **Un annuaire réellement dédié** aux commanditaires (IV.3.13.c) : une instance de Keycloak dans la zone d'échange commanditaire, distincte de celle des opérateurs.
 
@@ -221,7 +221,7 @@ Règle du projet : aucune, sans décision écrite. Le socle (Keryx, PostgreSQL, 
 
 | Dépendance | Quand | Ce qui sort | Pour s'en passer |
 |---|---|---|---|
-| Registres d'images (Docker Hub, quay.io) ; dépôts Debian, PyPI, npm | à la construction et à chaque mise à jour, pas à l'exécution | l'adresse de la machine, la liste de ce qui est téléchargé | registre et dépôts relais dans la zone de mise à jour (section 6) |
+| Registres d'images (Docker Hub, quay.io) ; dépôts Debian, PyPI, npm ; mandataire et base de sommes des modules Go (proxy.golang.org, sum.golang.org) pour l'image de Caddy | à la construction et à chaque mise à jour, pas à l'exécution | l'adresse de la machine, la liste de ce qui est téléchargé | registre et dépôts relais dans la zone de mise à jour (section 6) ; pour Go, `GOPROXY` vers un mandataire interne |
 | Autorité ACME | mode `acme` | nom de domaine, adresse | choisir une autorité de l'UE, ou le mode `fourni` |
 | `database.clamav.net` | profil `antivirus` | adresse, fréquence | miroir privé, ou fermer la sortie |
 | `www.virustotal.com` | sortie ouverte et fonction active | une empreinte, la clé de l'analyste (ADR-0022) | `KERYX_VIRUSTOTAL_ENABLED=false` |

@@ -61,7 +61,7 @@ Statuts :
 | IV.3.13.b | Une machine par client pour le portail, le stockage des incidents et des notifications | Écart | Mode tout-en-un ; séparation décidée (ADR-0027) |
 | IV.3.13.c | Annuaire dédié aux clients ; comptes nominatifs, deux facteurs ; authentification mutuelle entre machines | Partiel | Comptes nominatifs, second facteur obligatoire, realm Keycloak `clients` ; authentification mutuelle console et portail : ADR-0027 |
 | IV.3.13.e, f | Le client n'accède qu'au nécessaire, sans droit d'administration | Couvert | Rôle Client limité à ses tickets (`test_access.py`) |
-| IV.3.13.g | Pare-feu applicatif devant le portail | Écart | Absent du kit ; décidé (ADR-0027, Coraza et OWASP CRS) |
+| IV.3.13.g | Pare-feu applicatif devant le portail | Couvert | Coraza et l'OWASP CRS 4 dans le Caddy du kit, en blocage par défaut ; suite e2e jouée au travers en CI, attaques courantes refusées (`99-pare-feu.mjs`) ; ADR-0035. Devant chaque portail séparé : ADR-0027 |
 | IV.3.16.f | Recherches en sources ouvertes horodatées et journalisées | Partiel | Recherches VirusTotal journalisées avec l'heure ; elles devraient partir de la zone internet, pas du serveur |
 | IV.4.2.f | Recommandé : astreintes | Couvert | Astreinte et escalade (ADR-0032) |
 | IV.4.3 | Comités opérationnels et stratégiques | Organisation | Rapports périodiques et pilotage de Keryx comme supports |
@@ -119,5 +119,5 @@ de notifications et du portail (IV.5.1).
 Restent, dans l'ordre du découpage de l'ADR-0027 :
 
 1. **Portail par client (IV.3.13.b, c)** : une machine par client, authentification mutuelle console et portail.
-2. **Pare-feu applicatif (IV.3.13.g)** : Coraza et l'OWASP CRS devant chaque portail.
+2. **Pare-feu applicatif (IV.3.13.g)** : fait dans le kit (ADR-0035) ; à placer aussi devant chaque portail séparé.
 3. **Disponibilité du portail** (IV.5.1.e, g) : mesurée par la console en mode portail (ADR-0027).

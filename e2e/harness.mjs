@@ -81,8 +81,22 @@ export function startStack() {
     seeds[name] = { secret: /secret=([A-Z2-7]+)/.exec(out)[1], recovery: [...out.matchAll(/^\s+([0-9a-f]{6}-[0-9a-f]{6})$/gm)].map((m) => m[1]) }
   }
   seeds.apiKey = /(kx_[\w-]+)/.exec(cli('add-api-key', 'ACME', 'wazuh-e2e'))[1]
-  const server = spawn(PY, ['-m', 'uvicorn', 'keryx.api:create_app', '--factory', '--port', String(PORT)], { cwd: ROOT, env, stdio: ['ignore', openSync(`${dir}/server.log`, 'a'), openSync(`${dir}/server.log`, 'a')] })
-  return { dir, seeds, server, indexer, virustotal, stop: () => { server.kill('SIGTERM'); tsa?.stop(); indexer.stop(); virustotal.stop() } }
+  // E2E_WAF=detection|blocage : Keryx écoute derrière Caddy et Coraza (image keryx-caddy du kit, mêmes règles), sur
+  // le port suivant ; le navigateur et les scénarios passent par le pare-feu. Journal du pare-feu : waf.log.
+  const waf = process.env.E2E_WAF
+  const upstream = waf ? PORT + 1 : PORT
+  const server = spawn(PY, ['-m', 'uvicorn', 'keryx.api:create_app', '--factory', '--port', String(upstream)], { cwd: ROOT, env, stdio: ['ignore', openSync(`${dir}/server.log`, 'a'), openSync(`${dir}/server.log`, 'a')] })
+  let proxy = null
+  const proxyName = `keryx-e2e-waf-${process.pid}`
+  if (waf) {
+    proxy = spawn('docker', ['run', '--rm', '--name', proxyName, '--network', 'host', '--user', `${process.getuid()}:${process.getgid()}`,
+      '--tmpfs', '/data', '--tmpfs', '/config', '-v', `${join(ROOT, 'deploy', 'docker', 'caddy')}:/etc/caddy:ro`, '-v', `${join(ROOT, 'e2e', 'waf')}:/e2e:ro`,
+      '-e', `E2E_PORT=${PORT}`, '-e', `E2E_UPSTREAM=${upstream}`, '-e', `KERYX_WAF=${waf}`,
+      process.env.E2E_WAF_IMAGE || 'keryx-caddy:2.11.9-coraza', 'caddy', 'run', '--config', '/e2e/Caddyfile', '--adapter', 'caddyfile'],
+    { stdio: ['ignore', openSync(`${dir}/waf.log`, 'a'), openSync(`${dir}/waf.log`, 'a')] })
+  }
+  const stopProxy = () => { if (proxy) { try { execFileSync('docker', ['rm', '-f', proxyName], { stdio: 'ignore' }) } catch { /* déjà arrêté */ } } }
+  return { dir, seeds, server, indexer, virustotal, waf, stop: () => { server.kill('SIGTERM'); stopProxy(); tsa?.stop(); indexer.stop(); virustotal.stop() } }
 }
 
 // Requête SQL directe sur la base de test (préparation de données que l'interface ne propose pas).
@@ -91,7 +105,7 @@ export const sql = (stack, statement, ...params) => execFileSync(PY, ['-c', 'imp
 export const totp = (secret) => execFileSync(PY, ['-c', `import pyotp;print(pyotp.TOTP('${secret}').now())`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
 
 export async function waitUp() {
-  for (let i = 0; i < 60; i++) { try { if ((await fetch(`${BASE}/healthz`)).ok) return } catch { /* pas prêt */ } await new Promise((r) => setTimeout(r, 250)) }
+  for (let i = 0; i < 120; i++) { try { if ((await fetch(`${BASE}/healthz`)).ok) return } catch { /* pas prêt */ } await new Promise((r) => setTimeout(r, 250)) }
   throw new Error('serveur non démarré')
 }
 

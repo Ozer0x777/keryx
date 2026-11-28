@@ -1,0 +1,13 @@
+# Pare-feu applicatif en mode blocage (défaut, KERYX_WAF=blocage) : une requête qui atteint le seuil d'anomalie
+# de l'OWASP CRS est refusée (403) avant d'arriver à Keryx.
+coraza_waf {
+	load_owasp_crs
+	directives `
+		Include @coraza.conf-recommended
+		Include @crs-setup.conf.example
+		Include /etc/caddy/waf/keryx-avant-crs.conf
+		Include @owasp_crs/*.conf
+		Include /etc/caddy/waf/keryx-apres-crs.conf
+		SecRuleEngine On
+	`
+}
