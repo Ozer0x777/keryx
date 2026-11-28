@@ -25,15 +25,16 @@ identifiant CVE s'il existe (voir `SECURITY.md`).
 
 | Version | Correctifs de sécurité |
 |---|---|
-| 0.11.1 (dernière publiée) et `main` | oui |
-| 0.11.0 | non : mettre à jour vers 0.11.1 (procès-verbal de destruction créé avant la destruction, mesures d'endiguement dans l'export du client, discrétion élevée appliquée à tout le client ; pas de migration) |
-| 0.10.0 | non : mettre à jour vers 0.11.1 (réponse aux incidents PRIS, criticité par règle, fichiers non analysables ; migrations 0031 et 0032) |
-| 0.9.0 | non : mettre à jour vers 0.11.1 (écarts PDIS corrigés, migrations 0026 à 0032 ; lire l'avertissement de la section [0.10.0] du `CHANGELOG.md`) |
-| 0.8.4 | non : mettre à jour vers 0.11.1 (migrations de base 0022 à 0032 appliquées par l'image au démarrage) |
-| 0.8.3 | non : mettre à jour vers 0.11.1 (cloisonnement d'un indexeur Wazuh partagé, correctifs de sécurité, voir `CHANGELOG.md`) |
-| 0.8.2 | non : mettre à jour vers 0.11.1 (correctif de l'ingestion d'une alerte contenant un caractère nul, voir `CHANGELOG.md`) |
-| 0.8.1 | non : publication incomplète (image seule), mettre à jour vers 0.11.1 |
-| 0.8.0 | non : mettre à jour vers 0.11.1 (image touchée par des failles élevées de Debian, voir `CHANGELOG.md`) |
+| 0.12.0 (dernière publiée) et `main` | oui |
+| 0.11.1 | non : mettre à jour vers 0.12.0 (portail client, recherche par champ et liens, revue de l'interface, thème sombre en option ; migrations 0033 et 0034) |
+| 0.11.0 | non : mettre à jour vers 0.12.0 (corrections de la 0.11.1, puis migrations 0033 et 0034) |
+| 0.10.0 | non : mettre à jour vers 0.12.0 (réponse aux incidents PRIS, criticité par règle, fichiers non analysables ; migrations 0031 à 0034) |
+| 0.9.0 | non : mettre à jour vers 0.12.0 (écarts PDIS corrigés, migrations 0026 à 0034 ; lire l'avertissement de la section [0.10.0] du `CHANGELOG.md`) |
+| 0.8.4 | non : mettre à jour vers 0.12.0 (migrations de base 0022 à 0034 appliquées par l'image au démarrage) |
+| 0.8.3 | non : mettre à jour vers 0.12.0 (cloisonnement d'un indexeur Wazuh partagé, correctifs de sécurité, voir `CHANGELOG.md`) |
+| 0.8.2 | non : mettre à jour vers 0.12.0 (correctif de l'ingestion d'une alerte contenant un caractère nul, voir `CHANGELOG.md`) |
+| 0.8.1 | non : publication incomplète (image seule), mettre à jour vers 0.12.0 |
+| 0.8.0 | non : mettre à jour vers 0.12.0 (image touchée par des failles élevées de Debian, voir `CHANGELOG.md`) |
 | numéros antérieurs (jamais publiés) | non |
 
 Aucune durée de maintenance n'est promise pour une version ancienne : un correctif de sécurité sort dans une

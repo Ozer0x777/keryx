@@ -4,6 +4,14 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 
 ## [Non publié]
 
+## [0.12.0] : 2026-11-28
+
+**À lire avant la mise à jour** : migrations 0033 et 0034, appliquées par l'image au démarrage. La 0033 relit les
+alertes déjà conservées pour en relever les adresses, noms d'hôte, comptes, domaines et empreintes : sur une grosse
+base, le premier démarrage est plus long. Changements visibles : le client arrive sur son accueil, reçoit dans la
+cloche trois nouvelles notifications (activées par défaut, désactivables dans son profil) et peut lire son rapport
+d'incidents ; la file de l'équipe est triée par échéance par défaut. Le thème clair reste celui par défaut.
+
 ### Ajouté
 - Thème sombre, au choix dans « Mon profil » (« Clair (par défaut) », « Sombre », « Selon le système »), propre à
   chaque navigateur ; le thème clair reste celui par défaut. Toutes les couleurs de l'interface passent par des
