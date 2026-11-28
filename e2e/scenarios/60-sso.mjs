@@ -14,7 +14,9 @@ export default async ({ browser, stack, check }) => {
   await kc('/admin/realms/soc', { token: admin, method: 'DELETE' })
   await kc('/admin/realms', { token: admin, method: 'POST', body: { realm: 'soc', enabled: true, sslRequired: 'none', registrationAllowed: false } })
   const redirect = `http://localhost:${PORT}/api/v1/auth/oidc/soc/callback`
-  await kc('/admin/realms/soc/clients', { token: admin, method: 'POST', body: { clientId: 'keryx', secret: 'keryx-secret-e2e', publicClient: false, standardFlowEnabled: true, directAccessGrantsEnabled: false, redirectUris: [redirect], attributes: { 'pkce.code.challenge.method': 'S256', 'post.logout.redirect.uris': `http://localhost:${PORT}/*` } } })
+  await kc('/admin/realms/soc/clients', { token: admin, method: 'POST', body: { clientId: 'keryx', secret: 'keryx-secret-e2e', publicClient: false, standardFlowEnabled: true, directAccessGrantsEnabled: false, redirectUris: [redirect], attributes: { 'pkce.code.challenge.method': 'S256', 'post.logout.redirect.uris': `http://localhost:${PORT}/*`,
+    // Déconnexion par le canal arrière (ADR-0017) : Keycloak prévient Keryx quand il ferme une session.
+    'backchannel.logout.url': `http://localhost:${PORT}/api/v1/auth/oidc/soc/backchannel-logout`, 'backchannel.logout.session.required': 'true' } } })
   const mkUser = (username, email, verified) => kc('/admin/realms/soc/users', { token: admin, method: 'POST', body: { username, email, emailVerified: verified, enabled: true, firstName: 'Sso', lastName: username, credentials: [{ type: 'password', value: 'Sso-Pass-12345!', temporary: false }] } })
   await mkUser('analyste', 'analyste@keryx.test', true)          // même identifiant que le compte Keryx « analyste », courriel vérifié et identique
   await mkUser('client', 'pirate@evil.test', true)               // même identifiant que « client », mais courriel différent : liaison refusée
@@ -53,6 +55,14 @@ export default async ({ browser, stack, check }) => {
   const again = await signIn('analyste')           // 2e connexion : reconnu par « sub »
   await again.p.waitForSelector('.sidebar', { timeout: 10000 })
   check(true, 'SSO : deuxième connexion (identité déjà liée)')
+  // Déconnexion décidée dans Keycloak (console d'administration) : Keycloak l'annonce à Keryx, qui ferme sa session.
+  const me = () => again.p.evaluate(async () => (await fetch('/api/v1/me')).status)
+  check(await me() === 200, 'SSO : session Keryx ouverte avant la déconnexion dans Keycloak')
+  const kcUser = (await (await kc('/admin/realms/soc/users?username=analyste&exact=true', { token: admin })).json())[0]
+  await kc(`/admin/realms/soc/users/${kcUser.id}/logout`, { token: admin, method: 'POST' })
+  let statut = 0
+  for (let i = 0; i < 40 && statut !== 401; i++) { statut = await me(); if (statut !== 401) await new Promise((r) => setTimeout(r, 250)) }
+  check(statut === 401, `SSO : session fermée dans Keycloak, session Keryx fermée aussi (canal arrière, ${statut})`)
   await again.ctx.close()
 
   const bad = await signIn('client')

@@ -22,6 +22,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
   (`E2E_WAF=blocage`), avec un scénario d'attaques courantes refusées.
 
 ### Documentation
+- Scénario e2e du SSO contre un vrai Keycloak (`E2E_KEYCLOAK`) : la déconnexion décidée dans Keycloak ferme la
+  session Keryx (canal arrière), essayé contre Keycloak 26.8.2.
 - Feuille de route et couverture PDIS mises à jour : fichiers non analysables et indicateurs de capacité faits
   depuis la 0.11.0, parc d'agents validé sur la préproduction, sonde de disponibilité documentée.
 
