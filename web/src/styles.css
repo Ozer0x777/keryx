@@ -762,3 +762,24 @@ a.card.stat { text-decoration: none; color: inherit; }
 a.card.stat:hover { border-color: var(--accent); }
 .banner.ok { background: #E4F4EA; color: #1E7A46; border-radius: 8px; padding: 10px 14px; }
 @media (max-width: 600px) { .feed li { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
+/* Journal d'audit : détails en « clé : valeur ». Profil : session de ce navigateur. */
+.audit-details { margin: 0; display: grid; gap: 2px; }
+.audit-details > div { display: flex; gap: 6px; min-width: 0; }
+.audit-details dt { color: var(--muted); flex: none; }
+.audit-details dt::after { content: ' :'; }
+.audit-details dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
+tr.current td { background: #EEF3FB; }
+.kanban-filters { align-items: end; }
+.column .more { margin-top: 8px; }
+/* Rapport d'analyse : complétude (écran seulement). */
+.completude { margin-bottom: 12px; }
+.completude .progress { flex: 1 1 200px; max-width: 320px; height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.completude .progress span { display: block; height: 100%; background: var(--warn-text); }
+.completude.ok .progress span { background: var(--ok); }
+.completude ul { columns: 2 18em; margin: 8px 0; }
+/* Politique des clients : choix du client, barre d'enregistrement collante. */
+.client-picker { margin: 0 0 12px; }
+.save-bar { position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 10px 0; background: var(--surface); border-top: 1px solid transparent; }
+.save-bar.dirty { border-top-color: var(--border); box-shadow: 0 -6px 12px -10px rgba(0,0,0,.25); }
+.save-bar.dirty > .small { color: var(--warn-text); }

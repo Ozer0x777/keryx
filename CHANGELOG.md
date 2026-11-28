@@ -5,6 +5,14 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 ## [Non publié]
 
 ### Ajouté
+- Kanban : filtres recherche, client et gravité, gardés dans l'adresse ; « Afficher 50 de plus » par colonne.
+- Rapport d'analyse : complétude à l'écran (pourcentage, rubriques à renseigner, lien vers « Réponse aux
+  incidents »), jamais imprimée.
+- Politique des clients : un client à la fois, choisi dans l'adresse ; barre d'enregistrement collante qui signale
+  les modifications non enregistrées ; changer de client sans enregistrer demande confirmation.
+- Journal d'audit : détails lisibles, une ligne « clé : valeur » par information.
+- Profil : la session de ce navigateur est marquée, date d'expiration affichée, « Fermer les autres sessions »
+  (`DELETE /api/v1/me/sessions`, inscrit au journal d'audit).
 - Portail client, accueil : « À faire de votre côté » (autoriser ou refuser une mesure, signaler une action faite),
   chiffres (en attente, en cours, résolus ce mois-ci, machines), dernières nouvelles du SOC dites en phrases, état du
   parc ; c'est la page d'arrivée du client. Le client lit et imprime son rapport d'incidents (sans les noms des

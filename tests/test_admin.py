@@ -152,3 +152,20 @@ def test_etat_du_systeme(app, db, world):
         k.created_at = utcnow() - timedelta(days=3)
     db.commit()
     assert adm.get("/api/v1/admin/system").json()["silent_sources"] == 2  # deux clés anciennes, aucune utilisée
+
+
+def test_sessions_courante_et_fermer_les_autres(app, db, world):
+    """Profil : la session de ce navigateur est marquée ; « Fermer les autres sessions » la conserve (A08)."""
+    c = login(app, db, "analyst_acme")
+    autres = [login(app, db, "analyst_acme")]   # une seconde session (codes TOTP à usage unique : pas plus ici)
+    items = c.get("/api/v1/me/sessions").json()["items"]
+    assert len(items) == 2 and sum(1 for s in items if s["courante"]) == 1
+    assert all("expires_at" in s for s in items)
+    r = c.delete("/api/v1/me/sessions")
+    assert r.status_code == 200 and r.json()["fermees"] == 1
+    assert c.get("/api/v1/me").status_code == 200
+    assert all(o.get("/api/v1/me").status_code == 401 for o in autres)
+    items = c.get("/api/v1/me/sessions").json()["items"]
+    assert len(items) == 1 and items[0]["courante"]
+    # sans jeton CSRF, refusé
+    assert TestClient(app).delete("/api/v1/me/sessions").status_code == 401

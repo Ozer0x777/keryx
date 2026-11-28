@@ -10,7 +10,15 @@ export default async ({ BASE, check, login }) => {
     for (const path of paths) {
       await p.goto(`${BASE}${path}`); await p.waitForTimeout(1100)
       await unfoldAll(p)   // les panneaux repliés de la fiche ticket comptent aussi
-      const lines = (await p.locator('main, .content').first().innerText()).split('\n').map((l) => l.trim()).filter(Boolean)
+      // Données enregistrées (valeurs du journal d'audit, etc.) marquées translate="no" : hors contrôle.
+      const text = await p.locator('main, .content').first().evaluate((el) => {
+        const hidden = [...el.querySelectorAll('[translate="no"]')]
+        hidden.forEach((n) => { n.dataset.e2eDisplay = n.style.display; n.style.display = 'none' })
+        const t = el.innerText
+        hidden.forEach((n) => { n.style.display = n.dataset.e2eDisplay; delete n.dataset.e2eDisplay })
+        return t
+      })
+      const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
       for (const l of lines) if (FR.test(l) && !IGNORE.test(l)) leaks.push(`${path} : ${l.slice(0, 90)}`)
     }
     try { (await import('node:fs')).appendFileSync('/tmp/leaks.txt', [...new Set(leaks)].join('\n') + '\n') } catch {}

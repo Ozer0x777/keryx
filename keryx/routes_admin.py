@@ -605,11 +605,30 @@ def register(app, ctx) -> None:
         return {"recovery_codes": plain}
 
     @app.get("/api/v1/me/sessions")
-    def my_sessions(user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+    def my_sessions(request: Request, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        """Sessions ouvertes du compte ; « courante » marque celle de ce navigateur (A08), pour fermer les autres sans
+        se déconnecter soi-même. Ni adresse IP ni navigateur conservés : rien de plus que ce que la session porte déjà."""
+        current = ctx.session_from_cookie(request, db)
         rows = db.scalars(select(Session).where(Session.user_id == user.id, Session.stage == "full")
-                          .order_by(Session.created_at.desc())).all()
+                          .order_by(Session.last_seen_at.desc())).all()
         return {"items": [{"id": s.token_hash[:16], "created_at": rfc3339(s.created_at),
-                           "last_seen_at": rfc3339(s.last_seen_at)} for s in rows]}
+                           "last_seen_at": rfc3339(s.last_seen_at), "expires_at": rfc3339(s.expires_at),
+                           "sso": bool(s.sso_provider),
+                           "courante": bool(current and current.token_hash == s.token_hash)} for s in rows]}
+
+    @app.delete("/api/v1/me/sessions")
+    def revoke_other_sessions(request: Request, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
+        """Ferme toutes les sessions du compte sauf celle de ce navigateur (appareil perdu, poste partagé)."""
+        current = ctx.session_from_cookie(request, db)
+        rows = db.scalars(select(Session).where(Session.user_id == user.id)).all()
+        n = 0
+        for s in rows:
+            if current is None or s.token_hash != current.token_hash:
+                db.delete(s)
+                n += 1
+        audit.record(db, user.username, "auth.sessions_revoked_others", "user", user.id, None, {"sessions": n})
+        commit(db)
+        return {"status": "ok", "fermees": n}
 
     @app.delete("/api/v1/me/sessions/{session_id}")
     def revoke_session(session_id: str, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
