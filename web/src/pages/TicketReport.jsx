@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api.js'
 import { Severity } from '../components/Badges.jsx'
+import PdfButton from '../components/PdfButton.jsx'
 import Html from '../components/Html.jsx'
 import { Occurrences } from './RapportAnalyse.jsx'
 import { formatUtc, STATUS, VERDICTS } from '../labels.js'
@@ -20,7 +21,8 @@ export default function TicketReport() {
     <>
       <div className="row gap noprint" style={{ marginBottom: 12 }}>
         <Link to={`/tickets/${encodeURIComponent(ref)}`}>{tr("← Retour au ticket")}</Link>
-        <button type="button" className="primary push" onClick={() => window.print()}>{tr("Imprimer / PDF")}</button>
+        <span className="row gap push"><PdfButton path={`/tickets/${encodeURIComponent(ref)}/rapport.pdf`} filename={`${ref}-rapport.pdf`} primary />
+          <button type="button" onClick={() => window.print()}>{tr("Imprimer")}</button></span>
       </div>
       <article className="report card section" aria-label={tr("Rapport d'incident")}>
         <h1>{tr("Rapport d'incident")} {t.ref}</h1>

@@ -3,6 +3,7 @@ import { t as tr } from '../i18n.js'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import ParcSummary from '../components/ParcSummary.jsx'
+import PdfButton from '../components/PdfButton.jsx'
 import { api, downloadBlob } from '../api.js'
 import { useAuth } from '../App.jsx'
 import { Severity, Status } from '../components/Badges.jsx'
@@ -38,8 +39,8 @@ export default function Reports() {
   return (
     <>
       <header className="page-head noprint"><div><h1>{isClient ? tr('Rapports') : tr("Rapports et registre")}</h1><p className="muted">{isClient
-        ? tr("Le rapport d'incidents de votre organisation sur la période choisie. Pour un PDF, utilisez « Imprimer » puis « Enregistrer au format PDF ».")
-        : tr("Rapport périodique d'un client, exportable. Pour un PDF, utilisez « Imprimer » puis « Enregistrer au format PDF ».")}</p></div></header>
+        ? tr("Le rapport d'incidents de votre organisation sur la période choisie, à télécharger en PDF.")
+        : tr("Rapport périodique d'un client, à télécharger en PDF.")}</p></div></header>
       <div className="row wrap gap noprint periodes" role="group" aria-label={tr('Période')}>
         {PERIODES.map(([label, fn]) => {
           const p = fn(); const on = f.from === p.from && f.to === p.to
@@ -54,7 +55,8 @@ export default function Reports() {
           <button className="primary">{tr("Générer")}</button>
           {!isClient && <button type="button" onClick={csv}>{tr("Exporter le registre (CSV)")}</button>}
           {!isClient && <button type="button" onClick={notifCsv}>{tr("Exporter le registre des notifications (CSV)")}</button>}
-          <button type="button" onClick={() => window.print()} disabled={!r}>{tr("Imprimer / PDF")}</button>
+          <PdfButton path="/reports/period.pdf" params={{ client: f.client, from: f.from, to: f.to }} filename={`rapport-${f.client}-${f.from}_${f.to}.pdf`} disabled={!f.client} />
+          <button type="button" onClick={() => window.print()} disabled={!r}>{tr("Imprimer")}</button>
         </div>
       </form>
       {error && <p className="error" role="alert">{error}</p>}

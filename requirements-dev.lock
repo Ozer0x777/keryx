@@ -448,7 +448,10 @@ charset-normalizer==3.5.3 \
     --hash=sha256:fc540d1618c5638fcf5aea97060cf011467918b010bf682a84ecc0c9474e6cd0 \
     --hash=sha256:fcb17f1d40c38912a2cdb56ea47aadac3527cd0b06fe24f3a0c4896febbea063 \
     --hash=sha256:fd0341b9dea133d187d7c5a2cd7e21ae6449a7b68ea8c2454f9cf77def11ec1b
-    # via requests
+    # via
+    #   -c requirements.lock
+    #   reportlab
+    #   requests
 click==8.5.1 \
     --hash=sha256:8bb5376d2006950386f8c6427613334a2acadc5f559cb80e638d00b4df957e37 \
     --hash=sha256:9bbfada76703fd1d784b83eea012e3e8c6a001a876543ef104fa56aaaeb072b4
@@ -1154,6 +1157,7 @@ pillow==13.0.0 \
     # via
     #   -c requirements.lock
     #   -r requirements.txt
+    #   reportlab
 pluggy==1.7.0 \
     --hash=sha256:7dd7b0d8832ba3cb632c306926ded123429211b83641b35dc5c41ad2d34f9bec \
     --hash=sha256:d1eaa46ebb595891b860ab086b4d09c8588af65ebd4361b8e8f4bb8920b90ba8
@@ -1731,6 +1735,12 @@ regex==2026.11.24 \
     --hash=sha256:fe9bb652571840bdc827202a345680eee35e85a4c71167725bf423edae7546a9 \
     --hash=sha256:ff6f55100211afc2da18821ba4cfd3186853c8c1e00ae7aba344dc6c1da83c53
     # via cfn-lint
+reportlab==5.1.0 \
+    --hash=sha256:59fdbaec5efe437095ad1d7292ec9a271c8ca2d3ec75e889c6e61400929b90df \
+    --hash=sha256:6878200464527e87672d19e9f7cfc6bb890e3a6931e74ac6a1a8d1754aa55671
+    # via
+    #   -c requirements.lock
+    #   -r requirements.txt
 requests==2.34.2 \
     --hash=sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0 \
     --hash=sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed

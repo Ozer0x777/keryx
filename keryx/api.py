@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session as DbSession
 from starlette.background import BackgroundTask
 
 from . import attachments as att
-from . import astreinte, audit, inbox, routes_admin, routes_astreinte, routes_oidc, routes_ops, routes_isi, routes_parc, pris, routes_politique, routes_reports, routes_suivi_client, routes_timestamp, routes_virustotal, routes_wazuh, routes_webauthn, routes_work, security
+from . import astreinte, audit, inbox, routes_admin, routes_astreinte, routes_oidc, routes_ops, routes_isi, routes_parc, pris, routes_pdf, routes_politique, routes_reports, routes_suivi_client, routes_timestamp, routes_virustotal, routes_wazuh, routes_webauthn, routes_work, security
 from . import recherche, wazuh_context
 from .oidc import load_providers
 from .bodylimit import BodyLimitMiddleware
@@ -1623,6 +1623,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     routes_astreinte.register(app, ctx)
     routes_suivi_client.register(app, ctx)
     pris.register(app, ctx)
+    routes_pdf.register(app, ctx)   # après les routes JSON dont il reprend les réponses
 
     # ---------------------------------------------------------------- interface web
     dist = settings.web_dist

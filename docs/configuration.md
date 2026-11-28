@@ -27,5 +27,6 @@ Toutes les variables d'environnement lues par Keryx. Le kit Docker (`deploy/dock
 | `KERYX_SMTP_HOST`, `_PORT`, `_TLS` (`starttls`/`ssl`), `_USER`, `_PASSWORD`, `_FROM` | Envoi des notifications | désactivé |
 | `KERYX_ATTACHMENTS_DIR` | Stockage des pièces (hors racine web) | `./data/attachments` |
 | `KERYX_CLAMAV_HOST`, `_PORT` | Analyse antivirus clamd | désactivé |
+| `KERYX_PDF_FONT_DIR` | Dossier des polices DejaVu des PDF produits par le serveur (ADR-0036), si elles ne sont pas dans un dossier habituel ; sans elles, polices de base du PDF | dossiers du système |
 | `KERYX_SYSLOG_HOST`, `_PORT` | Copie du journal d'audit en syslog RFC 5424 (vers Wazuh) | désactivé |
 | `KERYX_MIN_RULE_LEVEL`, `KERYX_DEDUP_MINUTES` | Seuil d'ouverture de ticket, fenêtre de dédoublonnage | 7, 15 |
