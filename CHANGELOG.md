@@ -5,6 +5,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 ## [Non publié]
 
 ### Ajouté
+- Pare-feu applicatif aussi devant le site de Keycloak (profil `sso`), même mode que celui de Keryx (ADR-0035) ;
+  essayé contre un vrai Keycloak 26.8.2 : parcours SSO complet en blocage, injection dans la connexion refusée.
 - PDF des rapports produits par le serveur (ADR-0036) : rapport périodique (équipe et client), rapport d'incident,
   point de situation et rapport d'analyse, par « Télécharger le PDF » sur chaque page (« Imprimer » reste). Mêmes
   droits et même contenu que la page, marquage TLP sur chaque page, HTML des tickets réduit à du texte mis en forme,

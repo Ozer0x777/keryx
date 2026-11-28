@@ -2,6 +2,8 @@
 {$KERYX_SSO_DOMAIN} {
 	import tls/{$KERYX_TLS:local}.caddy sso
 	import commun
+	# Pare-feu applicatif, mêmes règles et même mode que le site de Keryx (ADR-0035).
+	import waf/{$KERYX_WAF:blocage}.caddy
 	request_body {
 		max_size 1MB
 	}

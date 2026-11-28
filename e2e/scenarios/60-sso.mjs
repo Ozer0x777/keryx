@@ -70,6 +70,12 @@ export default async ({ browser, stack, check }) => {
   check((await bad.p.locator('[role=alert]').innerText()).includes('Liaison refusée'), 'SSO : liaison refusée si le courriel vérifié ne correspond pas')
   check(await bad.p.locator('.sidebar').count() === 0, 'SSO : aucune session ouverte après un refus')
   await bad.ctx.close()
+  if (stack.waf === 'blocage' && process.env.E2E_KC_PORT) {
+    // Keycloak derrière le pare-feu applicatif : une injection dans le formulaire de connexion est refusée avant Keycloak.
+    const r = await fetch(`${KC}/realms/soc/protocol/openid-connect/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'password', client_id: 'keryx', username: "admin' OR 1=1 --", password: '<script>alert(1)</script>' }) })
+    check(r.status === 403, `SSO : pare-feu devant Keycloak, injection refusée (${r.status})`)
+  }
   const unknown = await signIn('inconnu')
   await unknown.p.waitForSelector('[role=alert]')
   check((await unknown.p.locator('[role=alert]').innerText()).includes("Aucun compte Keryx"), 'SSO : compte Keryx inexistant refusé (jamais créé automatiquement)')

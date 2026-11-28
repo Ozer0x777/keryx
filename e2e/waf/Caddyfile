@@ -18,3 +18,10 @@
 	}
 	reverse_proxy 127.0.0.1:{$E2E_UPSTREAM}
 }
+
+# Keycloak derrière le même pare-feu (scénario 60-sso, E2E_KEYCLOAK pointant sur ce port) : même fichier de règles
+# que le site Keycloak du kit (deploy/docker/caddy/sso-actif.caddy). Sans Keycloak, ce site ne sert à rien.
+:{$E2E_KC_PORT:8999} {
+	import /etc/caddy/waf/{$KERYX_WAF}.caddy
+	reverse_proxy {$E2E_KC_UPSTREAM:127.0.0.1:1}
+}

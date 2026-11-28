@@ -92,6 +92,7 @@ export function startStack() {
     proxy = spawn('docker', ['run', '--rm', '--name', proxyName, '--network', 'host', '--user', `${process.getuid()}:${process.getgid()}`,
       '--tmpfs', '/data', '--tmpfs', '/config', '-v', `${join(ROOT, 'deploy', 'docker', 'caddy')}:/etc/caddy:ro`, '-v', `${join(ROOT, 'e2e', 'waf')}:/e2e:ro`,
       '-e', `E2E_PORT=${PORT}`, '-e', `E2E_UPSTREAM=${upstream}`, '-e', `KERYX_WAF=${waf}`,
+      ...(process.env.E2E_KC_PORT ? ['-e', `E2E_KC_PORT=${process.env.E2E_KC_PORT}`, '-e', `E2E_KC_UPSTREAM=${process.env.E2E_KC_UPSTREAM}`] : []),
       process.env.E2E_WAF_IMAGE || 'keryx-caddy:2.11.9-coraza', 'caddy', 'run', '--config', '/e2e/Caddyfile', '--adapter', 'caddyfile'],
     { stdio: ['ignore', openSync(`${dir}/waf.log`, 'a'), openSync(`${dir}/waf.log`, 'a')] })
   }
