@@ -212,7 +212,7 @@ cd e2e && npm ci && node run.mjs        # CHROME_PATH et KERYX_PYTHON si besoin
 - Recherche VirusTotal (ADR-0022) : jamais testée contre le vrai VirusTotal, seulement contre le faux serveur des tests. À valider avant usage : forme des réponses et des erreurs, forme des clés, quotas, conditions d'utilisation de l'API (à vérifier par l'exploitant). Keryx n'envoie aucun fichier à VirusTotal.
 - Interface testée dans Chrome sans tête (parcours de chaque rôle) et contrôlée avec axe-core (WCAG 2.1 A/AA) ; pas d'audit RGAA complet ni de test d'intrusion.
 - Restent en français par construction, même en mode anglais : le corps de ticket généré par le serveur à partir de l'alerte Wazuh (libellés « Règle », « Décodeur »…), les lignes techniques du registre des actions (codes d'action et clés de détail) et les noms de langues.
-- Pas encore : PDF généré côté serveur (impression du navigateur à la place). Les exports IODEF sont validés en test contre le schéma JSON de la RFC 8727.
+- Les PDF des rapports sont produits par le serveur, en français. Les exports IODEF sont validés en test contre le schéma JSON de la RFC 8727.
 
 ## Contribuer, signaler une vulnérabilité
 

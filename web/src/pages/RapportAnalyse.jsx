@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { api } from '../api.js'
 import { CHAMPS, DISCRETION, ETATS_MESURE, MENACE, PRESENCE, ROLES_EQUIPE } from '../components/Pris.jsx'
 import Html from '../components/Html.jsx'
+import PdfButton from '../components/PdfButton.jsx'
 import { t as tr } from '../i18n.js'
 import { formatUtc } from '../labels.js'
 
@@ -80,7 +81,8 @@ export default function RapportAnalyse() {
     <>
       <div className="row gap noprint" style={{ marginBottom: 12 }}>
         <Link to={`/tickets/${enc}`}>{tr('← Retour au ticket')}</Link>
-        <button type="button" onClick={() => window.print()}>{tr('Imprimer / PDF')}</button>
+        <PdfButton path={`/tickets/${enc}/rapport-analyse.pdf`} filename={`${ref}-rapport-analyse.pdf`} />
+        <button type="button" onClick={() => window.print()}>{tr('Imprimer')}</button>
       </div>
       <Completude t={t} enc={enc} r={r} c={c} s={s} />
       <article className="report card section" aria-label={tr("Rapport d'analyse")}>

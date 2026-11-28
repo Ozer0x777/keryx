@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api.js'
+import PdfButton from '../components/PdfButton.jsx'
 import { DISCRETION, ETATS_MESURE, MENACE, PRESENCE } from '../components/Pris.jsx'
 import { t as tr } from '../i18n.js'
 import { formatUtc } from '../labels.js'
@@ -21,7 +22,8 @@ export default function PointSituation() {
         <Link to={`/tickets/${enc}`}>{tr('← Retour au ticket')}</Link>
         <label>{tr('Depuis')}<select value={heures} onChange={(e) => setHeures(Number(e.target.value))}>
           <option value={24}>{tr('24 heures')}</option><option value={72}>{tr('3 jours')}</option><option value={168}>{tr('7 jours')}</option></select></label>
-        <button type="button" onClick={() => window.print()}>{tr('Imprimer / PDF')}</button>
+        <PdfButton path={`/tickets/${enc}/point-situation.pdf`} params={{ heures }} filename={`${ref}-point-de-situation.pdf`} />
+        <button type="button" onClick={() => window.print()}>{tr('Imprimer')}</button>
       </div>
       {!p ? <p className="loading">{tr('Chargement…')}</p> : (
         <article className="report card section" aria-label={tr('Point de situation')}>

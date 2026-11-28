@@ -19,11 +19,12 @@ RUN useradd --create-home --uid 10001 keryx \
 # refuse à la restauration (« transaction_timeout » avec le client 17). Celui de Debian est trop récent, on prend
 # donc le client 16 dans le dépôt officiel de PostgreSQL (apt.postgresql.org, paquets signés).
 # ca-certificates : autorités du système, contre lesquelles le certificat de VirusTotal est vérifié (ADR-0022).
+# fonts-dejavu-core : police des PDF produits par le serveur, pour écrire tous les caractères d'une alerte (ADR-0036).
 # apt-get upgrade : correctifs de sécurité Debian publiés après l'image de base python:3.12-slim ; sans lui, l'image
 # embarque des failles déjà corrigées (zlib, glibc relevées par Grype le 25/11/2026, docs/programme-securite-open-source.md).
 ARG PG_MAJOR=16
 RUN apt-get update && apt-get upgrade -y \
- && apt-get install -y --no-install-recommends postgresql-common openssl ca-certificates \
+ && apt-get install -y --no-install-recommends postgresql-common openssl ca-certificates fonts-dejavu-core \
  && /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y \
  && apt-get install -y --no-install-recommends postgresql-client-${PG_MAJOR} \
  && rm -rf /var/lib/apt/lists/*

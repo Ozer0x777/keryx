@@ -39,7 +39,8 @@ le manager de la préproduction (Wazuh 4.14.10), corrigé dans la 0.12.0.
 
 ## 4. Robustesse et exploitation
 
-- PDF des rapports produit côté serveur.
+Fait le 28/11/2026 : déconnexion demandée par Keycloak (ADR-0017), exports IODEF validés contre le schéma de la
+RFC 8727, PDF des rapports produits par le serveur (ADR-0036). Restent les essais réels de la section 1.
 
 ## 5. Portail par client, pare-feu applicatif, disponibilité (mis de côté le 27/11/2026)
 

@@ -5,6 +5,10 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 ## [Non publié]
 
 ### Ajouté
+- PDF des rapports produits par le serveur (ADR-0036) : rapport périodique (équipe et client), rapport d'incident,
+  point de situation et rapport d'analyse, par « Télécharger le PDF » sur chaque page (« Imprimer » reste). Mêmes
+  droits et même contenu que la page, marquage TLP sur chaque page, HTML des tickets réduit à du texte mis en forme,
+  chaque PDF inscrit au journal d'audit. Dépendance ajoutée : reportlab (BSD) ; l'image installe la police DejaVu.
 - Déconnexion demandée par Keycloak (OpenID Connect Back-Channel Logout 1.0, ADR-0017) : une session fermée dans
   Keycloak ferme aussi la session Keryx qu'elle avait ouverte. Jeton de déconnexion vérifié (signature, émetteur,
   audience, événement, `sid` ou `sub`, jamais de `nonce`), rejeu sans effet, chaque déconnexion inscrite au journal
