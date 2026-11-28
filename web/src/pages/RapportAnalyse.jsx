@@ -18,6 +18,43 @@ export function Occurrences({ o }) {
   return <p className="muted">{tr("{n} occurrence(s) de l'alerte fusionnée(s) dans ce ticket, du {a} au {b}, non détaillée(s).", { n: o.nombre, a: formatUtc(o.premiere), b: formatUtc(o.derniere) })}</p>
 }
 
+// Complétude du rapport (A05) : les rubriques attendues par le PRIS (VI.7) qui sont renseignées. Affichée à l'écran
+// seulement (jamais imprimée), avec la liste de ce qui manque et le lien vers l'onglet où le saisir.
+function completude(t, r, c, s) {
+  const plein = (v) => Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && v !== ''
+  const items = [
+    [tr('Prestation qualifiée'), r.qualifiee === true || r.qualifiee === false],
+    [tr('Niveau de qualification'), plein(r.niveau)], [tr('Activités de réponse'), plein(r.activites)],
+    [tr("Type d'analyse"), plein(r.analyse)], [tr('Équipe de réponse'), plein(r.equipe)],
+    ...['objectifs', 'criteres', 'perimetre_prestation', 'modalites', 'dates_lieux', 'documents', 'synthese_manageriale',
+      'risques_critiques', 'endiguement_recommande', 'reserves', 'ioc_recherches', 'elements_collectes', 'resultats']
+      .map((k) => [label('rapport', k), plein(r[k])]),
+    [tr('Compromission initiale'), plein(s.compromission_initiale)], [tr('Niveau de menace estimé'), plein(c.niveau_menace)],
+    [tr("Objectifs supposés de l'attaquant"), plein(c.objectifs_attaquant)], [tr("L'attaquant est-il toujours présent ?"), plein(c.attaquant_present)],
+    [tr("Niveau de discrétion vis-à-vis de l'attaquant"), plein((t.pris?.posture || {}).discretion)], [tr('Chronologie détaillée'), plein(s.chronologie)],
+    [label('comprehension', 'vecteur_initial'), plein(c.vecteur_initial)], [tr('Personnes avec qui le prestataire a interagi'), plein(r.interlocuteurs)],
+  ]
+  const manque = items.filter(([, ok]) => !ok).map(([l]) => l)
+  return { pct: Math.round(100 * (items.length - manque.length) / items.length), manque }
+}
+
+function Completude({ t, enc, r, c, s }) {
+  const { pct, manque } = completude(t, r, c, s)
+  return (
+    <section className={`card section noprint completude${pct === 100 ? ' ok' : ''}`} aria-label={tr('Complétude du rapport')}>
+      <div className="row between wrap gap">
+        <strong>{tr('Rapport complet à {p} %', { p: pct })}</strong>
+        <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={tr('Complétude du rapport')}><span style={{ width: `${pct}%` }} /></div>
+      </div>
+      {manque.length > 0 && <details>
+        <summary>{tr('{n} rubrique(s) à renseigner', { n: manque.length })}</summary>
+        <ul className="small">{manque.map((m) => <li key={m}>{m}</li>)}</ul>
+        <Link to={`/tickets/${enc}?onglet=investigation`}>{tr('Compléter dans « Réponse aux incidents »')}</Link>
+      </details>}
+    </section>
+  )
+}
+
 function Texte({ v }) {
   return v ? <p className="prewrap">{v}</p> : <p>{vide}</p>
 }
@@ -45,6 +82,7 @@ export default function RapportAnalyse() {
         <Link to={`/tickets/${enc}`}>{tr('← Retour au ticket')}</Link>
         <button type="button" onClick={() => window.print()}>{tr('Imprimer / PDF')}</button>
       </div>
+      <Completude t={t} enc={enc} r={r} c={c} s={s} />
       <article className="report card section" aria-label={tr("Rapport d'analyse")}>
         <h1>{tr("Rapport d'analyse")} — {t.ref}</h1>
         <p className="muted">{t.title} · {t.client} · {t.tlp} · {tr(t.niveau_classification || 'Non protégé')} · {tr('généré le {d}', { d: formatUtc(new Date().toISOString()) })}</p>

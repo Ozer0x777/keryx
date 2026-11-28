@@ -67,6 +67,9 @@ export default function Profile() {
       e.target.reset(); setSecret({ title: tr('Nouveaux codes de secours (les anciens sont invalides)'), items: [[tr('Codes de secours'), r.recovery_codes]] })
     } catch (err) { setError(err.message) }
   }
+  const revokeOthers = async () => {
+    try { const r = await api('/me/sessions', { method: 'DELETE' }); setMsg(tr('{n} autre(s) session(s) fermée(s).', { n: r.fermees })); load() } catch (err) { setError(err.message) }
+  }
   const revoke = async (id) => {
     try { await api(`/me/sessions/${id}`, { method: 'DELETE' }); load() } catch (err) { setError(err.message) }
   }
@@ -123,12 +126,16 @@ export default function Profile() {
         </section>
       )}
       <section className="card section" aria-label={tr("Sessions")}>
-        <header className="section-head"><h2>{tr("Sessions actives")}</h2></header>
+        <header className="section-head"><h2>{tr("Sessions actives")}</h2>
+          {sessions?.length > 1 && <button type="button" className="small-btn danger" onClick={revokeOthers}>{tr('Fermer les autres sessions')}</button>}</header>
+        <p className="muted small">{tr("Une session que vous ne reconnaissez pas ? Fermez-la, puis changez votre mot de passe.")}</p>
         <div className="table-wrap"><table className="grid">
-          <thead><tr><th scope="col">{tr("Ouverte le")}</th><th scope="col">{tr("Dernière activité")}</th><th scope="col"><span className="sr-only">{tr("Action")}</span></th></tr></thead>
+          <thead><tr><th scope="col">{tr("Session")}</th><th scope="col">{tr("Ouverte le")}</th><th scope="col">{tr("Dernière activité")}</th><th scope="col">{tr("Expire le")}</th><th scope="col"><span className="sr-only">{tr("Action")}</span></th></tr></thead>
           <tbody>{sessions?.map((s) => (
-            <tr key={s.id}><td className="mono small">{formatUtc(s.created_at)}</td><td className="mono small">{formatUtc(s.last_seen_at)}</td>
-              <td><button type="button" className="small-btn danger" onClick={() => revoke(s.id)}>{tr("Fermer")}</button></td></tr>))}
+            <tr key={s.id} className={s.courante ? 'current' : ''}>
+              <td>{s.courante ? <span className="pill ok">{tr('Ce navigateur')}</span> : <span className="muted small">{tr('Autre appareil ou navigateur')}</span>}{s.sso && <span className="pill">SSO</span>}</td>
+              <td className="mono small">{formatUtc(s.created_at)}</td><td className="mono small">{formatUtc(s.last_seen_at)}</td><td className="mono small">{formatUtc(s.expires_at)}</td>
+              <td>{!s.courante && <button type="button" className="small-btn danger" onClick={() => revoke(s.id)}>{tr("Fermer")}</button>}</td></tr>))}
           </tbody></table></div>
       </section>
     </>

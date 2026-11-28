@@ -1,0 +1,42 @@
+import { eventually } from '../harness.mjs'
+
+// Améliorations : Kanban filtré (dans l'URL), sessions actives (celle de ce navigateur marquée), journal d'audit en
+// « clé : valeur », périodes des rapports en un clic.
+export default async ({ BASE, check, login, stack }) => {
+  const send = (a) => fetch(`${BASE}/api/v1/ingest/wazuh`, { method: 'POST', headers: { Authorization: `Bearer ${stack.seeds.apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify(a) }).then((r) => r.json())
+  const ref = (await send({ timestamp: new Date().toISOString(), id: 'am1', rule: { id: '100980', level: 10, description: 'amelioration : kanbanfiltre', groups: ['t'] }, agent: { id: '090', name: 'srv-kanban', ip: '10.20.9.1' }, full_log: 'x' })).ticket
+  await send({ timestamp: new Date().toISOString(), id: 'am2', rule: { id: '100981', level: 10, description: 'amelioration : autre carte', groups: ['t'] }, agent: { id: '091', name: 'srv-autre', ip: '10.20.9.2' }, full_log: 'y' })
+  const a = await login('analyste')
+  await a.goto(`${BASE}/kanban`)
+  await a.waitForSelector('.kcard')
+  await a.getByLabel('Recherche').fill('kanbanfiltre')
+  await a.getByLabel('Recherche').press('Enter')
+  check(await eventually(async () => a.url().includes('q=kanbanfiltre') && (await a.locator('.kcard').count()) === 1 && (await a.locator('.kcard').innerText()).includes(ref)), 'Kanban : recherche dans l\'URL, une seule carte')
+  await a.getByRole('button', { name: 'Réinitialiser' }).click()
+  check(await eventually(async () => !a.url().includes('q=') && (await a.locator('.kcard').count()) > 1), 'Kanban : réinitialiser rend toutes les cartes')
+  await a.goto(`${BASE}/profil`)
+  const sess = a.locator('section[aria-label="Sessions"]')
+  check(await eventually(async () => (await sess.locator('tr.current').count()) === 1 && (await sess.innerText()).includes('Ce navigateur')), 'profil : la session de ce navigateur est marquée')
+  await a.goto(`${BASE}/rapports`)
+  await a.getByRole('button', { name: 'Mois précédent' }).click()
+  check(await eventually(async () => (await a.getByRole('button', { name: 'Mois précédent' }).getAttribute('aria-pressed')) === 'true'), 'rapports : période « Mois précédent » en un clic')
+  await a.goto(`${BASE}/tickets/${ref}/rapport-analyse`)
+  const comp = a.locator('section[aria-label="Complétude du rapport"]')
+  check(await eventually(async () => /Rapport complet à \d+ %/.test(await comp.innerText()) && (await comp.locator('[role="progressbar"]').count()) === 1), 'rapport d\'analyse : complétude affichée')
+  const mg = await login('manager')
+  await mg.goto(`${BASE}/politique`)
+  const picker = mg.locator('[role="group"][aria-label="Client affiché"]')
+  await picker.waitFor()
+  check((await mg.locator('main section[aria-label]').filter({ has: mg.locator('.save-bar') }).count()) === 1, 'politique : un seul client affiché')
+  const premier = mg.locator('main section').filter({ has: mg.locator('.save-bar') })
+  await premier.getByLabel('Version du jeu de règles de détection en service').fill('modif-non-enregistree')
+  check(await eventually(async () => (await premier.locator('.save-bar.dirty').count()) === 1), 'politique : barre d\'enregistrement signale la modification')
+  await picker.getByRole('button').nth(1).click()
+  check(await eventually(async () => (await mg.locator('dialog[open]', { hasText: 'Quitter sans enregistrer' }).count()) === 1), 'politique : changer de client demande confirmation')
+  await mg.locator('dialog[open]').getByRole('button', { name: 'Quitter sans enregistrer' }).click()
+  check(await eventually(async () => mg.url().includes('client=') && (await picker.getByRole('button').nth(1).getAttribute('aria-pressed')) === 'true'), 'politique : second client affiché')
+  const ad = await login('admin')
+  await ad.goto(`${BASE}/admin/audit`)
+  check(await eventually(async () => (await ad.locator('dl.audit-details').count()) > 0), 'journal d\'audit : détails en « clé : valeur »')
+  check(a.errors.length === 0 && ad.errors.length === 0 && mg.errors.length === 0, 'aucune erreur JavaScript')
+}

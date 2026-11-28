@@ -3,6 +3,19 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { formatUtc } from '../labels.js'
 
+// Détails d'une entrée, lisibles (A07) : « clé : valeur » par ligne, valeurs courtes ; les listes et objets imbriqués restent
+// en texte compact. Jamais de HTML interprété : tout passe par du texte React.
+function Details({ d }) {
+  const keys = Object.keys(d || {})
+  if (!keys.length) return '—'
+  const show = (v) => v === null || v === undefined ? '—' : typeof v === 'object' ? JSON.stringify(v) : typeof v === 'boolean' ? (v ? tr('oui') : tr('non')) : String(v)
+  return (
+    <dl className="audit-details">
+      {keys.map((k) => <div key={k}><dt>{k}</dt><dd className="mono" translate="no">{show(d[k])}</dd></div>)}
+    </dl>
+  )
+}
+
 // Journal d'audit consultable. L'Admin ne voit jamais le détail des entrées qui touchent au contenu des tickets.
 export default function AuditViewer() {
   const [f, setF] = useState({ actor: '', action: '', client: '', from: '', to: '' })
@@ -39,7 +52,7 @@ export default function AuditViewer() {
             <tr key={e.seq}>
               <td className="num mono small">{e.seq}</td><td className="mono small">{formatUtc(e.ts)}</td><td className="small">{e.actor}</td>
               <td className="mono small">{e.action}</td><td className="mono small">{e.object_id || '—'}</td><td className="mono small">{e.client || '—'}</td>
-              <td className="small">{e.details?.masque ? <span className="pill">{tr("masqué (contenu)")}</span> : <code className="mono">{Object.keys(e.details || {}).length ? JSON.stringify(e.details) : '—'}</code>}</td>
+              <td className="small">{e.details?.masque ? <span className="pill">{tr("masqué (contenu)")}</span> : <Details d={e.details} />}</td>
             </tr>
           ))}
         </tbody>

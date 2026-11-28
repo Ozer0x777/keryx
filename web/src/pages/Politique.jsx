@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { useConfirm } from '../components/Confirm.jsx'
 import { api, downloadBlob } from '../api.js'
 import { ActionStatus, useActionStatus } from '../components/ActionStatus.jsx'
 import { t as tr } from '../i18n.js'
@@ -11,7 +13,7 @@ import { TLPS, formatUtc } from '../labels.js'
 //   ceux que l'Admin a déclarés ; délai d'acquittement dans le rapport remis au client.
 const CRITICITES = ['Critique', 'Élevée', 'Moyenne', 'Faible']
 
-function Client({ c, canaux, onSaved }) {
+function Client({ c, canaux, onSaved, onDirty }) {
   const [plancher, setPlancher] = useState(c.tlp_plancher || '')
   const [niveau, setNiveau] = useState(c.niveau_classification_defaut)
   const [versionRegles, setVersionRegles] = useState(c.version_regles || '')
@@ -28,6 +30,7 @@ function Client({ c, canaux, onSaved }) {
     || secours !== (c.notif_secours.canal_id || '') || vt !== Boolean(c.virustotal_autorise)
     || JSON.stringify(ast) !== JSON.stringify(c.astreinte)
     || bat.active !== c.battement.active || bat.periode_min !== c.battement.periode_min || bat.delai_min !== c.battement.delai_min
+  useEffect(() => { onDirty?.(changed) }, [changed, onDirty])
   const set = (patch) => setAst((a) => ({ ...a, ...patch }))
   const crit = (x, on) => set({ criticites: CRITICITES.filter((k) => (k === x ? on : ast.criticites.includes(k))) })
   const save = async () => {
@@ -152,8 +155,12 @@ function Client({ c, canaux, onSaved }) {
         <h3>{tr('Rapport')}</h3>
         <label className="check"><input type="checkbox" checked={rapport} onChange={(e) => setRapport(e.target.checked)} />{' '}
           {tr("Inclure le délai d'acquittement dans le rapport périodique remis au client")}</label>
-        <div><button type="button" className="primary" onClick={save} disabled={!changed}>{tr('Enregistrer')}</button></div>
-        <ActionStatus state={status} />
+        {/* Barre d'enregistrement collante (A06) : visible tant que la politique a des modifications non enregistrées. */}
+        <div className={`save-bar${changed ? ' dirty' : ''}`}>
+          {changed && <span className="small">{tr('Modifications non enregistrées')}</span>}
+          <button type="button" className="primary" onClick={save} disabled={!changed}>{tr('Enregistrer')}</button>
+          <ActionStatus state={status} />
+        </div>
 
         <h3>{tr('Réversibilité')}</h3>
         <p className="field-hint">{tr("Toutes les données du client dans une archive ZIP (tickets et leur contexte, pièces, notifications, parc, journal d'audit), avec l'empreinte de chaque fichier (PDIS IV.5.2.b). La destruction en fin de prestation se fait ensuite sur le serveur : keryx destroy-client.")}</p>
@@ -213,6 +220,19 @@ function CriticiteRegles({ items, onChange }) {
 export default function Politique() {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
+  // Un client à la fois (A06), choisi dans l'URL (?client=) ; changer de client avec des modifications non
+  // enregistrées demande confirmation.
+  const [params, setParams] = useSearchParams()
+  const [dirty, setDirty] = useState(false)
+  const [ask, dialog] = useConfirm()
+  const onDirty = useCallback((v) => setDirty(v), [])
+  const courant = data?.items.find((x) => x.key === params.get('client')) || data?.items[0]
+  const choisir = async (key) => {
+    if (key === courant?.key) return
+    if (dirty && !(await ask({ title: tr('Quitter sans enregistrer ?'), body: tr('Les modifications de la politique de {c} seront perdues.', { c: courant.name }), confirm: tr('Quitter sans enregistrer'), danger: true }))) return
+    setDirty(false)
+    const p = new URLSearchParams(params); p.set('client', key); setParams(p, { replace: true })
+  }
   useEffect(() => { api('/politique').then(setData).catch((e) => setError(e.message)) }, [])
   const saved = (r) => setData((d) => ({ ...d, items: d.items.map((x) => (x.key === r.key ? { ...x, ...r } : x)) }))
   return (
@@ -224,7 +244,13 @@ export default function Politique() {
       {error && <p className="error" role="alert">{error}</p>}
       {data === null && !error && <p className="loading">{tr('Chargement…')}</p>}
       {data && <CriticiteRegles items={data.items} onChange={() => api('/politique').then(setData)} />}
-      {data?.items.map((c) => <Client key={c.key} c={c} canaux={data.canaux} onSaved={saved} />)}
+      {dialog}
+      {data?.items.length > 1 && (
+        <div className="row wrap gap client-picker" role="group" aria-label={tr('Client affiché')}>
+          {data.items.map((c) => <button type="button" key={c.key} className={`vchip${c.key === courant.key ? ' on' : ''}`} aria-pressed={c.key === courant.key} onClick={() => choisir(c.key)}>{c.name}</button>)}
+        </div>
+      )}
+      {courant && <Client key={courant.key} c={courant} canaux={data.canaux} onSaved={saved} onDirty={onDirty} />}
     </>
   )
 }
