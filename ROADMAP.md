@@ -11,14 +11,14 @@ choix technique passe par un ADR (`GOVERNANCE.md`).
 
 Plusieurs fonctions n'ont été essayées que contre les faux serveurs des tests (README, « Limites connues ») :
 
-- parc d'agents Wazuh contre un vrai manager : champs de `/agents`, permissions RBAC du compte de lecture (ADR-0030) ;
 - contexte Wazuh contre un vrai indexeur et un vrai tableau de bord (ADR-0021) ;
 - recherche VirusTotal contre le vrai service (ADR-0022) ;
 - intégration sur un cluster Wazuh à plusieurs nœuds ;
 - astreinte contre de vrais services (serveur de messagerie, Mattermost, Teams) et battement de cœur contre un vrai
   manager Wazuh (règle 119990, tâche planifiée, second bloc d'intégration ; ADR-0032).
 
-Chaque essai réel donne lieu à une correction ou à une note dans la documentation.
+Chaque essai réel donne lieu à une correction ou à une note dans la documentation. Fait : le parc d'agents contre
+le manager de la préproduction (Wazuh 4.14.10), corrigé dans la 0.12.0.
 
 ## 2. Aide au triage (priorité haute)
 
@@ -30,9 +30,9 @@ Chaque essai réel donne lieu à une correction ou à une note dans la documenta
 
 ## 3. Conformité documentée
 
-- Couverture des exigences PDIS (`docs/conformite/couverture-pdis.md`) : écarts du logiciel corrigés dans la 0.10.0 ;
-  restent les fichiers chiffrés ou non analysables, le portail par client, le pare-feu applicatif et les indicateurs
-  de capacité (section 5 et ADR-0027).
+- Couverture des exigences PDIS (`docs/conformite/couverture-pdis.md`) : écarts du logiciel corrigés dans la 0.10.0,
+  puis fichiers chiffrés ou non analysables et indicateurs de capacité dans la 0.11.0 ; restent le portail par
+  client et le pare-feu applicatif (section 5 et ADR-0027).
 - Couverture du référentiel PRIS v3.2 (`docs/conformite/couverture-pris.md`) : écarts du logiciel corrigés le
   27/11/2026 ; restent partiels le registre des actions sur une ressource du SI cible et le retour d'expérience par
   rubriques.
@@ -47,7 +47,8 @@ Chaque essai réel donne lieu à une correction ou à une note dans la documenta
 
 Seuls écarts PDIS du logiciel restants. Ordre recommandé : d'abord le pare-feu applicatif (Coraza et l'OWASP CRS
 dans le Caddy du kit, en profil optionnel puis par défaut, après passage de toute la suite e2e), utile à tous ; la
-disponibilité par une sonde extérieure documentée sur `/healthz` (un logiciel ne mesure pas ses propres pannes) ;
+disponibilité par une sonde extérieure sur `/healthz` (un logiciel ne mesure pas ses propres pannes), documentée
+depuis la 0.12.0 (`docs/deploiement-docker.md`, matrice des flux, ligne 21) ;
 le portail séparé par client (ADR-0027, `docs/conception/portail-par-client.md`) quand un déploiement visant la
 qualification se présente, ses étapes 1 et 5 (projection client unique, modes) pouvant être faites avant sans
 changement visible. Le mode tout-en-un reste le produit principal.
