@@ -10,8 +10,10 @@ import '@fontsource/ibm-plex-mono/500.css'
 import './styles.css'
 import App from './App.jsx'
 import { initLang, t } from './i18n.js'
+import { initTheme } from './theme.js'
 
 initLang()
+initTheme()
 
 // Routeur à données : nécessaire à useBlocker (garde-fou « saisies non enregistrées », ADR-0024). Toute l'application
 // reste une seule route ; ses <Routes> internes sont inchangés.

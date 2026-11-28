@@ -5,12 +5,14 @@ import { useConfirm } from '../components/Confirm.jsx'
 import OneTime from '../components/OneTime.jsx'
 import { VirusTotalKey } from '../components/VirusTotal.jsx'
 import { getLang, LANGS, setLang, t, t as tr } from '../i18n.js'
+import { getTheme, setTheme } from '../theme.js'
 import { createCredential, webauthnSupported } from '../webauthn.js'
 import { formatUtc, ROLES } from '../labels.js'
 
 export default function Profile() {
   const { me } = useAuth()
   const [sessions, setSessions] = useState(null)
+  const [theme, setThemeState] = useState(getTheme)
   const [secret, setSecret] = useState(null)
   const [prefs, setPrefs] = useState(null)
   const [keys, setKeys] = useState([])
@@ -84,6 +86,15 @@ export default function Profile() {
       <section className="card section" aria-label={t('Langue')}>
         <header className="section-head"><h2>{t('Langue')}</h2></header>
         <select className="narrow-select" aria-label={t('Langue')} value={getLang()} onChange={(e) => setLang(e.target.value)}>{Object.entries(LANGS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+      </section>
+      <section className="card section" aria-label={tr('Apparence')}>
+        <header className="section-head"><h2>{tr('Apparence')}</h2></header>
+        <div className="row wrap gap" role="radiogroup" aria-label={tr('Thème')}>
+          {[['clair', tr('Clair (par défaut)')], ['sombre', tr('Sombre')], ['systeme', tr('Selon le système')]].map(([k, l]) => (
+            <label key={k} className="check"><input type="radio" name="theme" value={k} checked={theme === k} onChange={() => { setTheme(k); setThemeState(k) }} /> {l}</label>
+          ))}
+        </div>
+        <p className="muted small">{tr('Choix propre à ce navigateur. Les impressions et les PDF restent en clair.')}</p>
       </section>
       <section className="card section" aria-label={tr("Mot de passe")}>
         <header className="section-head"><h2>{tr("Changer de mot de passe")}</h2></header>

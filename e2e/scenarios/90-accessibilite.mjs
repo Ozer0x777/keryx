@@ -42,4 +42,22 @@ export default async ({ BASE, check, login }) => {
     }
     await page.context().close()
   }
+
+  // Thème sombre (A12, au choix dans « Mon profil ») : mêmes contrôles, contraste compris, sur les pages de chaque rôle.
+  for (const [role, paths] of Object.entries(PAGES)) {
+    const page = await login(role)
+    await page.evaluate(() => localStorage.setItem('keryx_theme', 'sombre'))
+    for (const path of paths) {
+      await page.goto(`${BASE}${path}`)
+      await page.waitForTimeout(1200)
+      await unfoldAll(page)
+      if (path === paths[0]) check(await page.evaluate(() => document.documentElement.dataset.theme === 'dark'), `thème sombre appliqué (${role})`)
+      await page.evaluate(axeSource)  // eslint-disable-line
+      await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getComputedTiming().endTime !== Infinity).map((a) => a.finished.catch(() => {}))))
+      const res = await page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } })).violations
+        .map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length, sample: v.nodes[0].target.join(' '), help: v.help })))
+      check(res.length === 0, `accessibilité, thème sombre, ${role} ${path}${res.length ? ' : ' + JSON.stringify(res) : ''}`)
+    }
+    await page.context().close()
+  }
 }

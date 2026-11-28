@@ -5,6 +5,10 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
 ## [Non publié]
 
 ### Ajouté
+- Thème sombre, au choix dans « Mon profil » (« Clair (par défaut) », « Sombre », « Selon le système »), propre à
+  chaque navigateur ; le thème clair reste celui par défaut. Toutes les couleurs de l'interface passent par des
+  variables ; les impressions et les PDF restent en clair. Contrôle d'accessibilité axe (WCAG 2.1 AA, contraste
+  compris) aussi en thème sombre, sur les pages de chaque rôle.
 - Kanban : filtres recherche, client et gravité, gardés dans l'adresse ; « Afficher 50 de plus » par colonne.
 - Rapport d'analyse : complétude à l'écran (pourcentage, rubriques à renseigner, lien vers « Réponse aux
   incidents »), jamais imprimée.
@@ -71,6 +75,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Num
   4.14.10), où le relevé complet fonctionne désormais ; le faux manager des tests refuse maintenant un tri mal formé.
 
 ### Documentation
+- Matrice des flux du kit Docker : webhooks d'astreinte (ligne 20) et sonde de disponibilité sur `/healthz`
+  (ligne 21), avec la manière de mesurer la disponibilité mensuelle.
 - Intégration Wazuh : limites observées en préproduction (alertes de plus de 64 Kio jamais transmises par le
   manager, avec une commande pour les repérer ; débit d'une alerte à la fois et retard après une rafale ; horloge du
   manager).
